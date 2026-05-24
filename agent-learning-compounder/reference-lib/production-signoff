@@ -1,12 +1,38 @@
 # Production Signoff
 
 Package: `agent-learning-compounder`
-Version: `2026.05.24+review7-production`
+Version: `2026.05.24+review7-plus1`
 Date: `2026-05-24`
 
 ## Decision
 
 Status: `APPROVED_FOR_PRODUCTION_USE`
+
+## Eight-Upgrade Extension (review7-plus1)
+
+This version layers eight extensions on top of review7-production. All upstream
+hardening properties are preserved; the upgrades are additive.
+
+| Phase | Upgrade | Surface |
+| --- | --- | --- |
+| 1 | Hook event schema versioning + replay | `bin/collect_hook_event` v2, `bin/replay_hook_events` |
+| 2A | Improvement-queue semantic dedup | `bin/queue_dedup`, post-append in `refresh_learning_state` |
+| 2B | Per-gate effectiveness scoring + retirement candidates | `bin/evaluate_gate_effectiveness`, `gate_id` in `export_gates`, refresh wiring |
+| 3A | Domain-rules mining | `bin/propose_domain_rules`, refresh wiring |
+| 3B | Causal A/B probes | `bin/causal_probe`, `probe_decisions` field in v2 schema, causal_signal in effectiveness |
+| 4 | Cross-repo gate federation | `bin/gates_promote`, `bin/gates_inherit`, auto-demote in refresh |
+| 5A | MCP server | `alc_mcp/` (stdio; optional `mcp` SDK dependency) |
+| 5B | Operator dashboard | `dashboard/` + `bin/serve_dashboard` (optional fastapi/jinja2/uvicorn) |
+
+Tests: 160 fixture tests (was 105 in review7-production; +55) plus 1 smoke
+and 4 pressure scenarios pass on the production-eligible branch. The 4 SKIPs
+in the fixture suite are tests gated on optional deps (`mcp`, `fastapi`,
+`jinja2`, `httpx`) that are not installed by default; they pass when the
+extras are present.
+
+The plan document captured in `PLAN.md` at the repo root specifies all
+eight upgrades with implementation-ready depth, including TDD steps,
+acceptance criteria, and dependency sequencing.
 
 This signoff applies to the portable tarball package produced from this tree
 after the production-hardening audit. The approved operating mode is project-local:
