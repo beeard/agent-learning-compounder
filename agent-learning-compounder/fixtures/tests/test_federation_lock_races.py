@@ -179,10 +179,20 @@ class ExportInheritRaceUnderSharedLock(unittest.TestCase):
     appended, export wrote a rendered string that excluded the new block
     -- the inherit was silently overwritten."""
 
+    # Four DISTINCT (domain, category, gate, gate_id) so every inherit
+    # exercises the append path. Same-id same-origin inherits would
+    # hit the idempotent-match short-circuit on the 2nd-4th calls and
+    # the test couldn't distinguish "lock serialized 4 appends" from
+    # "only the first inherit ran, the rest no-op'd". gate_ids are the
+    # real sha256(domain|category|gate)[:12]; C2 rejects mismatches.
+    INHERITED_GATES = [
+        ("kubernetes", "yaml-check", "Verify kustomize render before kubectl apply.", "592673b3333a"),
+        ("terraform", "plan-check", "Run terraform plan and quote one resource change.", "3f5415acb6c7"),
+        ("docker", "dockerfile-check", "Inspect Dockerfile for hardcoded secrets.", "33008792ade7"),
+        ("aws", "iam-check", "Verify IAM role minimum permissions.", "6c449f0a07f0"),
+    ]
+
     def test_concurrent_inherit_during_export_preserves_inherited_block(self):
-        # Drive 4 inherits concurrently with 4 re-exports against the
-        # same target. After all settle, the inherited block must be in
-        # the file (preserved by the shared sidecar lock).
         with tempfile.TemporaryDirectory() as td:
             tdp = Path(td)
             report = tdp / "report.md"
@@ -190,24 +200,23 @@ class ExportInheritRaceUnderSharedLock(unittest.TestCase):
             target = tdp / "approved-gates.md"
             _export_gates(report, target)
 
-            # Seed a shared record for a DIFFERENT gate_id so the inherit
-            # adds a block not produced by re-export. gate_id is the real
-            # sha256("kubernetes|yaml-check|<gate-text>")[:12]; C2's
-            # content-hash check would otherwise reject a placeholder.
             shared = tdp / "shared" / "gates"
             shared.mkdir(parents=True)
-            inherited_id = "592673b3333a"
-            (shared / f"{inherited_id}.json").write_text(json.dumps({
-                "domain": "kubernetes",
-                "gate_id": inherited_id,
-                "gate_category": "yaml-check",
-                "gate": "Verify kustomize render before kubectl apply.",
-                "origin_repo": "sibling-repo",
-                "promoted_at": "2026-01-15T00:00:00Z",
-                "note": "",
-            }))
+            for domain, category, gate_text, gate_id in self.INHERITED_GATES:
+                (shared / f"{gate_id}.json").write_text(json.dumps({
+                    "domain": domain,
+                    "gate_id": gate_id,
+                    "gate_category": category,
+                    "gate": gate_text,
+                    "origin_repo": "sibling-repo",
+                    "promoted_at": "2026-01-15T00:00:00Z",
+                    "note": "",
+                }))
 
-            inherit_jobs = [(str(shared.parent), str(target), inherited_id)] * 4
+            inherit_jobs = [
+                (str(shared.parent), str(target), gate_id)
+                for _, _, _, gate_id in self.INHERITED_GATES
+            ]
             export_jobs = [(str(report), str(target))] * 4
 
             ctx = multiprocessing.get_context("spawn")
@@ -217,29 +226,35 @@ class ExportInheritRaceUnderSharedLock(unittest.TestCase):
                 inherit_rcs = inherit_results.get(timeout=60)
                 export_rcs = export_results.get(timeout=60)
 
-            # All exports must succeed.
             for rc, err in export_rcs:
                 self.assertEqual(rc, 0, msg=f"export failed: rc={rc} stderr={err!r}")
-            # First inherit succeeds (rc=0); subsequent inherits of the
-            # same gate_id from the same origin no-op (rc=0).
             for rc, err in inherit_rcs:
                 self.assertEqual(rc, 0, msg=f"inherit failed: rc={rc} stderr={err!r}")
 
             text = target.read_text()
-            self.assertIn(
-                f"gate_id: {inherited_id}", text,
-                msg=(
-                    "inherited block was lost in the export/inherit race -- "
-                    "pre-B-5 export's render-from-stale-snapshot would silently "
-                    "overwrite the freshly-appended inherit"
-                ),
+            # Every distinct inherit's block must appear exactly once.
+            # Strengthens the earlier test which used same-id inherits and
+            # could not distinguish "all appended" from "first appended,
+            # rest idempotent-matched".
+            for _, _, _, gate_id in self.INHERITED_GATES:
+                n_lines = len(re.findall(
+                    rf"^\s*gate_id:\s*{gate_id}\s*$", text, re.MULTILINE,
+                ))
+                self.assertEqual(
+                    n_lines, 1,
+                    msg=(
+                        f"expected exactly one occurrence of gate_id "
+                        f"{gate_id}, got {n_lines}. The race between "
+                        f"export's render-from-stale-snapshot and inherit's "
+                        f"append would silently drop a freshly-appended "
+                        f"block, leaving zero occurrences here."
+                    ),
+                )
+            # And one derived_from line per inherit.
+            self.assertEqual(
+                text.count("derived_from: sibling-repo"),
+                len(self.INHERITED_GATES),
             )
-            self.assertIn("derived_from: sibling-repo", text)
-            # Exactly one canonical line per gate_id (no duplication).
-            n_lines = len(re.findall(
-                rf"^\s*gate_id:\s*{inherited_id}\s*$", text, re.MULTILINE,
-            ))
-            self.assertEqual(n_lines, 1, msg=f"expected one line, got {n_lines}")
 
 
 class PreservedInheritedBlocksAnchoredMatch(unittest.TestCase):

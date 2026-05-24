@@ -111,6 +111,47 @@ class AtomicRewriteReadModifyWrite(unittest.TestCase):
         self.assertEqual(self.path.read_text(), "preserved\n")
 
 
+class AtomicWriteRefusesSymlinkTarget(unittest.TestCase):
+    """B-6: the symlink check is now inside atomic_write_text /
+    atomic_rewrite, run under the same lock that guards the write.
+    Pre-fix callers ran an out-of-band assert_regular_file_destination
+    before acquiring the lock -- a symlink swap in that gap was honored.
+    """
+
+    def test_atomic_write_text_refuses_symlink_at_destination(self):
+        with tempfile.TemporaryDirectory() as td:
+            real = Path(td) / "real-target"
+            real.write_text("real content")
+            link = Path(td) / "link"
+            link.symlink_to(real)
+            with self.assertRaises(ValueError) as cm:
+                atomic_write_text(link, "new content")
+            self.assertIn("symlink", str(cm.exception))
+            # The real file must be untouched.
+            self.assertEqual(real.read_text(), "real content")
+
+    def test_atomic_rewrite_refuses_symlink_at_destination(self):
+        with tempfile.TemporaryDirectory() as td:
+            real = Path(td) / "real-target"
+            real.write_text("real content")
+            link = Path(td) / "link"
+            link.symlink_to(real)
+            with self.assertRaises(ValueError):
+                with atomic_rewrite(link) as (_current, _commit):
+                    self.fail("atomic_rewrite must not yield through a symlink")
+            self.assertEqual(real.read_text(), "real content")
+
+    def test_atomic_write_text_refuses_non_regular_file(self):
+        # FIFO is a non-regular file the test can construct portably.
+        import os as _os
+        with tempfile.TemporaryDirectory() as td:
+            fifo = Path(td) / "fifo"
+            _os.mkfifo(fifo)
+            with self.assertRaises(ValueError) as cm:
+                atomic_write_text(fifo, "x")
+            self.assertIn("non-regular", str(cm.exception))
+
+
 class AtomicRewriteConcurrency(unittest.TestCase):
     """The whole point of the sidecar lockfile: parallel writers must
     serialize so no update is lost.
