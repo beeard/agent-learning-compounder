@@ -424,14 +424,20 @@ def refresh(
     # lock is a stable mutex across the writes that this refresh performs.
     refresh_lock_path = repo_state / ".refresh.lock"
     refresh_lock_fd = os.open(str(refresh_lock_path), os.O_RDWR | os.O_CREAT, 0o644)
-    fcntl.flock(refresh_lock_fd, fcntl.LOCK_EX)
+    # Nested try so the outer finally closes the fd even if fcntl.flock
+    # itself raises (EINTR loop, EDEADLK, etc.) -- the previous shape
+    # held the fd outside the try and would leak it on any error
+    # between os.open and the flock that ran on the next line.
     try:
-        return _refresh_locked(repo, repo_state, reports, state_dir, personal, events, queue, corpus)
-    finally:
+        fcntl.flock(refresh_lock_fd, fcntl.LOCK_EX)
         try:
-            fcntl.flock(refresh_lock_fd, fcntl.LOCK_UN)
-        except OSError:
-            pass
+            return _refresh_locked(repo, repo_state, reports, state_dir, personal, events, queue, corpus)
+        finally:
+            try:
+                fcntl.flock(refresh_lock_fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+    finally:
         os.close(refresh_lock_fd)
 
 

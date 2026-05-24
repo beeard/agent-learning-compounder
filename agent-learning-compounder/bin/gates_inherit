@@ -6,7 +6,6 @@ Idempotent: reruns are no-ops if the gate_id is already present in the target.
 from __future__ import annotations
 
 import argparse
-import fcntl
 import json
 import re
 import sys
@@ -15,6 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 from export_gates import _gate_id  # noqa: E402
+from state_paths import atomic_rewrite  # noqa: E402
 
 
 GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
@@ -167,50 +167,35 @@ def main():
         print(f"invalid shared gate record: {exc}", file=sys.stderr)
         return 2
 
-    # Open the target r+ and hold LOCK_EX across read+check+write. Two
-    # concurrent inherits of the same gate_id can no longer both observe
-    # absence; the loser sees the winner's row and either no-ops (same
-    # origin_repo) or exits EXIT_CONFLICT (different origin_repo).
-    # Pattern mirrors refresh_learning_state.queue_candidate_adjustments.
-    try:
-        handle = args.target_gates.open("r+", encoding="utf-8")
-    except OSError as exc:
-        print(f"failed to open target gates: {exc}", file=sys.stderr)
-        return 2
-    try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-        try:
-            handle.seek(0)
-            current_text = handle.read()
-            existing_derived = _existing_derived_from(current_text, args.gate_id)
-            if existing_derived is not None:
-                incoming_derived = (
-                    f"{record['origin_repo']}:{record['gate_id']}:{record['promoted_at']}"
-                )
-                # Treat unknown/missing derived_from as "matches nothing":
-                # we can't prove the origin, so refuse rather than silently
-                # accept a possibly-distinct origin's gate as the same row.
-                if existing_derived == incoming_derived:
-                    return 0
-                # Same gate_id, different origin_repo (or different
-                # promoted_at) — provenance would be lost if we silently
-                # no-op'd. Exit non-zero so the caller knows to investigate.
-                print(
-                    f"gate_id {args.gate_id} already inherited from "
-                    f"{existing_derived!r}; refusing to re-inherit from "
-                    f"{incoming_derived!r}",
-                    file=sys.stderr,
-                )
-                return EXIT_CONFLICT
-            # Absent — append under the lock so no concurrent inherit can
-            # interleave a duplicate.
-            handle.seek(0, 2)  # to end
-            handle.write(block)
-            handle.flush()
-        finally:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    finally:
-        handle.close()
+    # Read+check+write under the shared sidecar lock. Both export_gates
+    # and gates_inherit acquire the same `<target_gates>.lock` so a
+    # concurrent re-export cannot wipe a freshly-appended inherited
+    # block, and two concurrent inherits of the same gate_id can no
+    # longer both observe absence and both append. Pre-B-5 the flock
+    # was on the data file's inode, which does not survive export's
+    # os.replace -- this fix coordinates both writers on a sidecar
+    # that is never renamed.
+    with atomic_rewrite(args.target_gates) as (current_text, commit):
+        existing_derived = _existing_derived_from(current_text, args.gate_id)
+        if existing_derived is not None:
+            incoming_derived = (
+                f"{record['origin_repo']}:{record['gate_id']}:{record['promoted_at']}"
+            )
+            if existing_derived == incoming_derived:
+                return 0
+            # Same gate_id, different origin_repo (or different
+            # promoted_at) -- provenance would be lost if we silently
+            # no-op'd. Exit non-zero so the caller knows to investigate.
+            print(
+                f"gate_id {args.gate_id} already inherited from "
+                f"{existing_derived!r}; refusing to re-inherit from "
+                f"{incoming_derived!r}",
+                file=sys.stderr,
+            )
+            return EXIT_CONFLICT
+        # Absent -- append. The block already starts with a leading
+        # newline so it concatenates cleanly with any existing content.
+        commit(current_text + block)
     return 0
 
 

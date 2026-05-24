@@ -12,6 +12,7 @@ import pathlib
 import re
 import sys
 
+from state_paths import atomic_rewrite
 from validate_outputs import validate
 
 
@@ -207,7 +208,12 @@ def preserved_inherited_blocks(existing_text: str) -> dict[str, str]:
     for part in parts:
         if not re.match(r"-\s+domain:", part):
             continue
-        if "derived_from:" not in part:
+        # Anchored to the canonical indented field position so a local
+        # gate whose `gate:` text legitimately contains the literal
+        # substring "derived_from:" (e.g. an instruction about checking
+        # the derived_from field) is not silently treated as inherited
+        # and pinned across re-exports.
+        if not re.search(r"^\s+derived_from:\s*\S", part, re.MULTILINE):
             continue
         match = re.search(r"^\s*gate_id:\s*([a-f0-9]{12})\s*$", part, re.MULTILINE)
         if not match:
@@ -310,27 +316,26 @@ def main(argv: list[str] | None = None) -> int:
     probes_path = pathlib.Path(args.probes) if args.probes else None
     probes = _load_probes(probes_path)
 
-    # Preserve any federation-inherited blocks already in the output file.
-    # Drop inherited blocks for gate_ids the new render will also emit so
-    # we don't write two copies of the same gate.
-    existing_text = output_path.read_text(encoding="utf-8") if output_path.exists() else ""
-    inherited = preserved_inherited_blocks(existing_text)
-    new_gate_ids = {
-        _gate_id(g.domain, g.gate_category, g.gate)
-        for g in _select_for_render(gates, args.max_domains)
-    }
-    preserve = [block for gid, block in inherited.items() if gid not in new_gate_ids]
-
-    output_path.write_text(
-        render_registry(
+    # Read + preserve + write under one sidecar lock so a concurrent
+    # gates_inherit cannot land an inherited block between the read and
+    # the write -- pre-B-5 export would render from a pre-inherit snapshot
+    # and silently overwrite the freshly-appended block. gates_inherit
+    # uses the same `atomic_rewrite` on the same path, so the lockfile
+    # `<output>.lock` is the shared mutex.
+    with atomic_rewrite(output_path) as (existing_text, commit):
+        inherited = preserved_inherited_blocks(existing_text)
+        new_gate_ids = {
+            _gate_id(g.domain, g.gate_category, g.gate)
+            for g in _select_for_render(gates, args.max_domains)
+        }
+        preserve = [block for gid, block in inherited.items() if gid not in new_gate_ids]
+        commit(render_registry(
             report_path,
             gates,
             args.max_domains,
             probes=probes,
             preserve_blocks=preserve,
-        ),
-        encoding="utf-8",
-    )
+        ))
     print(f"exported {len(gates)} gates to {output_path}")
     return 0
 
