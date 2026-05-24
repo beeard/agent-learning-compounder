@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Inherit a gate from the shared registry into a target repo's approved gates.
+
+Idempotent: reruns are no-ops if the gate_id is already present in the target.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+
+def gate_already_present(target: Path, gate_id: str) -> bool:
+    return gate_id in target.read_text(encoding="utf-8")
+
+
+def append_gate(target: Path, record: dict):
+    block = (
+        f"\n- domain: {record['domain']}\n"
+        f"  gate_id: {record['gate_id']}\n"
+        f"  gate_category: {record['gate_category']}\n"
+        f"  gate: {record['gate']}\n"
+        f"  derived_from: {record['origin_repo']}:{record['gate_id']}:{record['promoted_at']}\n"
+    )
+    with target.open("a", encoding="utf-8") as fh:
+        fh.write(block)
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--shared-root", required=True, type=Path)
+    p.add_argument("--target-gates", required=True, type=Path)
+    p.add_argument("--gate-id", required=True)
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    record_path = args.shared_root / "gates" / f"{args.gate_id}.json"
+    if not record_path.is_file():
+        print(f"shared gate not found: {record_path}", file=sys.stderr)
+        return 2
+    if not args.target_gates.is_file():
+        print(f"target gates not found: {args.target_gates}", file=sys.stderr)
+        return 2
+    if gate_already_present(args.target_gates, args.gate_id):
+        return 0
+    record = json.loads(record_path.read_text(encoding="utf-8"))
+    append_gate(args.target_gates, record)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

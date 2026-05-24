@@ -1,0 +1,1 @@
+../bin/gates_inherit
