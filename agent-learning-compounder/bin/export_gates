@@ -6,11 +6,19 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import datetime as dt
+import hashlib
 import pathlib
 import re
 import sys
 
 from validate_outputs import validate
+
+
+def _gate_id(domain: str, category: str, gate_text: str) -> str:
+    """Deterministic 12-hex identifier for (domain, category, gate text)."""
+    h = hashlib.sha256()
+    h.update(f"{domain}|{category}|{gate_text.strip()}".encode("utf-8"))
+    return h.hexdigest()[:12]
 
 
 SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
@@ -175,9 +183,11 @@ def render_registry(report_path: pathlib.Path, gates: list[Gate], max_domains: i
         "",
     ]
     for gate in selected_gates:
+        gate_id = _gate_id(gate.domain, gate.gate_category, gate.gate)
         lines.extend(
             [
                 f"- domain: {gate.domain}",
+                f"  gate_id: {gate_id}",
                 f"  gate_category: {gate.gate_category}",
                 f"  gate: {gate.gate}",
             ]
