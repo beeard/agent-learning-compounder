@@ -408,14 +408,18 @@ def main(argv: list[str] | None = None) -> int:
     # existing files; _chmod_quiet below upgrades pre-existing logs that
     # predate this hardening.
     #
-    # LOCK_SH around the open+write window cooperates with the LOCK_EX held
-    # by rotate_if_needed: rotation cannot rename the log while an appender
-    # has the shared lock, so the appender's fd is always pointing at the
-    # live inode for its full lifetime. Multiple concurrent appenders can
-    # still run in parallel because LOCK_SH is non-exclusive; O_APPEND keeps
-    # their os.write calls atomic up to PIPE_BUF.
+    # LOCK_EX around the open+write window: cooperates with rotate_if_needed
+    # (which also takes LOCK_EX), AND serializes concurrent appenders. The
+    # previous LOCK_SH permitted concurrent appenders, relying on O_APPEND
+    # being atomic up to PIPE_BUF (4096 on Linux). With a full v2 event --
+    # MAX_GATE_LOADED_IDS * MAX_GATE_LOADED_ID_LEN = 4096B for
+    # gate_loaded_ids alone, plus probe_decisions and headers -- one line
+    # routinely exceeds PIPE_BUF, two concurrent appenders interleave bytes
+    # mid-line, evaluate_gate_effectiveness.load_sessions sees torn JSON,
+    # and (combined with the unguarded json.loads pre-C7) the entire
+    # scoring pass aborts.
     try:
-        with _rotation_lock(output, exclusive=False):
+        with _rotation_lock(output, exclusive=True):
             fd = os.open(str(output), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
             try:
                 os.write(fd, (rendered + "\n").encode("utf-8"))
