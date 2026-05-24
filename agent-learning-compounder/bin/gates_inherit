@@ -14,6 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
+from export_gates import _gate_id  # noqa: E402
 
 
 GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
@@ -47,6 +48,20 @@ def validate_record(record: dict, gate_id: str) -> None:
             raise ValueError(f"field contains a newline: {field}")
     if record["gate_id"] != gate_id:
         raise ValueError("record gate_id does not match requested gate_id")
+    # Recompute the gate_id from (domain, gate_category, gate) and refuse
+    # if it no longer hashes to the requested id. Catches post-promote
+    # mutation of the gate text in the shared registry: the filename id
+    # still matches, REQUIRED_RECORD_FIELDS still all parse, but the
+    # underlying instruction text was swapped. Without this, every
+    # inheritor would silently pull the mutated text under the original
+    # gate_id and cohort statistics would keep accumulating against the
+    # wrong instruction.
+    derived = _gate_id(record["domain"], record["gate_category"], record["gate"])
+    if derived != gate_id:
+        raise ValueError(
+            f"record content does not hash to gate_id {gate_id} "
+            f"(derived {derived}); possible registry tampering"
+        )
 
 
 def gate_already_present(target: Path, gate_id: str) -> bool:
@@ -62,7 +77,12 @@ def _existing_derived_from(text: str, gate_id: str) -> str | None:
     one block — a flat regex over the whole file could cross block
     boundaries on a malformed file.
     """
-    blocks = text.split("\n- domain:")
+    # Use the (?m)-anchored splitter so the walk works on CRLF files and
+    # on files that start directly with "- domain:" (no leading newline).
+    # The previous text.split("\n- domain:") returned the whole file as
+    # one block in both cases, and the per-block field walk would then
+    # cross block boundaries and report a stale derived_from.
+    blocks = re.split(r"(?m)^-\s+domain:\s*", text)
     for block in blocks[1:]:
         block_gate_id: str | None = None
         derived_from: str | None = None

@@ -11,12 +11,23 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
+from gates_inherit import REQUIRED_RECORD_FIELDS  # noqa: E402
+
+
+# Distinct from "not found" (3) and "block missing fields" (4) so callers can
+# tell a same-gate_id / different-content collision apart from upstream
+# malformedness. Mirrors the role of gates_inherit.EXIT_CONFLICT.
+EXIT_CONFLICT = 5
+# Distinct from --gates parse failures so callers can tell that the record
+# the operator tried to build was itself invalid (e.g. empty --origin-repo).
+EXIT_INVALID_RECORD = 6
 
 
 # Each gate block emitted by ``bin/export_gates`` looks like:
@@ -87,6 +98,57 @@ def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str
     return record
 
 
+def validate_record_for_promote(record: dict) -> None:
+    """Field-level validation a record must satisfy before reaching the shared
+    registry. Mirrors gates_inherit.validate_record minus the requested-id
+    cross-check (no expected id at promote time). Without this an empty or
+    newline-bearing --origin-repo writes through, gates_inherit fails on the
+    same record at every sibling repo, and federation is silently bricked
+    until an operator hand-edits the JSON.
+    """
+    for field in REQUIRED_RECORD_FIELDS:
+        value = record.get(field)
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"missing or invalid field: {field}")
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"field contains a newline: {field}")
+
+
+def _records_match_ignoring_volatile(a: dict, b: dict) -> bool:
+    """Two promote records describe the same shared gate when all the
+    federation-stable fields agree. promoted_at always differs on a re-promote
+    and `note` is operator metadata, so neither participates in the check.
+    """
+    keys = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "level")
+    return all(a.get(k) == b.get(k) for k in keys)
+
+
+def atomic_write_json(path: Path, record: dict) -> None:
+    """Write the record via tmp+fsync+rename so a concurrent reader can never
+    observe a truncated JSON file. Pre-fix `path.write_text` would interleave
+    bytes with a racing promoter and gates_inherit on a sibling repo would
+    surface the truncated read as a misleading 'invalid shared gate record'.
+
+    The tmp filename embeds os.getpid() so two concurrent promoters can't
+    truncate each other's tmp file (which would cause the loser's os.replace
+    to FileNotFoundError on a tmp that the winner already consumed).
+    """
+    tmp = path.with_suffix(f"{path.suffix}.{os.getpid()}.tmp")
+    try:
+        with tmp.open("w", encoding="utf-8") as fh:
+            fh.write(json.dumps(record, indent=2, sort_keys=True) + "\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        # If we crashed between open and replace, clean up the orphan.
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+
 def validate_gate_id(gate_id: str) -> None:
     if not GATE_ID_RE.fullmatch(gate_id):
         raise ValueError(f"gate_id must be 12 lowercase hex characters: {gate_id}")
@@ -131,16 +193,36 @@ def main(argv: list[str] | None = None) -> int:
         return 4
     record = build_record(block, args.origin_repo, args.note)
     try:
+        validate_record_for_promote(record)
+    except ValueError as exc:
+        print(f"invalid record: {exc}", file=sys.stderr)
+        return EXIT_INVALID_RECORD
+    try:
         out_path = shared_gate_path(args.shared_root, args.gate_id)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         assert_regular_file_destination(out_path, label="Promote output")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    out_path.write_text(
-        json.dumps(record, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    if out_path.exists():
+        # Same gate_id already in the registry. Re-promotes from the same
+        # origin are idempotent (promoted_at refreshed, content identical);
+        # promotes from a DIFFERENT origin or with mutated content are a
+        # conflict so provenance isn't silently overwritten.
+        try:
+            existing = json.loads(out_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, ValueError):
+            existing = None
+        if isinstance(existing, dict) and not _records_match_ignoring_volatile(existing, record):
+            print(
+                f"gate {args.gate_id} already promoted from "
+                f"{existing.get('origin_repo', '?')!r} at "
+                f"{existing.get('promoted_at', '?')}; refusing to overwrite with "
+                f"{record['origin_repo']!r}",
+                file=sys.stderr,
+            )
+            return EXIT_CONFLICT
+    atomic_write_json(out_path, record)
     print(f"promoted gate {args.gate_id} -> {out_path}")
     return 0
 

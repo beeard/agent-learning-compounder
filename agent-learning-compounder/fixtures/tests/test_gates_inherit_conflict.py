@@ -53,7 +53,9 @@ class GatesInheritConflictTests(unittest.TestCase):
         self.target = Path(self.tmp.name) / "approved-gates.md"
         self.target.write_text("# Approved Agent Gates\n\n")
         # Two records sharing the same gate_id from different origin_repos.
-        self.gate_id = "aaaaaaaaaaaa"
+        # gate_id = sha256("cloudflare|docs-check|<gate-text>")[:12]; see
+        # test_gates_inherit for the frozen-value note.
+        self.gate_id = "2aed10be9612"
         (self.shared / f"{self.gate_id}.json").write_text(json.dumps({
             "domain": "cloudflare",
             "gate_id": self.gate_id,
