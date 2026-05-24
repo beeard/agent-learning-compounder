@@ -60,7 +60,12 @@ command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum required" >&2; exit 1;
 
 # Top-level layout shipped in the release. Matches the existing tarball.
 top_files=".gitignore CHANGES.md MANIFEST.json README.md install.sh"
-top_dirs="agent-learning-compounder scripts"
+# `docs` ships so README and CHANGES references to
+# docs/history/PLAN-eight-upgrade.md and docs/llm-install-prompt.md
+# resolve inside a freshly-extracted tarball. docs/dev is pruned below
+# because A-3 moved those internal release-process docs out of the
+# user-facing surface on purpose.
+top_dirs="agent-learning-compounder scripts docs"
 
 for f in $top_files; do
   [ -e "$repo_root/$f" ] || { echo "missing $f at repo root" >&2; exit 1; }
@@ -89,6 +94,10 @@ done
 # Strip __pycache__, .pytest_cache, .agent-learning, *.pyc, *.pyo,
 # .agent-learning.json. Same exclusion set install.sh enforces at install time.
 sanitize_skill_tree "$stage_root/agent-learning-compounder"
+
+# docs/dev/ holds internal release-process notes that A-3 moved out of
+# the shipped skill. Keep them in the source tree but not in the tarball.
+rm -rf "$stage_root/docs/dev"
 
 # Normalize on-disk mtimes so the zip archive (which records per-file
 # mtimes from the filesystem) is reproducible. tar --mtime overrides
