@@ -40,45 +40,52 @@ pip install -r agent-learning-compounder/requirements-optional.txt
 ```bash
 tar -xzf agent-learning-compounder-2026.05.24+review7-plus1.tar.gz
 cd agent-learning-compounder-2026.05.24+review7-plus1
-./install.sh --codex --verify
+./install.sh
 ```
 
-Other targets:
+With no arguments, the installer detects whether to use Codex (`~/.agents/`) or
+Claude (`~/.claude/`), runs the test suite (`--verify` is on by default),
+backs up any existing install, and prints the exact next command to initialize
+a repo. Prompts once if both runtime roots are present; defaults to Codex if
+neither is.
+
+After install, run the printed `init_learning_system.py` command from your
+project root to wire the skill into that repo.
+
+### Custom install
+
+To bypass auto-detection — for an explicit runtime, a non-standard target, or
+to script a repeatable install — pass any of the flags below. Any one of them
+disables auto-detection (and `--verify` reverts to opt-in).
 
 ```bash
-./install.sh --claude
-./install.sh --codex-home
-./install.sh --target "$HOME/.agents/skills"
+./install.sh --claude                         # explicit Claude
+./install.sh --codex-home                     # ${CODEX_HOME:-~/.codex}/skills
+./install.sh --target "$HOME/.agents/skills"  # explicit target
+./install.sh --runtime claude --verify        # explicit runtime, verify
 ```
 
-The installer backs up an existing `agent-learning-compounder` directory before
-copying the packaged skill.
+`AGENT_LEARNING_RUNTIME=claude ./install.sh` also bypasses auto-detection.
 
 ## One-Command Bootstrap (from a checked-out repo)
 
-The following one-liner installs the skill, initializes repo state with local state
-root, and runs self-test:
+To extract, install, and initialize a repo in one shell pipeline (set
+`AGENT_LEARNING_RUNTIME` if you want to override auto-detection):
 
 ```bash
 REPO_ROOT="$PWD" && \
 ARCHIVE="agent-learning-compounder-2026.05.24+review7-plus1.tar.gz" && \
 WORKDIR="$(mktemp -d)" && \
 tar -xzf "$ARCHIVE" -C "$WORKDIR" && \
-BASE="$(ls -1d "$WORKDIR"/agent-learning-compounder-*)"; \
-( cd "$BASE" && ./install.sh --codex --verify ) && \
-python3 "$HOME/.agents/skills/agent-learning-compounder/scripts/init_learning_system.py" \
-  --repo "$REPO_ROOT" \
-  --runtime "${AGENT_LEARNING_RUNTIME:-codex}" \
-  --state-dir "$REPO_ROOT/.agent-learning" \
-  --install-repo-integration \
-  --install-hooks \
-  --self-test && \
+( cd "$WORKDIR"/agent-learning-compounder-* && \
+  ./install.sh --bootstrap-repo "$REPO_ROOT" --verify ) && \
 rm -rf "$WORKDIR"
 ```
 
-To run against Claude-only installs, replace:
-`$HOME/.agents/skills` in the install step with your Claude target and call
-`init_learning_system.py` from the same installed location.
+`--bootstrap-repo` installs the skill into the repo's runtime root (`.codex/`
+or `.claude/`) and runs `init_learning_system.py` against the repo in one step.
+Pass `--apply-runtime-hooks` if you also want runtime hooks wired immediately
+instead of left as a dry-run manifest.
 
 ## Runtime-Specific Behavior
 
