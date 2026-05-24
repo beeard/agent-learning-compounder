@@ -254,6 +254,9 @@ LLM agents should start with `agent-learning-compounder/SKILL.md`. For a
 single deferred operating guide, read
 `agent-learning-compounder/references/agent-quickstart.md`.
 
+To delegate the install itself to an LLM (paste-ready prompts for both the
+from-tarball and from-source paths), see `docs/llm-install-prompt.md`.
+
 ## Verify After Install
 
 ```bash
