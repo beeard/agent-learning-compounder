@@ -89,5 +89,62 @@ class QueueDedup(unittest.TestCase):
         self.assertEqual(real.read_text().strip(), json.dumps({"id": "a", "text": "hi"}))
 
 
+class RefreshWiresDedup(unittest.TestCase):
+    """refresh_learning_state should invoke queue_dedup after appending candidates."""
+
+    def test_refresh_emits_dedup_count(self):
+        import shutil
+        import sys
+
+        fixture_src = REPO_ROOT / "fixtures" / "eval-fixtures" / "mini-repo"
+        seed = fixture_src / "seed"
+
+        sys.path.insert(0, str(REPO_ROOT / "bin"))
+        import state_paths  # type: ignore
+
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            # Copy everything except seed/ into the staged repo
+            shutil.copytree(fixture_src, repo, ignore=shutil.ignore_patterns("seed"))
+
+            rid = state_paths.repo_id(repo)
+            state_root = repo / ".agent-learning"
+            state_dir = state_root / "repos" / rid
+            state_dir.mkdir(parents=True, exist_ok=True)
+            for name in (
+                "config.json",
+                "baseline.json",
+                "domain-rules.active.json",
+                "skill-map.json",
+            ):
+                shutil.copy(seed / name, state_dir / name)
+            (state_dir / "improvement-queue.jsonl").write_text(
+                (seed / "improvement-queue-near-dupes.jsonl").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            # The state root also expects a config.json so refresh can read runtime.
+            shutil.copy(seed / "config.json", state_root / "config.json")
+
+            proc = subprocess.run(
+                [
+                    str(REPO_ROOT / "bin" / "refresh_learning_state"),
+                    "--repo", str(repo),
+                    "--state-dir", str(state_root),
+                ],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            # Combined stdout+stderr should report dedup_removed somewhere
+            output = proc.stdout + proc.stderr
+            self.assertIn("dedup_removed", output)
+
+            # Verify queue actually got deduped
+            queue = state_dir / "improvement-queue.jsonl"
+            rows = [json.loads(ln) for ln in queue.read_text().splitlines() if ln]
+            self.assertEqual(len(rows), 1, f"expected 1 row, got {len(rows)}")
+            # Oldest (id='a') should survive
+            self.assertEqual(rows[0]["id"], "a")
+
+
 if __name__ == "__main__":
     unittest.main()

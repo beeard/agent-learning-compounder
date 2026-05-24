@@ -1,0 +1,5 @@
+{
+  "state_version": 1,
+  "runtime": "codex",
+  "retention": {"max_hook_event_bytes": 1048576, "max_hook_event_backups": 4}
+}

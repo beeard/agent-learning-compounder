@@ -18,6 +18,7 @@ from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
 from extract_skill_usage import build_usage, read_events
 from map_active_skills import build_map
+from queue_dedup import find_duplicates, order_by_keep
 from scrub_secrets import scrub
 from state_paths import repo_state_dir, resolve_state_dir
 
@@ -136,6 +137,58 @@ def queue_candidate_adjustments(path: pathlib.Path, impact: dict[str, Any]) -> d
     }
 
 
+def _post_dedup(
+    queue_path: pathlib.Path,
+    backend: str = "trigram",
+    threshold: float = 0.80,
+) -> int:
+    """Dedup queue in place using trigram-Dice.
+
+    Called after queue_candidate_adjustments so duplicate near-paraphrases
+    from prior runs are collapsed in-process. Re-opens the queue under
+    LOCK_EX and rewrites it atomically (truncate-in-place under the lock).
+    Returns the count of rows removed.
+
+    Persisted queue rows written by refresh use ``candidate_adjustment``
+    rather than ``text``, so we synthesize a view-row carrying ``text``
+    for the dedup algorithm without mutating what we write back.
+    """
+    if not queue_path.exists():
+        return 0
+    lines = [ln for ln in queue_path.read_text(encoding="utf-8").splitlines() if ln]
+    rows = []
+    for ln in lines:
+        try:
+            rows.append(json.loads(ln))
+        except json.JSONDecodeError:
+            continue
+    if len(rows) < 2:
+        return 0
+    # Build a parallel view with a "text" key for find_duplicates without
+    # mutating the rows we'll persist.
+    view = [
+        dict(r, text=r.get("text") or str(r.get("candidate_adjustment", "")))
+        for r in rows
+    ]
+    priority = order_by_keep(view, "oldest")
+    reordered_view = [view[i] for i in priority]
+    reordered_rows = [rows[i] for i in priority]
+    drop = find_duplicates(reordered_view, backend, threshold)
+    if not drop:
+        return 0
+    kept = [r for i, r in enumerate(reordered_rows) if i not in drop]
+    with queue_path.open("r+", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            fh.seek(0)
+            fh.truncate()
+            for r in kept:
+                fh.write(json.dumps(r, sort_keys=True) + "\n")
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    return len(drop)
+
+
 def has_event_rows(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
@@ -193,6 +246,9 @@ def refresh(
     queue_path = queue or repo_state / "improvement-queue.jsonl"
     queue_stats = queue_candidate_adjustments(queue_path, impact)
     queue_path.touch(exist_ok=True)
+    # Run dedup after the append-section releases its lock. The helper
+    # acquires its own LOCK_EX, so it's safe to call here.
+    dedup_removed = _post_dedup(queue_path)
     touched.append(queue_path)
 
     queued = queue_stats["queued"]
@@ -205,6 +261,8 @@ def refresh(
             f"refresh: suppressed {suppressed_redacted} rows containing secret-like content",
             file=sys.stderr,
         )
+    if dedup_removed:
+        print(f"refresh: dedup_removed={dedup_removed} near-duplicate rows", file=sys.stderr)
 
     return {
         "repo": str(repo),
@@ -214,6 +272,7 @@ def refresh(
         "queued_candidates": queued,
         "suppressed_needs_review": suppressed,
         "suppressed_redacted": suppressed_redacted,
+        "dedup_removed": dedup_removed,
         "touched": [str(path) for path in touched],
     }
 
