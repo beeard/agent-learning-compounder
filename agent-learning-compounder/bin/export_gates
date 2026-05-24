@@ -7,6 +7,7 @@ import argparse
 import dataclasses
 import datetime as dt
 import hashlib
+import json
 import pathlib
 import re
 import sys
@@ -159,7 +160,24 @@ def parse_gates(report: str) -> list[Gate]:
     return deduped
 
 
-def render_registry(report_path: pathlib.Path, gates: list[Gate], max_domains: int | None = None) -> str:
+def _load_probes(path: pathlib.Path | None) -> dict:
+    """Return the registered probes dict, or {} when no path is supplied or
+    the file is missing. Operator-controlled local state, so a malformed
+    file surfaces a JSONDecodeError rather than being silently swallowed."""
+    if path is None:
+        return {}
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return data if isinstance(data, dict) else {}
+
+
+def render_registry(
+    report_path: pathlib.Path,
+    gates: list[Gate],
+    max_domains: int | None = None,
+    probes: dict | None = None,
+) -> str:
     now = dt.datetime.now(dt.timezone.utc)
     selected_domains: list[str] = []
     selected_gates: list[Gate] = []
@@ -182,6 +200,7 @@ def render_registry(report_path: pathlib.Path, gates: list[Gate], max_domains: i
         "## gates",
         "",
     ]
+    probes = probes or {}
     for gate in selected_gates:
         gate_id = _gate_id(gate.domain, gate.gate_category, gate.gate)
         lines.extend(
@@ -192,6 +211,13 @@ def render_registry(report_path: pathlib.Path, gates: list[Gate], max_domains: i
                 f"  gate: {gate.gate}",
             ]
         )
+        probe = probes.get(gate_id)
+        if isinstance(probe, dict) and "rate" in probe:
+            # Emit probe metadata so downstream loaders know this gate is
+            # under an A/B probe and at what skip rate. Unregistered gates
+            # stay silent (status omitted entirely).
+            lines.append("  probe_status: active")
+            lines.append(f"  probe_rate: {probe['rate']}")
         if gate.level:
             lines.append(f"  level: {gate.level}")
         if gate.evidence_unit and gate.evidence_count:
@@ -205,6 +231,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", required=True, help="Validated agent-learning report.md to export from.")
     parser.add_argument("--output", required=True, help="Markdown registry output path.")
     parser.add_argument("--max-domains", type=int, default=None, help="Maximum number of domains to export.")
+    parser.add_argument(
+        "--probes",
+        default=None,
+        help="Optional path to causal_probe probes.json; emits probe_status/probe_rate "
+        "lines for any gate_id registered there.",
+    )
     args = parser.parse_args(argv)
 
     if args.max_domains is not None and args.max_domains < 1:
@@ -225,7 +257,13 @@ def main(argv: list[str] | None = None) -> int:
         print("no agent_compensation gates found", file=sys.stderr)
         return 1
 
-    output_path.write_text(render_registry(report_path, gates, args.max_domains), encoding="utf-8")
+    probes_path = pathlib.Path(args.probes) if args.probes else None
+    probes = _load_probes(probes_path)
+
+    output_path.write_text(
+        render_registry(report_path, gates, args.max_domains, probes=probes),
+        encoding="utf-8",
+    )
     print(f"exported {len(gates)} gates to {output_path}")
     return 0
 

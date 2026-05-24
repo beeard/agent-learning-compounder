@@ -20,8 +20,13 @@ from pathlib import Path
 
 
 def load_sessions(events_path: Path):
-    """Returns dict cid -> {"gates": set[str], "outcome": str|None}."""
-    sessions = defaultdict(lambda: {"gates": set(), "outcome": None})
+    """Returns dict cid -> {gates: set[str], outcome: str|None,
+                            probe_decisions: dict[gate_id, 'load'|'skip']}.
+
+    A session's per-gate probe decision is whichever value was most recently
+    seen for that gate_id across the session's instructions_loaded events.
+    """
+    sessions = defaultdict(lambda: {"gates": set(), "outcome": None, "probe_decisions": {}})
     with events_path.open(encoding="utf-8") as fh:
         for line in fh:
             line = line.strip()
@@ -35,16 +40,42 @@ def load_sessions(events_path: Path):
             if evt == "instructions_loaded":
                 for gid in row.get("gate_loaded_ids", []) or []:
                     sessions[cid]["gates"].add(gid)
+                for entry in row.get("probe_decisions", []) or []:
+                    if not isinstance(entry, dict):
+                        continue
+                    gid = entry.get("gate_id")
+                    decision = entry.get("decision")
+                    if isinstance(gid, str) and decision in ("load", "skip"):
+                        sessions[cid]["probe_decisions"][gid] = decision
             elif evt == "session_end":
                 sessions[cid]["outcome"] = row.get("outcome")
     return dict(sessions)
 
 
+PROBE_COHORT_MIN_N = 5
+
+
 def evaluate(sessions, min_n=10):
-    """For each gate_id, compute cohort stats. Returns dict with 'gates' list."""
+    """For each gate_id, compute cohort stats. Returns dict with 'gates' list.
+
+    Additionally splits by probe_decision when present, emitting a
+    causal_signal field. Probe cohorts use a lower min-N (5) than the
+    correlational cohorts (10): probes are deliberately N-bounded by the
+    operator-controlled skip rate, so the same threshold would suppress
+    causal signal indefinitely.
+    """
     all_gate_ids = set()
     for s in sessions.values():
         all_gate_ids.update(s["gates"])
+        # Include gates that were probe-skipped this session too — they
+        # belong to the gate's universe even though the session itself
+        # never had the gate loaded.
+        all_gate_ids.update(s.get("probe_decisions", {}).keys())
+
+    def rate(outs):
+        if not outs:
+            return None
+        return sum(1 for o in outs if o == "correction") / len(outs)
 
     rows = []
     for gid in sorted(all_gate_ids):
@@ -53,10 +84,17 @@ def evaluate(sessions, min_n=10):
         absent_outcomes = [s["outcome"] for s in sessions.values()
                            if gid not in s["gates"] and s["outcome"]]
 
-        def rate(outs):
-            if not outs:
-                return None
-            return sum(1 for o in outs if o == "correction") / len(outs)
+        # Probe cohorts: per-gate decisions, regardless of whether the gate
+        # was loaded in the absence-of-probe case. The probe decision *is*
+        # the contract — load=loaded, skip=not loaded.
+        probe_loaded_outcomes = [
+            s["outcome"] for s in sessions.values()
+            if s.get("probe_decisions", {}).get(gid) == "load" and s["outcome"]
+        ]
+        probe_skipped_outcomes = [
+            s["outcome"] for s in sessions.values()
+            if s.get("probe_decisions", {}).get(gid) == "skip" and s["outcome"]
+        ]
 
         a = rate(loaded_outcomes)
         b = rate(absent_outcomes)
@@ -75,6 +113,28 @@ def evaluate(sessions, min_n=10):
             else:
                 label = "no_signal"
 
+        # Causal signal from probe cohorts. Uses a smaller min-N (5) because
+        # probes are intentionally rate-limited; demanding 10 would gate the
+        # signal indefinitely on low-traffic gates.
+        probe_loaded_rate = rate(probe_loaded_outcomes)
+        probe_skipped_rate = rate(probe_skipped_outcomes)
+        n_probe_loaded = len(probe_loaded_outcomes)
+        n_probe_skipped = len(probe_skipped_outcomes)
+
+        if (n_probe_loaded < PROBE_COHORT_MIN_N
+                or n_probe_skipped < PROBE_COHORT_MIN_N
+                or probe_loaded_rate is None
+                or probe_skipped_rate is None):
+            causal_signal = "needs_review"
+        else:
+            probe_delta = probe_skipped_rate - probe_loaded_rate
+            if probe_delta >= 0.20:
+                causal_signal = "causal_correlated_with_success"
+            elif probe_delta <= -0.10:
+                causal_signal = "causal_correlated_with_failure"
+            else:
+                causal_signal = "causal_no_signal"
+
         rows.append({
             "gate_id": gid,
             "n_loaded": n_loaded,
@@ -83,6 +143,7 @@ def evaluate(sessions, min_n=10):
             "correction_rate_absent": b,
             "delta": delta,
             "label": label,
+            "causal_signal": causal_signal,
         })
     return {"gates": rows}
 

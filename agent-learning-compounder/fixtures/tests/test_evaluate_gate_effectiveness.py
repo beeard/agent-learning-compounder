@@ -47,6 +47,12 @@ class EvaluateGateEffectiveness(unittest.TestCase):
         self.assertEqual(row["label"], "correlated_with_failure")
         self.assertLessEqual(row["delta"], -0.10)
 
+    def test_probe_cohort_emits_causal_signal(self):
+        result = self._run()
+        row = next(r for r in result["gates"] if r["gate_id"] == "g_aaa111")
+        self.assertIn("causal_signal", row)
+        self.assertEqual(row["causal_signal"], "causal_correlated_with_success")
+
     def test_min_n_gates_needs_review(self):
         with tempfile.NamedTemporaryFile("w", suffix=".jsonl", delete=False) as fh:
             fh.write(json.dumps({

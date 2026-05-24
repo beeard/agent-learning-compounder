@@ -68,3 +68,43 @@
 {"schema_version": 2, "ts": "2026-01-01T01:03:00Z", "event": "session_end", "correlation_id": "none_corr_06", "outcome": "correction"}
 {"schema_version": 2, "ts": "2026-01-01T00:34:00Z", "event": "instructions_loaded", "correlation_id": "none_corr_07", "gate_loaded_ids": []}
 {"schema_version": 2, "ts": "2026-01-01T01:04:00Z", "event": "session_end", "correlation_id": "none_corr_07", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T01:00:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_00", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:10:00Z", "event": "session_end", "correlation_id": "a_probe_load_00", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:01:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_01", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:11:00Z", "event": "session_end", "correlation_id": "a_probe_load_01", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:02:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_02", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:12:00Z", "event": "session_end", "correlation_id": "a_probe_load_02", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:03:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_03", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:13:00Z", "event": "session_end", "correlation_id": "a_probe_load_03", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:04:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_04", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:14:00Z", "event": "session_end", "correlation_id": "a_probe_load_04", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:05:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_05", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:15:00Z", "event": "session_end", "correlation_id": "a_probe_load_05", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:06:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_06", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:16:00Z", "event": "session_end", "correlation_id": "a_probe_load_06", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:07:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_07", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:17:00Z", "event": "session_end", "correlation_id": "a_probe_load_07", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:08:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_08", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:18:00Z", "event": "session_end", "correlation_id": "a_probe_load_08", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T01:09:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_load_09", "gate_loaded_ids": ["g_aaa111"], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "load"}]}
+{"schema_version": 2, "ts": "2026-01-01T01:19:00Z", "event": "session_end", "correlation_id": "a_probe_load_09", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:00:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_00", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:10:00Z", "event": "session_end", "correlation_id": "a_probe_skip_00", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T02:01:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_01", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:11:00Z", "event": "session_end", "correlation_id": "a_probe_skip_01", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T02:02:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_02", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:12:00Z", "event": "session_end", "correlation_id": "a_probe_skip_02", "outcome": "clean"}
+{"schema_version": 2, "ts": "2026-01-01T02:03:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_03", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:13:00Z", "event": "session_end", "correlation_id": "a_probe_skip_03", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:04:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_04", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:14:00Z", "event": "session_end", "correlation_id": "a_probe_skip_04", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:05:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_05", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:15:00Z", "event": "session_end", "correlation_id": "a_probe_skip_05", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:06:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_06", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:16:00Z", "event": "session_end", "correlation_id": "a_probe_skip_06", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:07:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_07", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:17:00Z", "event": "session_end", "correlation_id": "a_probe_skip_07", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:08:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_08", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:18:00Z", "event": "session_end", "correlation_id": "a_probe_skip_08", "outcome": "correction"}
+{"schema_version": 2, "ts": "2026-01-01T02:09:00Z", "event": "instructions_loaded", "correlation_id": "a_probe_skip_09", "gate_loaded_ids": [], "probe_decisions": [{"gate_id": "g_aaa111", "decision": "skip"}]}
+{"schema_version": 2, "ts": "2026-01-01T02:19:00Z", "event": "session_end", "correlation_id": "a_probe_skip_09", "outcome": "correction"}
