@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Compute correlation-only effectiveness signals per gate_id.
+
+Reads hook events JSONL. Pairs instructions_loaded with session_end via
+correlation_id. For each gate_id, computes correction_rate among sessions
+that loaded the gate (cohort A) and among sessions that did not (cohort B).
+delta = correction_rate(B) - correction_rate(A); positive delta means
+loading the gate correlates with fewer corrections.
+
+Never reports causality. Below --min-n in either cohort, label is
+needs_review.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+
+def load_sessions(events_path: Path):
+    """Returns dict cid -> {"gates": set[str], "outcome": str|None}."""
+    sessions = defaultdict(lambda: {"gates": set(), "outcome": None})
+    with events_path.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            row = json.loads(line)
+            cid = row.get("correlation_id")
+            if not cid:
+                continue
+            evt = row.get("event")
+            if evt == "instructions_loaded":
+                for gid in row.get("gate_loaded_ids", []) or []:
+                    sessions[cid]["gates"].add(gid)
+            elif evt == "session_end":
+                sessions[cid]["outcome"] = row.get("outcome")
+    return dict(sessions)
+
+
+def evaluate(sessions, min_n=10):
+    """For each gate_id, compute cohort stats. Returns dict with 'gates' list."""
+    all_gate_ids = set()
+    for s in sessions.values():
+        all_gate_ids.update(s["gates"])
+
+    rows = []
+    for gid in sorted(all_gate_ids):
+        loaded_outcomes = [s["outcome"] for s in sessions.values()
+                           if gid in s["gates"] and s["outcome"]]
+        absent_outcomes = [s["outcome"] for s in sessions.values()
+                           if gid not in s["gates"] and s["outcome"]]
+
+        def rate(outs):
+            if not outs:
+                return None
+            return sum(1 for o in outs if o == "correction") / len(outs)
+
+        a = rate(loaded_outcomes)
+        b = rate(absent_outcomes)
+        n_loaded = len(loaded_outcomes)
+        n_absent = len(absent_outcomes)
+
+        if n_loaded < min_n or n_absent < min_n or a is None or b is None:
+            label = "needs_review"
+            delta = None
+        else:
+            delta = b - a
+            if delta >= 0.20:
+                label = "correlated_with_success"
+            elif delta <= -0.10:
+                label = "correlated_with_failure"
+            else:
+                label = "no_signal"
+
+        rows.append({
+            "gate_id": gid,
+            "n_loaded": n_loaded,
+            "n_absent": n_absent,
+            "correction_rate_loaded": a,
+            "correction_rate_absent": b,
+            "delta": delta,
+            "label": label,
+        })
+    return {"gates": rows}
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--events", required=True, type=Path)
+    p.add_argument("--output", required=True, type=Path)
+    p.add_argument("--min-n", type=int, default=10)
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    if not args.events.is_file():
+        print(f"events not a regular file: {args.events}", file=sys.stderr)
+        return 2
+    sessions = load_sessions(args.events)
+    result = evaluate(sessions, min_n=args.min_n)
+    args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
