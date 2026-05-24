@@ -39,8 +39,6 @@
     "agent-learning-compounder/SKILL.md",
     "agent-learning-compounder/references/agent-quickstart.md",
     "agent-learning-compounder/references/architecture.md",
-    "agent-learning-compounder/references/production-hardening-plan.md",
-    "agent-learning-compounder/references/production-signoff.md",
     "agent-learning-compounder/references/event-schema-evolution.md",
     "agent-learning-compounder/references/queue-dedup.md",
     "agent-learning-compounder/references/gate-effectiveness.md",

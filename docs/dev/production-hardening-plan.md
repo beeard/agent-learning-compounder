@@ -35,7 +35,7 @@ true:
 Evidence gates:
 
 - `agent-learning-compounder/reference-lib/architecture` exists.
-- `agent-learning-compounder/reference-lib/production-hardening-plan` exists.
+- `docs/dev/production-hardening-plan.md` exists.
 - Existing manifest and default command contracts are referenced from
   `references/*.md` pages and SKILL.
 
@@ -95,7 +95,7 @@ Evidence gates:
 Evidence gates:
 
 - `references/architecture.md` exists as symlink to canonical source.
-- `references/production-hardening-plan.md` exists as symlink to canonical source.
+- `docs/dev/production-hardening-plan.md` lives outside the shipped skill.
 - `README.md`, `SKILL.md`, and `references/agent-quickstart.md` link to both.
 
 ## Phase 5: Signoff (3 steps)
