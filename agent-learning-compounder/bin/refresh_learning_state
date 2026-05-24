@@ -193,22 +193,59 @@ def _post_dedup(
     return len(drop)
 
 
+def _inherited_gates(gates_md_path: pathlib.Path) -> dict[str, str]:
+    """Return dict gate_id -> derived_from value for gates with a derived_from line.
+
+    Parses ``latest-approved-gates.md`` block-by-block; a block is considered
+    inherited when it carries both a ``gate_id:`` and a ``derived_from:`` line.
+    Returns an empty dict if the file is missing.
+    """
+    if not gates_md_path.is_file():
+        return {}
+    text = gates_md_path.read_text(encoding="utf-8")
+    inherited: dict[str, str] = {}
+    # Split on the block marker "- domain:"; each block contains gate_id and
+    # optionally derived_from. The first element is the header before the first
+    # block, so skip it.
+    blocks = text.split("\n- domain:")
+    for block in blocks[1:]:
+        gate_id = None
+        derived_from = None
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if line.startswith("gate_id:"):
+                gate_id = line.split(":", 1)[1].strip()
+            elif line.startswith("derived_from:"):
+                derived_from = line.split(":", 1)[1].strip()
+        if gate_id and derived_from:
+            inherited[gate_id] = derived_from
+    return inherited
+
+
 def _queue_retirement_candidates(
     queue_path: pathlib.Path,
     events_path: pathlib.Path,
     min_n_retire: int = 20,
-) -> int:
-    """Run effectiveness scoring; append retirement candidates for low-impact gates.
+    inherited: dict[str, str] | None = None,
+) -> tuple[int, int]:
+    """Run effectiveness scoring; append retirement / demote candidates.
 
-    A retirement candidate is queued when:
+    A candidate gate is one where:
       - label is correlated_with_failure OR no_signal
-      - n_loaded >= min_n_retire (default 20; stricter than the standalone scorer's
-        min-N=10 because retirement is more disruptive than signal-or-not).
+      - n_loaded >= min_n_retire (default 20; stricter than the standalone
+        scorer's min-N=10 because retirement is more disruptive).
 
-    Returns the count of retirement rows appended.
+    For each candidate, if the gate appears in ``inherited`` (i.e. carries a
+    ``derived_from:`` line in approved-gates.md), queue an
+    ``inherited_gate_demote_candidate`` row carrying the derived_from value.
+    Otherwise queue the original ``gate_retirement_candidate``. Each candidate
+    produces exactly one row (demote OR retire, never both).
+
+    Returns (retirement_count, demote_count).
     """
     if not events_path.is_file():
-        return 0
+        return (0, 0)
+    inherited_map = inherited or {}
     sessions = load_sessions(events_path)
     result = evaluate_gates(sessions, min_n=10)
     candidates = [
@@ -217,8 +254,9 @@ def _queue_retirement_candidates(
         and row["n_loaded"] >= min_n_retire
     ]
     if not candidates:
-        return 0
-    appended = 0
+        return (0, 0)
+    retire_count = 0
+    demote_count = 0
     ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     now_unix = int(time.time())
     queue_path.parent.mkdir(parents=True, exist_ok=True)
@@ -227,28 +265,52 @@ def _queue_retirement_candidates(
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
             for c in candidates:
-                row = {
-                    "id": f"retire-{c['gate_id']}-{now_unix}-{appended}",
-                    "kind": "gate_retirement_candidate",
-                    "text": (
-                        f"Retire low-impact gate {c['gate_id']}: "
-                        f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
-                        f"label={c['label']}."
-                    ),
-                    "gate_id": c["gate_id"],
-                    "evidence": {
-                        "n_loaded": c["n_loaded"],
-                        "n_absent": c["n_absent"],
-                        "delta": c["delta"],
-                        "label": c["label"],
-                    },
-                    "ts": ts,
-                }
-                handle.write(json.dumps(row, sort_keys=True) + "\n")
-                appended += 1
+                gate_id = c["gate_id"]
+                if gate_id in inherited_map:
+                    derived_from = inherited_map[gate_id]
+                    row = {
+                        "id": f"demote-{gate_id}-{now_unix}-{demote_count}",
+                        "kind": "inherited_gate_demote_candidate",
+                        "text": (
+                            f"Demote inherited gate {gate_id} (origin={derived_from}): "
+                            f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
+                            f"label={c['label']}."
+                        ),
+                        "gate_id": gate_id,
+                        "derived_from": derived_from,
+                        "evidence": {
+                            "n_loaded": c["n_loaded"],
+                            "n_absent": c["n_absent"],
+                            "delta": c["delta"],
+                            "label": c["label"],
+                        },
+                        "ts": ts,
+                    }
+                    handle.write(json.dumps(row, sort_keys=True) + "\n")
+                    demote_count += 1
+                else:
+                    row = {
+                        "id": f"retire-{gate_id}-{now_unix}-{retire_count}",
+                        "kind": "gate_retirement_candidate",
+                        "text": (
+                            f"Retire low-impact gate {gate_id}: "
+                            f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
+                            f"label={c['label']}."
+                        ),
+                        "gate_id": gate_id,
+                        "evidence": {
+                            "n_loaded": c["n_loaded"],
+                            "n_absent": c["n_absent"],
+                            "delta": c["delta"],
+                            "label": c["label"],
+                        },
+                        "ts": ts,
+                    }
+                    handle.write(json.dumps(row, sort_keys=True) + "\n")
+                    retire_count += 1
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-    return appended
+    return (retire_count, demote_count)
 
 
 def _queue_domain_rule_candidates(
@@ -362,11 +424,19 @@ def refresh(
     # Run dedup after the append-section releases its lock. The helper
     # acquires its own LOCK_EX, so it's safe to call here.
     dedup_removed = _post_dedup(queue_path)
-    # Score gate effectiveness and append retirement candidates for
+    # Score gate effectiveness and append retirement / demote candidates for
     # low-impact gates (correlated_with_failure / no_signal with
-    # n_loaded >= 20). Re-run dedup so any duplicate retirement rows are
-    # collapsed alongside other candidates.
-    retirement_count = _queue_retirement_candidates(queue_path, event_log)
+    # n_loaded >= 20). Inherited gates (those with a derived_from: line in
+    # latest-approved-gates.md) are queued as inherited_gate_demote_candidate
+    # instead of gate_retirement_candidate so operators can demote them in
+    # this repo without affecting siblings that inherited the same gate.
+    # Re-run dedup so any duplicate rows are collapsed alongside other
+    # candidates.
+    gates_md_path = reports / "latest-approved-gates.md"
+    inherited_map = _inherited_gates(gates_md_path)
+    retirement_count, demote_count = _queue_retirement_candidates(
+        queue_path, event_log, inherited=inherited_map
+    )
     # Mine the session corpus for correction-correlated n-grams and queue
     # them as domain_rule_candidate rows for operator review. The corpus is
     # expected at repo_state/"session-corpus.txt" unless overridden; if
@@ -377,7 +447,7 @@ def refresh(
     # headers and assert domain_rule_candidate rows appear in the queue.
     corpus_path = corpus or repo_state / "session-corpus.txt"
     domain_count = _queue_domain_rule_candidates(queue_path, corpus_path)
-    if retirement_count or domain_count:
+    if retirement_count or demote_count or domain_count:
         dedup_removed += _post_dedup(queue_path)
     touched.append(queue_path)
 
@@ -398,6 +468,11 @@ def refresh(
             f"refresh: queued {retirement_count} gate_retirement_candidate row(s)",
             file=sys.stderr,
         )
+    if demote_count:
+        print(
+            f"refresh: queued {demote_count} inherited_gate_demote_candidate row(s)",
+            file=sys.stderr,
+        )
     if domain_count:
         print(
             f"refresh: queued {domain_count} domain_rule_candidate row(s)",
@@ -414,6 +489,7 @@ def refresh(
         "suppressed_redacted": suppressed_redacted,
         "dedup_removed": dedup_removed,
         "retirement_candidates_queued": retirement_count,
+        "inherited_demote_candidates_queued": demote_count,
         "domain_rule_candidates_queued": domain_count,
         "touched": [str(path) for path in touched],
     }

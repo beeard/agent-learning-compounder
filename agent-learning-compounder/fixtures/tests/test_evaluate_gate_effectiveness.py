@@ -127,5 +127,74 @@ class RefreshSurfacesRetirementCandidate(unittest.TestCase):
             self.assertGreaterEqual(retirement["evidence"]["n_loaded"], 20)
 
 
+class RefreshSurfacesInheritedDemoteCandidate(unittest.TestCase):
+    """When an inherited gate (has derived_from in approved-gates.md) hits
+    correlated_with_failure with n_loaded>=20, queue an inherited_gate_demote_candidate
+    instead of gate_retirement_candidate."""
+
+    def test_refresh_queues_demote_for_failing_inherited_gate(self):
+        import shutil
+        import sys
+
+        fixture_src = REPO_ROOT / "fixtures" / "eval-fixtures" / "mini-repo"
+        seed = fixture_src / "seed"
+
+        sys.path.insert(0, str(REPO_ROOT / "bin"))
+        import state_paths  # type: ignore
+
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            shutil.copytree(fixture_src, repo, ignore=shutil.ignore_patterns("seed"))
+
+            rid = state_paths.repo_id(repo)
+            state_root = repo / ".agent-learning"
+            state_dir = state_root / "repos" / rid
+            state_dir.mkdir(parents=True, exist_ok=True)
+            for name in ("config.json", "baseline.json", "domain-rules.active.json", "skill-map.json"):
+                shutil.copy(seed / name, state_dir / name)
+            (state_dir / "improvement-queue.jsonl").write_text("", encoding="utf-8")
+            shutil.copy(
+                seed / "hook-events-inherited-failure-cohort.jsonl",
+                state_dir / "hook-events.jsonl",
+            )
+
+            # Build a gates.md with the inherited fragment so the gate_id is
+            # marked inherited (derived_from: present in its block).
+            reports_dir = state_dir / "reports"
+            reports_dir.mkdir(parents=True, exist_ok=True)
+            gates_md = reports_dir / "latest-approved-gates.md"
+            gates_md.write_text("# Approved Agent Gates\n", encoding="utf-8")
+            with gates_md.open("a", encoding="utf-8") as fh:
+                fh.write((seed / "inherited-gates-md-fragment.md").read_text(encoding="utf-8"))
+
+            shutil.copy(seed / "config.json", state_root / "config.json")
+
+            proc = subprocess.run(
+                [str(REPO_ROOT / "bin" / "refresh_learning_state"),
+                 "--repo", str(repo),
+                 "--state-dir", str(state_root)],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+
+            queue = state_dir / "improvement-queue.jsonl"
+            rows = [json.loads(ln) for ln in queue.read_text().splitlines() if ln]
+            kinds = {r.get("kind") for r in rows}
+            self.assertIn("inherited_gate_demote_candidate", kinds)
+
+            demote = next(r for r in rows if r.get("kind") == "inherited_gate_demote_candidate")
+            self.assertEqual(demote["gate_id"], "bbbbbbbbbbbb")
+            self.assertIn("repo-origin", demote["derived_from"])
+            self.assertEqual(demote["evidence"]["label"], "correlated_with_failure")
+            self.assertGreaterEqual(demote["evidence"]["n_loaded"], 20)
+
+            # Should NOT also queue this as gate_retirement_candidate
+            kinds_for_this_gate = {
+                r.get("kind") for r in rows
+                if r.get("gate_id") == "bbbbbbbbbbbb"
+            }
+            self.assertNotIn("gate_retirement_candidate", kinds_for_this_gate)
+
+
 if __name__ == "__main__":
     unittest.main()
