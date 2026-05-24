@@ -67,7 +67,7 @@ class GatesInherit(unittest.TestCase):
             str(INHERIT),
             "--shared-root", str(self.shared.parent),
             "--target-gates", str(self.target),
-            "--gate-id", "doesnotexist",
+            "--gate-id", "ffffffffffff",
         ], capture_output=True, text=True, check=False)
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("not found", proc.stderr)
@@ -83,6 +83,48 @@ class GatesInherit(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         # The error message should mention the target was not found
         self.assertIn("not", proc.stderr.lower())
+
+    def test_inherit_rejects_non_hex_gate_id_before_reading_outside_registry(self):
+        outside = Path(self.tmp.name) / "secret.json"
+        outside.write_text(json.dumps({
+            "domain": "tests",
+            "gate_id": "../../secret",
+            "gate_category": "validation-check",
+            "gate": "Run validation.",
+            "origin_repo": "repo-abc",
+            "promoted_at": "2026-01-01T00:00:00Z",
+            "note": "",
+        }))
+        proc = subprocess.run([
+            str(INHERIT),
+            "--shared-root", str(self.shared.parent),
+            "--target-gates", str(self.target),
+            "--gate-id", "../../secret",
+        ], capture_output=True, text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("12 lowercase hex", proc.stderr)
+        self.assertNotIn("secret", self.target.read_text())
+
+    def test_inherit_rejects_record_with_newline_in_markdown_field(self):
+        gate_id = "bbbbbbbbbbbb"
+        (self.shared / f"{gate_id}.json").write_text(json.dumps({
+            "domain": "tests\n- domain: injected",
+            "gate_id": gate_id,
+            "gate_category": "validation-check",
+            "gate": "Run validation.",
+            "origin_repo": "repo-abc",
+            "promoted_at": "2026-01-01T00:00:00Z",
+            "note": "",
+        }))
+        proc = subprocess.run([
+            str(INHERIT),
+            "--shared-root", str(self.shared.parent),
+            "--target-gates", str(self.target),
+            "--gate-id", gate_id,
+        ], capture_output=True, text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("invalid shared gate record", proc.stderr)
+        self.assertNotIn("bbbbbbbbbbbb", self.target.read_text())
 
 
 if __name__ == "__main__":

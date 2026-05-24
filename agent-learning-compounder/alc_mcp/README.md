@@ -8,7 +8,9 @@ Stdio MCP server exposing the durable state as queryable tools.
 pip install mcp
 ```
 
-(Or `pip install -r requirements-optional.txt` to install all P5 optional deps.)
+(Or `pip install -r requirements-optional.txt` from the installed skill root.
+From the archive root, use
+`pip install -r agent-learning-compounder/requirements-optional.txt`.)
 
 ## Run
 

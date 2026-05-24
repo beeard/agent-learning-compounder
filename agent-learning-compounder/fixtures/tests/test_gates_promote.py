@@ -122,6 +122,29 @@ class GatesPromote(unittest.TestCase):
         data = json.loads(record_path.read_text())
         self.assertEqual(data["note"], "high impact in our cloudflare workflow")
 
+    def test_promote_rejects_non_hex_gate_id_before_writing(self):
+        malicious = "../../escape"
+        gates = Path(self.tmp.name) / "malicious-gates.md"
+        gates.write_text(
+            "# Approved Agent Gates\n\n"
+            "## gates\n\n"
+            "- domain: tests\n"
+            f"  gate_id: {malicious}\n"
+            "  gate_category: validation-check\n"
+            "  gate: Run validation.\n",
+            encoding="utf-8",
+        )
+        proc = subprocess.run([
+            str(PROMOTE),
+            "--gates", str(gates),
+            "--gate-id", malicious,
+            "--origin-repo", "repo-abc",
+            "--shared-root", str(self.shared),
+        ], capture_output=True, text=True, check=False)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("12 lowercase hex", proc.stderr)
+        self.assertFalse((Path(self.tmp.name) / "escape.json").exists())
+
 
 class GatesPromoteInheritRoundTrip(unittest.TestCase):
     """Promote a gate from one repo's gates.md, inherit into another's gates.md,

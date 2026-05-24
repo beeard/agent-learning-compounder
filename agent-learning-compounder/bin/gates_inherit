@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -14,8 +15,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 
 
+GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
+REQUIRED_RECORD_FIELDS = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "promoted_at")
+
+
+def validate_gate_id(gate_id: str) -> None:
+    if not GATE_ID_RE.fullmatch(gate_id):
+        raise ValueError(f"gate_id must be 12 lowercase hex characters: {gate_id}")
+
+
+def shared_gate_path(shared_root: Path, gate_id: str) -> Path:
+    gates_dir = (shared_root / "gates").resolve()
+    record_path = (gates_dir / f"{gate_id}.json").resolve()
+    try:
+        record_path.relative_to(gates_dir)
+    except ValueError as error:
+        raise ValueError(f"shared gate path escapes registry: {record_path}") from error
+    return record_path
+
+
+def validate_record(record: dict, gate_id: str) -> None:
+    for field in REQUIRED_RECORD_FIELDS:
+        value = record.get(field)
+        if not isinstance(value, str) or not value:
+            raise ValueError(f"missing or invalid field: {field}")
+        if "\n" in value or "\r" in value:
+            raise ValueError(f"field contains a newline: {field}")
+    if record["gate_id"] != gate_id:
+        raise ValueError("record gate_id does not match requested gate_id")
+
+
 def gate_already_present(target: Path, gate_id: str) -> bool:
-    return gate_id in target.read_text(encoding="utf-8")
+    pattern = re.compile(rf"^\s*gate_id:\s*{re.escape(gate_id)}\s*$", re.MULTILINE)
+    return bool(pattern.search(target.read_text(encoding="utf-8")))
 
 
 def append_gate(target: Path, record: dict):
@@ -40,7 +72,12 @@ def parse_args():
 
 def main():
     args = parse_args()
-    record_path = args.shared_root / "gates" / f"{args.gate_id}.json"
+    try:
+        validate_gate_id(args.gate_id)
+        record_path = shared_gate_path(args.shared_root, args.gate_id)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if not record_path.is_file():
         print(f"shared gate not found: {record_path}", file=sys.stderr)
         return 2
@@ -54,7 +91,14 @@ def main():
         return 2
     if gate_already_present(args.target_gates, args.gate_id):
         return 0
-    record = json.loads(record_path.read_text(encoding="utf-8"))
+    try:
+        record = json.loads(record_path.read_text(encoding="utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError("record must be a JSON object")
+        validate_record(record, args.gate_id)
+    except (json.JSONDecodeError, ValueError) as exc:
+        print(f"invalid shared gate record: {exc}", file=sys.stderr)
+        return 2
     append_gate(args.target_gates, record)
     return 0
 

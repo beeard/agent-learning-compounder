@@ -137,8 +137,20 @@ install_once() {
     mv "$dest" "$backup"
     echo "existing install moved to $backup" >&2
   fi
-  cp -a "$skill_src" "$dest"
+  copy_skill "$dest"
   printf '%s\n' "$dest"
+}
+
+copy_skill() {
+  dest="$1"
+  cp -a "$skill_src" "$dest"
+  sanitize_skill_tree "$dest"
+}
+
+sanitize_skill_tree() {
+  root="$1"
+  find "$root" \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.agent-learning' \) -type d -prune -exec rm -rf {} +
+  find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
 }
 
 while [ "$#" -gt 0 ]; do
@@ -236,6 +248,7 @@ if [ -n "$bootstrap_repo" ]; then
     (cd "$bootstrap_dest" && python3 -m unittest discover -s fixtures/tests)
     (cd "$bootstrap_dest" && python3 -m unittest discover -s tests)
     (cd "$bootstrap_dest" && python3 scripts/run_pressure_tests.py)
+    sanitize_skill_tree "$bootstrap_dest"
   fi
 
   python3 "$bootstrap_dest/bin/init_learning_system.py" \
@@ -300,13 +313,15 @@ if [ -e "$dest" ]; then
   echo "existing install moved to $backup"
 fi
 
-cp -a "$skill_src" "$dest"
+copy_skill "$dest"
 python3 -m py_compile "$dest/bin/init_learning_system" "$dest/bin/install_runtime_hooks"
+sanitize_skill_tree "$dest"
 
 if [ "$verify" -eq 1 ]; then
   (cd "$dest" && python3 -m unittest discover -s fixtures/tests)
   (cd "$dest" && python3 -m unittest discover -s tests)
   (cd "$dest" && python3 scripts/run_pressure_tests.py)
+  sanitize_skill_tree "$dest"
 fi
 
 cat <<EOF

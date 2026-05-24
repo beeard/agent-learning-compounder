@@ -6,6 +6,17 @@ Eight-upgrade extension on top of `2026.05.24+review7-production`. All
 upstream hardening properties preserved; additions are additive. See
 `PLAN.md` for the full implementation plan.
 
+Post-review fixes:
+- `bin/gates_promote` and `bin/gates_inherit` now require 12 lowercase hex
+  `gate_id` values before building shared-registry paths.
+- `bin/gates_inherit` validates shared JSON records before appending markdown,
+  including matching `gate_id` and rejecting newline-bearing fields.
+- `install.sh` sanitizes copied installs after copy, compile checks, and
+  optional verification so ignored cache artifacts are not shipped into target
+  skill roots.
+- Optional dependency docs now distinguish archive-root and installed-root
+  `requirements-optional.txt` paths.
+
 New capabilities:
 - **Phase 1 (schema versioning + replay):** `bin/collect_hook_event` now
   stamps `schema_version: 2` on every persisted row and allows
@@ -39,7 +50,7 @@ New capabilities:
   HTMX) + `bin/serve_dashboard` launcher serve a localhost-only view of
   gates, queue, and active probes. Optional fastapi/jinja2/uvicorn/httpx.
 
-Test deltas: 105 → 160 fixture tests (+55 new). 4 SKIPs are gated on
+Test deltas: 105 → 166 fixture tests (+61 new). 4 SKIPs are gated on
 optional deps. 1 smoke + 4 pressure scenarios still pass.
 
 New references: `event-schema-evolution.md`, `queue-dedup.md`,

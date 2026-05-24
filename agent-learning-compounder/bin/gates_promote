@@ -31,6 +31,7 @@ from collect_hook_event import assert_regular_file_destination  # noqa: E402
 # each block. The next block (or end-of-file) terminates the current one.
 GATE_BLOCK_SPLIT_RE = re.compile(r"(?m)^-\s+domain:\s*")
 FIELD_RE = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.*?)\s*$", re.I)
+GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
 
 
 def parse_blocks(text: str) -> list[dict[str, str]]:
@@ -80,6 +81,21 @@ def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str
     }
 
 
+def validate_gate_id(gate_id: str) -> None:
+    if not GATE_ID_RE.fullmatch(gate_id):
+        raise ValueError(f"gate_id must be 12 lowercase hex characters: {gate_id}")
+
+
+def shared_gate_path(shared_root: Path, gate_id: str) -> Path:
+    gates_dir = (shared_root / "gates").resolve()
+    out_path = (gates_dir / f"{gate_id}.json").resolve()
+    try:
+        out_path.relative_to(gates_dir)
+    except ValueError as error:
+        raise ValueError(f"gate output path escapes shared registry: {out_path}") from error
+    return out_path
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--gates", required=True, type=Path, help="Path to approved-gates.md produced by export_gates.")
@@ -92,6 +108,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        validate_gate_id(args.gate_id)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if not args.gates.is_file():
         print(f"gates file not found: {args.gates}", file=sys.stderr)
         return 2
@@ -103,10 +124,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"gate block for {args.gate_id} missing gate_category or gate", file=sys.stderr)
         return 4
     record = build_record(block, args.origin_repo, args.note)
-    out_dir = args.shared_root / "gates"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{args.gate_id}.json"
     try:
+        out_path = shared_gate_path(args.shared_root, args.gate_id)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
         assert_regular_file_destination(out_path, label="Promote output")
     except ValueError as exc:
         print(str(exc), file=sys.stderr)

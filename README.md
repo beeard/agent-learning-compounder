@@ -25,7 +25,7 @@ gracefully when they are absent (tests skip, code paths fall back or
 raise on first use).
 
 ```bash
-pip install -r requirements-optional.txt
+pip install -r agent-learning-compounder/requirements-optional.txt
 ```
 
 - `mcp` — required for `alc_mcp/server.py` (the MCP stdio server).

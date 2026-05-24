@@ -115,3 +115,26 @@ class ContractTests(unittest.TestCase):
             self.assertFalse(any("__pycache__" in entry for entry in entries))
             self.assertFalse(any(entry.endswith(".pyc") for entry in entries))
             self.assertFalse(any("/.pytest_cache/" in entry for entry in entries))
+
+    def test_install_excludes_cached_artifacts_from_source_tree(self):
+        if INSTALL_SCRIPT is None:
+            self.skipTest("install.sh not available in this runtime")
+        with tempfile.TemporaryDirectory() as tmp:
+            target_root = pathlib.Path(tmp) / "skills"
+            result = subprocess.run(
+                [str(INSTALL_SCRIPT), "--target", str(target_root)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            installed = target_root / "agent-learning-compounder"
+            leaked = [
+                path.relative_to(installed)
+                for path in installed.rglob("*")
+                if path.name == "__pycache__"
+                or path.name == ".pytest_cache"
+                or path.suffix == ".pyc"
+            ]
+            self.assertEqual(leaked, [])
