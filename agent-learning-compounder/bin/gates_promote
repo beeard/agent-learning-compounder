@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Promote a gate from a repo's approved-gates.md into the shared registry.
+
+Reads a single gate (identified by gate_id) from a gates registry markdown file
+produced by ``bin/export_gates`` and writes it as a JSON record into a shared
+root at ``<shared-root>/gates/<gate-id>.json``. Other repos in a federation can
+then inherit promoted gates from that shared root (P4-B).
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import re
+import sys
+from pathlib import Path
+
+
+# Each gate block emitted by ``bin/export_gates`` looks like:
+#
+#     - domain: cloudflare
+#       gate_id: 2aed10be9612
+#       gate_category: docs-check
+#       gate: Re-read current Cloudflare docs before changing wrangler config.
+#       level: 3
+#
+# We split on the leading ``- domain:`` marker and parse field lines inside
+# each block. The next block (or end-of-file) terminates the current one.
+GATE_BLOCK_SPLIT_RE = re.compile(r"(?m)^-\s+domain:\s*")
+FIELD_RE = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.*?)\s*$", re.I)
+
+
+def parse_blocks(text: str) -> list[dict[str, str]]:
+    """Return one dict of field-name -> value per gate block in ``text``."""
+    blocks: list[dict[str, str]] = []
+    parts = GATE_BLOCK_SPLIT_RE.split(text)
+    # parts[0] is the preamble before the first ``- domain:`` marker.
+    for part in parts[1:]:
+        first_line, _, rest = part.partition("\n")
+        block: dict[str, str] = {"domain": first_line.strip()}
+        for raw in rest.splitlines():
+            # Stop at the next gate block (defensive: split already handles it)
+            # or at a blank section break.
+            stripped = raw.strip()
+            if not stripped:
+                # Blank lines inside a block are rare but tolerated; stop only
+                # when we hit a non-indented non-field line (e.g. next ##).
+                continue
+            if stripped.startswith("##") or stripped.startswith("# "):
+                break
+            match = FIELD_RE.match(raw)
+            if not match:
+                continue
+            block[match.group(1).lower()] = match.group(2)
+        blocks.append(block)
+    return blocks
+
+
+def find_gate(gates_md: Path, gate_id: str) -> dict[str, str] | None:
+    """Return the parsed block matching ``gate_id``, or None."""
+    text = gates_md.read_text(encoding="utf-8")
+    for block in parse_blocks(text):
+        if block.get("gate_id") == gate_id:
+            return block
+    return None
+
+
+def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str, str]:
+    return {
+        "domain": block["domain"],
+        "gate_id": block["gate_id"],
+        "category": block.get("gate_category", ""),
+        "gate": block.get("gate", ""),
+        "origin_repo": origin_repo,
+        "promoted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "note": note,
+    }
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--gates", required=True, type=Path, help="Path to approved-gates.md produced by export_gates.")
+    parser.add_argument("--gate-id", required=True, help="12-hex gate_id to promote.")
+    parser.add_argument("--origin-repo", required=True, help="Identifier of the repo this gate originated from.")
+    parser.add_argument("--shared-root", required=True, type=Path, help="Root directory of the shared registry.")
+    parser.add_argument("--note", default="", help="Optional operator note to persist with the record.")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    if not args.gates.is_file():
+        print(f"gates file not found: {args.gates}", file=sys.stderr)
+        return 2
+    block = find_gate(args.gates, args.gate_id)
+    if not block:
+        print(f"gate_id not found: {args.gate_id}", file=sys.stderr)
+        return 3
+    if not block.get("gate_category") or not block.get("gate"):
+        print(f"gate block for {args.gate_id} missing gate_category or gate", file=sys.stderr)
+        return 4
+    record = build_record(block, args.origin_repo, args.note)
+    out_dir = args.shared_root / "gates"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{args.gate_id}.json"
+    out_path.write_text(
+        json.dumps(record, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(f"promoted gate {args.gate_id} -> {out_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
