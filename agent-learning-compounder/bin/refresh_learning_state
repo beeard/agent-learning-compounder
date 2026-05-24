@@ -11,9 +11,12 @@ import json
 import stat
 import pathlib
 import sys
+import time
 from typing import Any
 
 from build_repo_baseline import build as build_baseline
+from evaluate_gate_effectiveness import evaluate as evaluate_gates
+from evaluate_gate_effectiveness import load_sessions
 from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
 from extract_skill_usage import build_usage, read_events
@@ -189,6 +192,64 @@ def _post_dedup(
     return len(drop)
 
 
+def _queue_retirement_candidates(
+    queue_path: pathlib.Path,
+    events_path: pathlib.Path,
+    min_n_retire: int = 20,
+) -> int:
+    """Run effectiveness scoring; append retirement candidates for low-impact gates.
+
+    A retirement candidate is queued when:
+      - label is correlated_with_failure OR no_signal
+      - n_loaded >= min_n_retire (default 20; stricter than the standalone scorer's
+        min-N=10 because retirement is more disruptive than signal-or-not).
+
+    Returns the count of retirement rows appended.
+    """
+    if not events_path.is_file():
+        return 0
+    sessions = load_sessions(events_path)
+    result = evaluate_gates(sessions, min_n=10)
+    candidates = [
+        row for row in result["gates"]
+        if row["label"] in ("correlated_with_failure", "no_signal")
+        and row["n_loaded"] >= min_n_retire
+    ]
+    if not candidates:
+        return 0
+    appended = 0
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_unix = int(time.time())
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    assert_regular_file_destination(queue_path, label="Improvement queue")
+    with queue_path.open("a", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            for c in candidates:
+                row = {
+                    "id": f"retire-{c['gate_id']}-{now_unix}-{appended}",
+                    "kind": "gate_retirement_candidate",
+                    "text": (
+                        f"Retire low-impact gate {c['gate_id']}: "
+                        f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
+                        f"label={c['label']}."
+                    ),
+                    "gate_id": c["gate_id"],
+                    "evidence": {
+                        "n_loaded": c["n_loaded"],
+                        "n_absent": c["n_absent"],
+                        "delta": c["delta"],
+                        "label": c["label"],
+                    },
+                    "ts": ts,
+                }
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+                appended += 1
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    return appended
+
+
 def has_event_rows(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
@@ -249,6 +310,13 @@ def refresh(
     # Run dedup after the append-section releases its lock. The helper
     # acquires its own LOCK_EX, so it's safe to call here.
     dedup_removed = _post_dedup(queue_path)
+    # Score gate effectiveness and append retirement candidates for
+    # low-impact gates (correlated_with_failure / no_signal with
+    # n_loaded >= 20). Re-run dedup so any duplicate retirement rows are
+    # collapsed alongside other candidates.
+    retirement_count = _queue_retirement_candidates(queue_path, event_log)
+    if retirement_count:
+        dedup_removed += _post_dedup(queue_path)
     touched.append(queue_path)
 
     queued = queue_stats["queued"]
@@ -263,6 +331,11 @@ def refresh(
         )
     if dedup_removed:
         print(f"refresh: dedup_removed={dedup_removed} near-duplicate rows", file=sys.stderr)
+    if retirement_count:
+        print(
+            f"refresh: queued {retirement_count} gate_retirement_candidate row(s)",
+            file=sys.stderr,
+        )
 
     return {
         "repo": str(repo),
@@ -273,6 +346,7 @@ def refresh(
         "suppressed_needs_review": suppressed,
         "suppressed_redacted": suppressed_redacted,
         "dedup_removed": dedup_removed,
+        "retirement_candidates_queued": retirement_count,
         "touched": [str(path) for path in touched],
     }
 
