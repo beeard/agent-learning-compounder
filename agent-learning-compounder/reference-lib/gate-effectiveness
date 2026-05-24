@@ -1,0 +1,80 @@
+# Gate Effectiveness
+
+`bin/evaluate_gate_effectiveness` computes correlation-only signals per
+`gate_id` from `hook-events.jsonl` (schema version 2 or later).
+
+## Signals
+
+| Label | Condition |
+| --- | --- |
+| `correlated_with_success` | delta ≥ 0.20, n_loaded ≥ min-N, n_absent ≥ min-N |
+| `correlated_with_failure` | delta ≤ -0.10 |
+| `no_signal` | -0.10 < delta < 0.20 |
+| `needs_review` | either cohort below min-N, or outcome data missing |
+
+`delta = correction_rate(absent) - correction_rate(loaded)`. Positive delta
+means loading the gate correlates with fewer corrections.
+
+## Cohort definition
+
+A session counts toward a gate's **loaded** cohort if its `gate_loaded_ids`
+contains the gate. A session counts toward the gate's **absent** cohort
+if its `gate_loaded_ids` does NOT contain the gate — including sessions
+that loaded other gates.
+
+This is deliberately permissive: it avoids privileging "load nothing"
+sessions (which are rare). The trade-off: when one gate is dominant in
+the corpus, other gates' absent cohorts inherit its outcome distribution.
+Future work may add a stricter "no-gate-loaded" cohort option as a
+sensitivity check, but the current default mirrors the language
+"sessions where this gate was not loaded."
+
+## Default thresholds
+
+| Knob | Default | Rationale |
+| --- | --- | --- |
+| `--min-n` | 10 | Sessions per cohort before any signal is reportable. |
+| success delta | +0.20 | Anything weaker is plausibly noise at small N. |
+| failure delta | -0.10 | Surfaces drag earlier; retirement still requires operator approval. |
+
+The standalone scorer's `--min-n` is 10. `refresh_learning_state` uses
+a stricter `min_n_retire=20` before queueing retirement candidates:
+retirement is more disruptive than first-pass signal, so it requires
+more evidence.
+
+## What this is not
+
+- Not causal. Loaded gates run alongside many other inputs (other gates,
+  scope-specific instructions, user corrections). Phase 3B (causal probe)
+  adds a directional causal signal via A/B skip cohorts.
+- Not a global capability claim. Only per-gate, per-cohort.
+- Not an auto-retirement signal. Low-impact gates are appended to
+  `improvement-queue.jsonl` with `kind: gate_retirement_candidate` for
+  operator review; nothing is auto-removed.
+
+## Output shape
+
+```json
+{
+  "gates": [
+    {
+      "gate_id": "abc123def456",
+      "n_loaded": 24,
+      "n_absent": 36,
+      "correction_rate_loaded": 0.083,
+      "correction_rate_absent": 0.500,
+      "delta": 0.417,
+      "label": "correlated_with_success"
+    }
+  ]
+}
+```
+
+## Invocation
+
+```bash
+python3 scripts/evaluate_gate_effectiveness.py \
+  --events "<state>/repos/<repo-id>/hook-events.jsonl" \
+  --output "/tmp/gate-effectiveness.json" \
+  --min-n 10
+```
