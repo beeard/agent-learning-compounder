@@ -1,0 +1,1 @@
+../bin/propose_domain_rules
