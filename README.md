@@ -11,6 +11,20 @@ server, and an optional operator dashboard. See `CHANGES.md` for the shipped
 feature list (historical implementation work order at
 `docs/history/PLAN-eight-upgrade.md`).
 
+## Quickstart
+
+Two commands from inside the project you want to set up. Installs the skill,
+wires the repo, and self-tests:
+
+```bash
+git clone https://github.com/beeard/agent-learning-compunder.git /tmp/alc
+/tmp/alc/install.sh --bootstrap-repo "$PWD" --verify
+```
+
+Defaults to Codex. Claude users prepend `AGENT_LEARNING_RUNTIME=claude` to
+the second command. See [docs/QUICKSTART.md](docs/QUICKSTART.md) for the
+beginner-friendly walk-through (verification, opt-in hooks, uninstall).
+
 ## Requirements
 
 - Python 3.10+
