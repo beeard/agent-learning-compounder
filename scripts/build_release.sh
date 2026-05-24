@@ -59,7 +59,7 @@ command -v zip >/dev/null 2>&1 || { echo "zip required" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum required" >&2; exit 1; }
 
 # Top-level layout shipped in the release. Matches the existing tarball.
-top_files=".gitignore CHANGES.md MANIFEST.json PLAN.md README.md install.sh"
+top_files=".gitignore CHANGES.md MANIFEST.json README.md install.sh"
 top_dirs="agent-learning-compounder scripts"
 
 for f in $top_files; do

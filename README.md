@@ -7,8 +7,9 @@ This version (`2026.05.24+review7-plus1`) layers eight upgrades on top of
 upstream `review7-production`: schema-versioned hook events with replay, semantic
 queue dedup, stable per-gate IDs with effectiveness scoring, domain-rule mining,
 deterministic A/B causal probes, cross-repo gate federation, an optional MCP
-server, and an optional operator dashboard. See `CHANGES.md` and `PLAN.md` for
-details.
+server, and an optional operator dashboard. See `CHANGES.md` for the shipped
+feature list (historical implementation work order at
+`docs/history/PLAN-eight-upgrade.md`).
 
 ## Requirements
 

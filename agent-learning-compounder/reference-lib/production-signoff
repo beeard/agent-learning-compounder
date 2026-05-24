@@ -30,9 +30,9 @@ in the fixture suite are tests gated on optional deps (`mcp`, `fastapi`,
 `jinja2`, `httpx`) that are not installed by default; they pass when the
 extras are present.
 
-The plan document captured in `PLAN.md` at the repo root specifies all
-eight upgrades with implementation-ready depth, including TDD steps,
-acceptance criteria, and dependency sequencing.
+The frozen implementation work order at `docs/history/PLAN-eight-upgrade.md`
+captures all eight upgrades with implementation-ready depth, including TDD
+steps, acceptance criteria, and dependency sequencing.
 
 This signoff applies to the portable tarball package produced from this tree
 after the production-hardening audit. The approved operating mode is project-local:

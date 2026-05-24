@@ -4,7 +4,8 @@
 
 Eight-upgrade extension on top of `2026.05.24+review7-production`. All
 upstream hardening properties preserved; additions are additive. See
-`PLAN.md` for the full implementation plan.
+`docs/history/PLAN-eight-upgrade.md` for the (now-frozen) implementation
+work order.
 
 Post-review fixes:
 - `bin/gates_promote` and `bin/gates_inherit` now require 12 lowercase hex
