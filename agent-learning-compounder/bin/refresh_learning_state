@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import fcntl
 import hashlib
 import json
+import os
 import pathlib
+import re
 import sys
 import time
 from typing import Any
@@ -171,10 +174,12 @@ def _inherited_gates(gates_md_path: pathlib.Path) -> dict[str, str]:
         return {}
     text = gates_md_path.read_text(encoding="utf-8")
     inherited: dict[str, str] = {}
-    # Split on the block marker "- domain:"; each block contains gate_id and
-    # optionally derived_from. The first element is the header before the first
-    # block, so skip it.
-    blocks = text.split("\n- domain:")
+    # CRLF-tolerant splitter (matches the pattern in gates_inherit and
+    # export_gates). The previous text.split("\n- domain:") returned the
+    # whole file as one block on CRLF files or files that start directly
+    # with "- domain:", and the per-block walk below would cross block
+    # boundaries and report a stale derived_from.
+    blocks = re.split(r"(?m)^-\s+domain:\s*", text)
     for block in blocks[1:]:
         gate_id = None
         derived_from = None
@@ -184,9 +189,33 @@ def _inherited_gates(gates_md_path: pathlib.Path) -> dict[str, str]:
                 gate_id = line.split(":", 1)[1].strip()
             elif line.startswith("derived_from:"):
                 derived_from = line.split(":", 1)[1].strip()
-        if gate_id and derived_from:
-            inherited[gate_id] = derived_from
+        if not gate_id:
+            continue
+        # Fail closed: a gate_id without derived_from is treated as
+        # inherited-with-unknown-origin. Pre-fix this block was silently
+        # dropped from inherited_map, and the retirement filter then
+        # queued it as gate_retirement_candidate instead of
+        # inherited_gate_demote_candidate -- an operator acting on the
+        # queue would retire a gate that may affect sibling repos. The
+        # "unknown" sentinel makes the missing provenance visible in the
+        # queue row text.
+        inherited[gate_id] = derived_from or "unknown"
     return inherited
+
+
+_RETIRE_CAUSAL_OK = ("causal_correlated_with_failure", "causal_no_signal")
+
+
+def _retirement_row_id(gate_id: str, kind: str) -> str:
+    """Stable per-(gate_id, kind) row id. Pre-fix the row id embedded the
+    refresh's wall-clock second and a within-batch counter, so two refreshes
+    one second apart produced different ids for the same candidate and the
+    downstream trigram dedup could not always collapse the drift (delta
+    varies between refreshes, the text differs, trigram-Dice can drop below
+    the 0.80 threshold). Stable ids let queue_candidate_adjustments-style
+    `seen` membership checks prevent duplicates outright.
+    """
+    return hashlib.sha256(f"{gate_id}|{kind}".encode("utf-8")).hexdigest()[:16]
 
 
 def _queue_retirement_candidates(
@@ -199,14 +228,23 @@ def _queue_retirement_candidates(
 
     A candidate gate is one where:
       - label is correlated_with_failure OR no_signal
-      - n_loaded >= min_n_retire (default 20; stricter than the standalone
-        scorer's min-N=10 because retirement is more disruptive).
+      - n_loaded >= min_n_retire AND n_absent >= min_n_retire (stricter
+        than the standalone scorer's min-N=10 because retirement is more
+        disruptive; M5 closes the asymmetry where n_absent could be as
+        low as 10 while n_loaded was capped at min_n_retire).
+      - causal_signal is causal_correlated_with_failure OR causal_no_signal.
+        H2 requires causal evidence before the action that actually
+        disrupts production. needs_review (no probe data) and
+        causal_correlated_with_success are excluded -- if the causal probe
+        says loading the gate helps, retiring it would be the wrong move.
 
     For each candidate, if the gate appears in ``inherited`` (i.e. carries a
     ``derived_from:`` line in approved-gates.md), queue an
     ``inherited_gate_demote_candidate`` row carrying the derived_from value.
-    Otherwise queue the original ``gate_retirement_candidate``. Each candidate
-    produces exactly one row (demote OR retire, never both).
+    Otherwise queue the original ``gate_retirement_candidate``. Each
+    candidate produces exactly one row (demote OR retire, never both), and
+    re-running across refreshes produces idempotent rows keyed on the
+    stable (gate_id, kind) hash -- not the wall-clock timestamp.
 
     Returns (retirement_count, demote_count).
     """
@@ -219,25 +257,49 @@ def _queue_retirement_candidates(
         row for row in result["gates"]
         if row["label"] in ("correlated_with_failure", "no_signal")
         and row["n_loaded"] >= min_n_retire
+        and row["n_absent"] >= min_n_retire
+        and row.get("causal_signal") in _RETIRE_CAUSAL_OK
     ]
     if not candidates:
         return (0, 0)
     retire_count = 0
     demote_count = 0
     ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    now_unix = int(time.time())
     queue_path.parent.mkdir(parents=True, exist_ok=True)
     assert_regular_file_destination(queue_path, label="Improvement queue")
-    with queue_path.open("a", encoding="utf-8") as handle:
+    queue_path.touch(exist_ok=True)
+    # Open r+ so we can read the existing rows for `seen` membership AND
+    # append new ones, all under the same LOCK_EX. Matches the pattern in
+    # queue_candidate_adjustments.
+    with queue_path.open("r+", encoding="utf-8") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         try:
+            handle.seek(0)
+            seen: set[str] = set()
+            for line in handle.read().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if payload.get("id"):
+                    seen.add(str(payload["id"]))
+            handle.seek(0, 2)  # to end for appends
             for c in candidates:
                 gate_id = c["gate_id"]
                 if gate_id in inherited_map:
+                    kind = "inherited_gate_demote_candidate"
+                else:
+                    kind = "gate_retirement_candidate"
+                row_id = _retirement_row_id(gate_id, kind)
+                if row_id in seen:
+                    continue
+                if kind == "inherited_gate_demote_candidate":
                     derived_from = inherited_map[gate_id]
                     row = {
-                        "id": f"demote-{gate_id}-{now_unix}-{demote_count}",
-                        "kind": "inherited_gate_demote_candidate",
+                        "id": row_id,
+                        "kind": kind,
                         "text": (
                             f"Demote inherited gate {gate_id} (origin={derived_from}): "
                             f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
@@ -250,15 +312,17 @@ def _queue_retirement_candidates(
                             "n_absent": c["n_absent"],
                             "delta": c["delta"],
                             "label": c["label"],
+                            "causal_signal": c.get("causal_signal"),
                         },
                         "ts": ts,
                     }
                     handle.write(json.dumps(row, sort_keys=True) + "\n")
+                    seen.add(row_id)
                     demote_count += 1
                 else:
                     row = {
-                        "id": f"retire-{gate_id}-{now_unix}-{retire_count}",
-                        "kind": "gate_retirement_candidate",
+                        "id": row_id,
+                        "kind": kind,
                         "text": (
                             f"Retire low-impact gate {gate_id}: "
                             f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
@@ -270,10 +334,12 @@ def _queue_retirement_candidates(
                             "n_absent": c["n_absent"],
                             "delta": c["delta"],
                             "label": c["label"],
+                            "causal_signal": c.get("causal_signal"),
                         },
                         "ts": ts,
                     }
                     handle.write(json.dumps(row, sort_keys=True) + "\n")
+                    seen.add(row_id)
                     retire_count += 1
         finally:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
@@ -349,6 +415,36 @@ def refresh(
     reports = repo_state / "reports"
     repo_state.mkdir(parents=True, exist_ok=True)
     reports.mkdir(parents=True, exist_ok=True)
+
+    # Top-level mutex so two concurrent refresh() invocations on the same
+    # repo serialize end-to-end. Per-file LOCK_EX guards individual writes,
+    # but releases between them, leaving a window where a sibling refresh
+    # could land a baseline.json from its run interleaved with this run's
+    # skill-map.json. The .refresh.lock sidecar is never renamed, so its
+    # lock is a stable mutex across the writes that this refresh performs.
+    refresh_lock_path = repo_state / ".refresh.lock"
+    refresh_lock_fd = os.open(str(refresh_lock_path), os.O_RDWR | os.O_CREAT, 0o644)
+    fcntl.flock(refresh_lock_fd, fcntl.LOCK_EX)
+    try:
+        return _refresh_locked(repo, repo_state, reports, state_dir, personal, events, queue, corpus)
+    finally:
+        try:
+            fcntl.flock(refresh_lock_fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+        os.close(refresh_lock_fd)
+
+
+def _refresh_locked(
+    repo: pathlib.Path,
+    repo_state: pathlib.Path,
+    reports: pathlib.Path,
+    state_dir: str | pathlib.Path | None,
+    personal: str | pathlib.Path | None,
+    events: pathlib.Path | None,
+    queue: pathlib.Path | None,
+    corpus: pathlib.Path | None,
+) -> dict[str, Any]:
 
     # Resolve runtime from the state-root config.json the installer writes.
     # Falls back silently to "auto" if config or runtime key is absent.
