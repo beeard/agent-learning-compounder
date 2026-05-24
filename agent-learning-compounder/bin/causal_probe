@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""Register and decide A/B causal probes per gate_id.
+
+Probes record a skip rate for specific gate_ids. The `decide` subcommand
+returns a deterministic 'load' or 'skip' verdict by hashing
+(session_id || gate_id). Same inputs always yield the same verdict.
+
+Unregistered gates always 'load'.
+
+Note: the probes file is operator-controlled local state (not adversarial
+input), so this script intentionally skips the symlink-rejection pattern
+used by hook-event ingest tools.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import sys
+from pathlib import Path
+
+
+def load_probes(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def save_probes(path: Path, data: dict):
+    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+
+def decide(gate_id: str, session_id: str, rate: float) -> str:
+    h = hashlib.sha256(f"{session_id}|{gate_id}".encode("utf-8")).hexdigest()
+    bucket = int(h[:8], 16) % 10000
+    return "skip" if bucket < int(rate * 10000) else "load"
+
+
+def cmd_register(args):
+    data = load_probes(args.probes)
+    if not (0.0 <= args.rate <= 1.0):
+        print(f"rate must be between 0.0 and 1.0; got {args.rate}", file=sys.stderr)
+        return 2
+    data[args.gate_id] = {"rate": args.rate}
+    save_probes(args.probes, data)
+    return 0
+
+
+def cmd_unregister(args):
+    data = load_probes(args.probes)
+    data.pop(args.gate_id, None)
+    save_probes(args.probes, data)
+    return 0
+
+
+def cmd_decide(args):
+    data = load_probes(args.probes)
+    probe = data.get(args.gate_id)
+    if not probe:
+        print("load")
+        return 0
+    print(decide(args.gate_id, args.session_id, probe["rate"]))
+    return 0
+
+
+def cmd_list(args):
+    data = load_probes(args.probes)
+    print(json.dumps(data, indent=2, sort_keys=True))
+    return 0
+
+
+def parse_args():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--probes", required=True, type=Path)
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    r = sub.add_parser("register")
+    r.add_argument("--gate-id", required=True)
+    r.add_argument("--rate", required=True, type=float)
+    r.set_defaults(func=cmd_register)
+
+    u = sub.add_parser("unregister")
+    u.add_argument("--gate-id", required=True)
+    u.set_defaults(func=cmd_unregister)
+
+    d = sub.add_parser("decide")
+    d.add_argument("--gate-id", required=True)
+    d.add_argument("--session-id", required=True)
+    d.set_defaults(func=cmd_decide)
+
+    lst = sub.add_parser("list")
+    lst.set_defaults(func=cmd_list)
+
+    return p.parse_args()
+
+
+def main():
+    args = parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
