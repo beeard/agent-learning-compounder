@@ -2,13 +2,16 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROPOSE = REPO_ROOT / "bin" / "propose_domain_rules"
+REFRESH = REPO_ROOT / "bin" / "refresh_learning_state"
 
 
 class ProposeDomainRules(unittest.TestCase):
@@ -73,6 +76,63 @@ class ProposeDomainRules(unittest.TestCase):
         )
         result = json.loads(self.output.read_text())
         self.assertEqual(result["proposals"], [])
+
+
+class RefreshWiresDomainRuleProposer(unittest.TestCase):
+    """refresh_learning_state should append domain_rule_candidate rows when given a corpus."""
+
+    def test_refresh_queues_domain_rule_candidates(self):
+        fixture_src = REPO_ROOT / "fixtures" / "eval-fixtures" / "mini-repo"
+        seed = fixture_src / "seed"
+
+        sys.path.insert(0, str(REPO_ROOT / "bin"))
+        import state_paths  # type: ignore
+
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            shutil.copytree(fixture_src, repo, ignore=shutil.ignore_patterns("seed"))
+
+            rid = state_paths.repo_id(repo)
+            state_root = repo / ".agent-learning"
+            state_dir = state_root / "repos" / rid
+            state_dir.mkdir(parents=True, exist_ok=True)
+            for name in (
+                "config.json",
+                "baseline.json",
+                "domain-rules.active.json",
+                "skill-map.json",
+            ):
+                shutil.copy(seed / name, state_dir / name)
+            shutil.copy(seed / "config.json", state_root / "config.json")
+
+            # Seed a small corpus with correction-correlated terms.
+            corpus = Path(td) / "corpus.txt"
+            corpus.write_text(
+                "[session=s1 outcome=correction] hyperdrive connection timed out hyperdrive\n"
+                "[session=s2 outcome=correction] hyperdrive failed hyperdrive\n"
+                "[session=s3 outcome=correction] hyperdrive query hung\n"
+                "[session=s4 outcome=clean] normal request to api\n"
+                "[session=s5 outcome=clean] frontend build green\n"
+            )
+
+            proc = subprocess.run(
+                [
+                    str(REFRESH),
+                    "--repo", str(repo),
+                    "--state-dir", str(state_root),
+                    "--corpus", str(corpus),
+                ],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc.returncode, 0, proc.stderr)
+            queue = state_dir / "improvement-queue.jsonl"
+            self.assertTrue(queue.exists(), "queue not written")
+            rows = [json.loads(ln) for ln in queue.read_text().splitlines() if ln]
+            kinds = [r.get("kind") for r in rows]
+            self.assertIn("domain_rule_candidate", kinds)
+            # The refresh JSON report should expose the count
+            report = json.loads(proc.stdout)
+            self.assertGreaterEqual(report.get("domain_rule_candidates_queued", 0), 1)
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
 from extract_skill_usage import build_usage, read_events
 from map_active_skills import build_map
+from propose_domain_rules import parse_chunks, score_terms
 from queue_dedup import find_duplicates, order_by_keep
 from scrub_secrets import scrub
 from state_paths import repo_state_dir, resolve_state_dir
@@ -250,6 +251,56 @@ def _queue_retirement_candidates(
     return appended
 
 
+def _queue_domain_rule_candidates(
+    queue_path: pathlib.Path,
+    corpus_path: pathlib.Path,
+    top_k: int = 10,
+    min_score: float = 2.0,
+) -> int:
+    """Mine corpus for correction-correlated terms; queue them as domain_rule_candidate.
+
+    Returns count appended. Corpus may not exist if extract_sessions hasn't run yet.
+    """
+    if not corpus_path.is_file():
+        return 0
+    chunks = list(parse_chunks(corpus_path))
+    if not chunks:
+        return 0
+    scores = score_terms(chunks)
+    scores = [s for s in scores if s[3] >= min_score]
+    scores.sort(key=lambda x: (-x[3], x[0]))
+    scores = scores[:top_k]
+    if not scores:
+        return 0
+    ts = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    now_unix = int(time.time())
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    assert_regular_file_destination(queue_path, label="Improvement queue")
+    with queue_path.open("a", encoding="utf-8") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            for i, (term, cc, cl, score) in enumerate(scores):
+                row = {
+                    "id": f"domain-{term.replace(' ', '_')}-{now_unix}-{i}",
+                    "kind": "domain_rule_candidate",
+                    "text": (
+                        f"Consider adding domain seed for '{term}' "
+                        f"(correction_count={cc}, clean_count={cl}, score={score:.2f})."
+                    ),
+                    "term": term,
+                    "evidence": {
+                        "correction_count": cc,
+                        "clean_count": cl,
+                        "score": score,
+                    },
+                    "ts": ts,
+                }
+                fh.write(json.dumps(row, sort_keys=True) + "\n")
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+    return len(scores)
+
+
 def has_event_rows(path: pathlib.Path) -> bool:
     if not path.exists():
         return False
@@ -262,6 +313,7 @@ def refresh(
     personal: str | pathlib.Path | None = None,
     events: pathlib.Path | None = None,
     queue: pathlib.Path | None = None,
+    corpus: pathlib.Path | None = None,
 ) -> dict[str, Any]:
     repo = repo.expanduser().resolve()
     repo_state = repo_state_dir(repo, state_dir, personal)
@@ -315,7 +367,17 @@ def refresh(
     # n_loaded >= 20). Re-run dedup so any duplicate retirement rows are
     # collapsed alongside other candidates.
     retirement_count = _queue_retirement_candidates(queue_path, event_log)
-    if retirement_count:
+    # Mine the session corpus for correction-correlated n-grams and queue
+    # them as domain_rule_candidate rows for operator review. The corpus is
+    # expected at repo_state/"session-corpus.txt" unless overridden; if
+    # absent, the helper is a no-op. extract_sessions does not currently
+    # emit the [session=<id> outcome=<state>] header format the proposer
+    # parses; the wiring is forward-looking and degrades gracefully.
+    # TODO: future integration test should seed a corpus.txt with proper
+    # headers and assert domain_rule_candidate rows appear in the queue.
+    corpus_path = corpus or repo_state / "session-corpus.txt"
+    domain_count = _queue_domain_rule_candidates(queue_path, corpus_path)
+    if retirement_count or domain_count:
         dedup_removed += _post_dedup(queue_path)
     touched.append(queue_path)
 
@@ -336,6 +398,11 @@ def refresh(
             f"refresh: queued {retirement_count} gate_retirement_candidate row(s)",
             file=sys.stderr,
         )
+    if domain_count:
+        print(
+            f"refresh: queued {domain_count} domain_rule_candidate row(s)",
+            file=sys.stderr,
+        )
 
     return {
         "repo": str(repo),
@@ -347,6 +414,7 @@ def refresh(
         "suppressed_redacted": suppressed_redacted,
         "dedup_removed": dedup_removed,
         "retirement_candidates_queued": retirement_count,
+        "domain_rule_candidates_queued": domain_count,
         "touched": [str(path) for path in touched],
     }
 
@@ -358,6 +426,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--personal")
     parser.add_argument("--events")
     parser.add_argument("--queue")
+    parser.add_argument("--corpus")
     parser.add_argument("--output")
     args = parser.parse_args(argv)
 
@@ -368,6 +437,7 @@ def main(argv: list[str] | None = None) -> int:
             args.personal,
             pathlib.Path(args.events) if args.events else None,
             pathlib.Path(args.queue) if args.queue else None,
+            pathlib.Path(args.corpus) if args.corpus else None,
         )
     except ValueError as error:
         print(str(error), file=sys.stderr)
