@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Evaluate expected skill routing from scope text and active skill maps."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import re
+import sys
+from typing import Any
+
+
+def load_json(path: str | pathlib.Path | None) -> dict[str, Any]:
+    if not path:
+        return {}
+    return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
+
+
+def add_once(items: list[str], value: str) -> None:
+    if value not in items:
+        items.append(value)
+
+
+def expected_for_scope(scope: str, skill_map: dict[str, Any] | None = None, approved_gates: str = "") -> tuple[list[str], str, str]:
+    text = (scope or "").strip()
+    lowered = text.lower()
+    expected: list[str] = []
+    reasons: list[str] = []
+
+    if not text or re.search(r"\b(whats next|what should i work on next|hva er neste|next-session)\b", lowered):
+        return ["next-session"], "empty or next-work scope routes to next-session", "high"
+
+    if re.search(r"\b(done|complete|completion|commit|push|pull request|pr|ship|ready-to-commit)\b", lowered):
+        return ["session-end"], "completion or release language routes to session-end", "high"
+
+    if "agent-learning-compounder" in lowered or ("agent-learning" in lowered and "roadmap" in lowered):
+        return ["agent-learning-compounder"], "agent-learning scope routes to agent-learning-compounder", "high"
+
+    if "browser automation" in lowered or "agent-browser" in lowered:
+        return ["agent-browser"], "browser automation scope routes to agent-browser", "medium"
+
+    substantial = bool(
+        re.search(r"\b(packages|apps|infra|docs/plans|workers?|cloudflare|quick3|auth|adapter|review)\b", lowered)
+        or "/" in lowered
+    )
+    if substantial and "what time" not in lowered:
+        add_once(expected, "session-start")
+        reasons.append("substantial repo scope")
+
+    if "packages/ports" in lowered or "port-vocab" in lowered or "port catalog" in lowered:
+        add_once(expected, "session-start")
+        add_once(expected, "port-vocab-gate")
+        reasons.append("scope touches port contracts")
+
+    if re.search(r"\b(ui|design|frontend|apps/web|apps/portal|visual)\b", lowered):
+        add_once(expected, "session-start")
+        add_once(expected, "tm-design")
+        reasons.append("scope touches UI/design")
+
+    if approved_gates and "missing-required-skill" in approved_gates.lower():
+        reasons.append("approved gates include missing-required-skill")
+
+    confidence = "high" if any("port" in reason or "UI" in reason for reason in reasons) else ("medium" if expected else "low")
+    return expected, "; ".join(reasons) if reasons else "no skill route matched", confidence
+
+
+def valid_skill_names(skill_map: dict[str, Any]) -> set[str]:
+    return {item.get("name", "") for item in skill_map.get("skills", []) if item.get("valid", True)}
+
+
+def route(scope: str, skill_map: dict[str, Any], approved_gates: str = "") -> dict[str, Any]:
+    expected, reason, confidence = expected_for_scope(scope, skill_map, approved_gates)
+    available = valid_skill_names(skill_map)
+    missing = [name for name in expected if name not in available]
+    return {"expected": expected, "reason": reason, "missing": missing, "confidence": confidence}
+
+
+def evaluate_fixtures(fixtures: pathlib.Path, skill_map: dict[str, Any], approved_gates: str, min_precision: float, min_recall: float) -> dict[str, Any]:
+    cases = json.loads(fixtures.read_text(encoding="utf-8"))
+    true_positive = false_positive = false_negative = 0
+    misses = []
+    for case in cases:
+        predicted = set(route(case.get("scope", ""), skill_map, approved_gates)["expected"])
+        expected = set(case.get("expected", []))
+        true_positive += len(predicted & expected)
+        false_positive += len(predicted - expected)
+        false_negative += len(expected - predicted)
+        if predicted != expected:
+            misses.append({"id": case.get("id"), "expected": sorted(expected), "predicted": sorted(predicted)})
+    precision = true_positive / (true_positive + false_positive) if true_positive + false_positive else 1.0
+    recall = true_positive / (true_positive + false_negative) if true_positive + false_negative else 1.0
+    return {
+        "case_count": len(cases),
+        "precision": precision,
+        "recall": recall,
+        "passed": precision >= min_precision and recall >= min_recall,
+        "misses": misses,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--scope", default="")
+    parser.add_argument("--skill-map", required=True)
+    parser.add_argument("--approved-gates")
+    parser.add_argument("--fixtures")
+    parser.add_argument("--min-precision", type=float, default=0.90)
+    parser.add_argument("--min-recall", type=float, default=0.90)
+    args = parser.parse_args(argv)
+
+    skill_map = load_json(args.skill_map)
+    approved = pathlib.Path(args.approved_gates).read_text(encoding="utf-8") if args.approved_gates else ""
+    if args.fixtures:
+        result = evaluate_fixtures(pathlib.Path(args.fixtures), skill_map, approved, args.min_precision, args.min_recall)
+        print(json.dumps(result, indent=2, sort_keys=True))
+        return 0 if result["passed"] else 1
+    print(json.dumps(route(args.scope, skill_map, approved), indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,416 @@
+#!/usr/bin/env python3
+"""Initialize a portable agent-learning state directory for a repo."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import shlex
+import shutil
+import subprocess
+import sys
+
+from build_repo_baseline import build as build_baseline
+from distill_learning import DEFAULT_DOMAIN_PRESET, load_domain_rules, packaged_domain_rules_path
+from export_skill_context import write_context
+from map_active_skills import build_map, resolve_runtime
+from state_paths import repo_id, repo_state_dir, resolve_state_dir
+
+
+def write_json(path: pathlib.Path, data: dict) -> pathlib.Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def write_text_if_missing(path: pathlib.Path, text: str) -> pathlib.Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text(text, encoding="utf-8")
+    return path
+
+
+def touch_private(path: pathlib.Path) -> pathlib.Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+    os.close(fd)
+    os.chmod(path, 0o600)
+    return path
+
+
+def render_initial_gate_registry(repo: pathlib.Path) -> str:
+    now = dt.datetime.now(dt.timezone.utc)
+    return "\n".join(
+        [
+            "# Approved Agent Gates",
+            "",
+            f"- generated_at: {now.isoformat()}",
+            f"- date: {now.date().isoformat()}",
+            "- source_report: init_learning_system.py",
+            f"- repo: {repo}",
+            "- domains: none",
+            "",
+            "## gates",
+            "",
+            "- none",
+            "",
+        ]
+    )
+
+
+HOOK_EVENTS = [
+    "InstructionsLoaded",
+    "UserPromptExpansion",
+    "PreToolUse",
+    "PostToolUse",
+    "PostToolUseFailure",
+    "SubagentStart",
+    "SubagentStop",
+    "Stop",
+    "SessionEnd",
+    "ConfigChange",
+    "FileChanged",
+    "ValidationFailure",
+    "UserCorrection",
+]
+
+
+def install_hooks(repo: pathlib.Path, state_root: pathlib.Path, repo_state: pathlib.Path) -> dict[str, pathlib.Path]:
+    hooks_dir = repo_state / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+    hook_log = repo_state / "hook-events.jsonl"
+    collector = pathlib.Path(__file__).resolve().parent / "collect_hook_event.py"
+    wrapper = hooks_dir / "collect-agent-learning-event.sh"
+    wrapper.write_text(
+        "\n".join(
+            [
+                "#!/bin/sh",
+                "set -eu",
+                "exec "
+                + " ".join(
+                    [
+                        shlex.quote(sys.executable),
+                        shlex.quote(str(collector)),
+                        "--repo",
+                        shlex.quote(str(repo)),
+                        "--state-dir",
+                        shlex.quote(str(state_root)),
+                    ]
+                )
+                + ' "$@"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    wrapper.chmod(wrapper.stat().st_mode | 0o755)
+    manifest = hooks_dir / "agent-learning-hooks.manifest.json"
+    write_json(
+        manifest,
+        {
+            "schema_version": 1,
+            "hook_command": str(wrapper),
+            "hook_event_log": str(hook_log),
+            "hook_input": "stdin-json",
+            "recommended_events": HOOK_EVENTS,
+            "persistence": "bounded-structured-jsonl",
+            "forbidden_payloads": ["raw prompts", "raw tool outputs", "transcript chunks", "secret values"],
+        },
+    )
+    touch_private(hook_log)
+    return {"hook_command": wrapper, "hook_manifest": manifest, "hook_event_log": hook_log}
+
+
+def install_refresh_manifest(repo: pathlib.Path, state_root: pathlib.Path, repo_state: pathlib.Path) -> dict[str, pathlib.Path]:
+    automation_dir = repo_state / "automation"
+    automation_dir.mkdir(parents=True, exist_ok=True)
+    refresh_script = pathlib.Path(__file__).resolve().parent / "refresh_learning_state.py"
+    queue_path = repo_state / "improvement-queue.jsonl"
+    manifest = automation_dir / "agent-learning-refresh.manifest.json"
+    command = [
+        sys.executable,
+        str(refresh_script),
+        "--repo",
+        str(repo),
+        "--state-dir",
+        str(state_root),
+    ]
+    write_json(
+        manifest,
+        {
+            "schema_version": 1,
+            "kind": "agent-learning-scheduled-refresh",
+            "cadence": "daily",
+            "runner": "script-only",
+            "scheduler_pattern": "external scheduler runs script directly",
+            "command": command,
+            "outputs": {
+                "baseline": str(repo_state / "baseline.json"),
+                "domain_rules": str(repo_state / "domain-rules.active.json"),
+                "skill_map": str(repo_state / "skill-map.json"),
+                "skill_usage": str(repo_state / "skill-usage.json"),
+                "skill_impact": str(repo_state / "skill-impact.json"),
+                "latest_skill_context": str(repo_state / "reports" / "latest-skill-context.md"),
+                "improvement_queue": str(queue_path),
+            },
+            "install_note": "Manifest only. Register with an external scheduler explicitly when live automation is wanted.",
+            "safety": [
+                "read-only repo scan",
+                "bounded structured telemetry only",
+                "no raw prompts, tool output, transcript chunks, or secret markers",
+            ],
+        },
+    )
+    queue_path.touch(exist_ok=True)
+    return {"refresh_manifest": manifest, "improvement_queue": queue_path}
+
+
+def install_domain_rules(repo_state: pathlib.Path, domain_rules: str | None, domain_preset: str) -> pathlib.Path:
+    source = pathlib.Path(domain_rules).expanduser() if domain_rules else packaged_domain_rules_path(domain_preset)
+    rules = load_domain_rules(source)
+    output = repo_state / "domain-rules.active.json"
+    return write_json(
+        output,
+        {
+            "schema_version": 1,
+            "source": str(source),
+            "rules": rules,
+        },
+    )
+
+
+def ensure_repo_local_config_untracked(repo: pathlib.Path, path: pathlib.Path) -> dict[str, str]:
+    """Refuse to write local discovery config when it is tracked by git."""
+    try:
+        rel = path.resolve().relative_to(repo.resolve())
+    except ValueError:
+        return {"status": "outside_repo", "path": str(path)}
+    if not (repo / ".git").exists():
+        return {"status": "not_a_git_repo", "path": str(rel)}
+    if not shutil.which("git"):
+        raise ValueError(f"cannot verify whether {rel} is tracked because git is unavailable")
+
+    result = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", str(rel)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        raise ValueError(
+            f"{rel} is tracked by git; refusing to write local agent-learning config with absolute paths. "
+            "Remove it from the index or keep it local/ignored before rerunning init."
+        )
+    return {"status": "untracked", "path": str(rel)}
+
+
+def ensure_repo_local_config_ignored(repo: pathlib.Path, path: pathlib.Path) -> dict[str, str]:
+    """Ensure the repo's .gitignore excludes local discovery config."""
+    try:
+        rel = path.resolve().relative_to(repo.resolve())
+    except ValueError:
+        return {"status": "outside_repo", "path": str(path)}
+    if not (repo / ".git").exists():
+        return {"status": "not_a_git_repo", "path": str(rel)}
+
+    gitignore = repo / ".gitignore"
+    entry = "/" + str(rel).replace("\\", "/")
+    existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+    lines = {line.strip() for line in existing.splitlines() if line.strip()}
+    dir_entry = "/" + rel.parts[0] + "/"
+    if lines & {entry, str(rel).replace("\\", "/"), dir_entry}:
+        return {"status": "already_ignored", "path": entry}
+
+    header = "\n# agent-learning-compounder: local integration config contains absolute paths\n"
+    suffix = "" if existing.endswith("\n") or not existing else "\n"
+    gitignore.write_text(existing + suffix + header + entry + "\n", encoding="utf-8")
+    return {"status": "added", "path": entry, "gitignore": str(gitignore)}
+
+
+def install_repo_integration(
+    repo: pathlib.Path,
+    state_root: pathlib.Path,
+    repo_state: pathlib.Path,
+    domain_rules_path: pathlib.Path,
+    refresh_paths: dict[str, pathlib.Path] | None = None,
+    hook_paths: dict[str, pathlib.Path] | None = None,
+) -> pathlib.Path:
+    reports = repo_state / "reports"
+    hook_paths = hook_paths or {}
+    refresh_paths = refresh_paths or {}
+    payload = {
+        "schema_version": 1,
+        "state_dir": str(state_root),
+        "repo_id": repo_id(repo),
+        "repo_state_dir": str(repo_state),
+        "reports_dir": str(reports),
+        "domain_rules": str(domain_rules_path),
+        "latest_approved_gates": str(reports / "latest-approved-gates.md"),
+        "latest_skill_context": str(reports / "latest-skill-context.md"),
+        "improvement_queue": str(refresh_paths.get("improvement_queue", repo_state / "improvement-queue.jsonl")),
+        "refresh_manifest": str(refresh_paths.get("refresh_manifest", repo_state / "automation" / "agent-learning-refresh.manifest.json")),
+    }
+    refresh_script = pathlib.Path(__file__).resolve().parent / "refresh_learning_state.py"
+    payload["refresh_command"] = [
+        sys.executable,
+        str(refresh_script),
+        "--repo",
+        str(repo),
+        "--state-dir",
+        str(state_root),
+    ]
+    if hook_paths:
+        payload.update(
+            {
+                "hook_command": str(hook_paths["hook_command"]),
+                "hook_manifest": str(hook_paths["hook_manifest"]),
+                "hook_event_log": str(hook_paths["hook_event_log"]),
+                "hook_input": "stdin-json",
+            }
+        )
+    else:
+        print(
+            "warning: writing .agent-learning.json without hook_command/hook_manifest/hook_event_log; "
+            "install_runtime_hooks --apply will abort. Rerun init with --install-hooks to populate them.",
+            file=sys.stderr,
+        )
+    config = repo / ".agent-learning.json"
+    ensure_repo_local_config_untracked(repo, config)
+    config.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    ensure_repo_local_config_ignored(repo, config)
+    return config
+
+
+def run_self_test(repo_state: pathlib.Path, repo: pathlib.Path | None = None) -> list[str]:
+    required = [
+        repo_state / "baseline.json",
+        repo_state / "domain-rules.active.json",
+        repo_state / "skill-map.json",
+        repo_state / "reports" / "latest-approved-gates.md",
+        repo_state / "reports" / "latest-skill-context.md",
+        repo_state / "improvement-queue.jsonl",
+        repo_state / "automation" / "agent-learning-refresh.manifest.json",
+    ]
+    missing = [str(path) for path in required if not path.exists()]
+    if missing:
+        return [f"missing initialized artifact: {path}" for path in missing]
+    context = (repo_state / "reports" / "latest-skill-context.md").read_text(encoding="utf-8")
+    if "# Active Skill Context" not in context:
+        return ["latest-skill-context.md missing header"]
+
+    if repo is not None:
+        config_path = repo / ".agent-learning.json"
+        if config_path.exists():
+            try:
+                config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as error:
+                return [f".agent-learning.json is not valid JSON: {error}"]
+            # If repo integration was installed (signalled by latest_approved_gates),
+            # the documented core keys must all be present.
+            if "latest_approved_gates" in config_payload:
+                integration_keys = [
+                    "latest_approved_gates",
+                    "latest_skill_context",
+                    "refresh_manifest",
+                    "improvement_queue",
+                ]
+                missing_integration = [k for k in integration_keys if k not in config_payload]
+                if missing_integration:
+                    return [
+                        f".agent-learning.json missing required integration key: {key}"
+                        for key in missing_integration
+                    ]
+            # If hooks were installed (hook_command present), the full hook trio
+            # must be present so install_runtime_hooks --apply can succeed.
+            if "hook_command" in config_payload:
+                hook_keys = ["hook_manifest", "hook_event_log"]
+                missing_hooks = [k for k in hook_keys if k not in config_payload]
+                if missing_hooks:
+                    return [
+                        f".agent-learning.json missing required hook key: {key}"
+                        for key in missing_hooks
+                    ]
+    return []
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--state-dir")
+    parser.add_argument("--personal")
+    parser.add_argument("--runtime", choices=("auto", "codex", "claude", "all"), default="auto")
+    parser.add_argument("--domain-rules", help="Custom domain-rules JSON to copy into this repo's agent-learning state.")
+    parser.add_argument("--domain-preset", default=DEFAULT_DOMAIN_PRESET, help="Packaged domain-rules preset to use when --domain-rules is not supplied.")
+    parser.add_argument("--install-repo-integration", action="store_true")
+    parser.add_argument("--install-hooks", action="store_true", help="Create a repo-scoped hook wrapper and manifest in the selected state dir.")
+    parser.add_argument("--self-test", action="store_true")
+    args = parser.parse_args(argv)
+
+    repo = pathlib.Path(args.repo).expanduser().resolve()
+    runtime = resolve_runtime(args.runtime, repo)
+    state_root = resolve_state_dir(args.state_dir, args.personal, repo)
+    state_root.mkdir(parents=True, exist_ok=True)
+    repo_state = repo_state_dir(repo, state_root)
+    reports = repo_state / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    try:
+        domain_rules_path = install_domain_rules(repo_state, args.domain_rules, args.domain_preset)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    config = {
+        "state_version": 1,
+        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "repo": str(repo),
+        "repo_id": repo_id(repo),
+        "runtime": runtime,
+        "state_dir": str(state_root),
+        "personal": str(pathlib.Path(args.personal).expanduser().resolve()) if args.personal else None,
+        "retention": {"hook_event_days": 30, "max_hook_event_bytes": 5_000_000},
+    }
+    write_json(state_root / "config.json", config)
+    baseline = build_baseline(repo, runtime=runtime)
+    skill_map = build_map(repo, runtime=runtime)
+    write_json(repo_state / "baseline.json", baseline)
+    write_json(repo_state / "skill-map.json", skill_map)
+    gates_path = write_text_if_missing(reports / "latest-approved-gates.md", render_initial_gate_registry(repo))
+    write_context(reports / "latest-skill-context.md", skill_map, {}, {})
+    refresh_paths = install_refresh_manifest(repo, state_root, repo_state)
+    touched = [
+        state_root / "config.json",
+        repo_state / "baseline.json",
+        domain_rules_path,
+        repo_state / "skill-map.json",
+        gates_path,
+        reports / "latest-skill-context.md",
+        refresh_paths["improvement_queue"],
+        refresh_paths["refresh_manifest"],
+    ]
+    hook_paths: dict[str, pathlib.Path] = {}
+    if args.install_hooks:
+        hook_paths = install_hooks(repo, state_root, repo_state)
+        touched.extend([hook_paths["hook_command"], hook_paths["hook_manifest"], hook_paths["hook_event_log"]])
+    try:
+        if args.install_repo_integration:
+            touched.append(install_repo_integration(repo, state_root, repo_state, domain_rules_path, refresh_paths, hook_paths))
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    if args.self_test:
+        errors = run_self_test(repo_state, repo)
+        if errors:
+            for error in errors:
+                print(error, file=sys.stderr)
+            return 1
+    print("initialized agent-learning state: " + ", ".join(str(path) for path in touched))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

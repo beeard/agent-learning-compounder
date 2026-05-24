@@ -1,0 +1,421 @@
+#!/usr/bin/env python3
+"""Install Codex/Claude hook config entries for the shared learning collector."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import stat
+import pathlib
+import shutil
+import shlex
+import subprocess
+import sys
+from typing import Any
+
+from state_paths import repo_state_dir
+
+
+DEFAULT_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
+RUNTIMES = {"codex", "claude"}
+
+
+def load_json(path: pathlib.Path) -> dict[str, Any]:
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{path} is not valid JSON: {error}") from error
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return payload
+
+
+def write_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def agent_config(repo: pathlib.Path) -> dict[str, Any]:
+    path = repo / ".agent-learning.json"
+    if not path.exists():
+        raise ValueError(
+            f"{path} is missing; run init_learning_system.py --install-repo-integration --install-hooks first"
+        )
+    config = load_json(path)
+    if not config.get("hook_command"):
+        raise ValueError(
+            f"{path} has no hook_command; rerun init_learning_system.py with --install-hooks"
+        )
+    return config
+
+
+def runtime_config_path(repo: pathlib.Path, runtime: str, scope: str) -> pathlib.Path:
+    home = pathlib.Path.home()
+    if runtime == "codex":
+        return repo / ".codex" / "hooks.json" if scope == "repo" else home / ".codex" / "hooks.json"
+    if runtime == "claude":
+        return repo / ".claude" / "settings.local.json" if scope == "repo" else home / ".claude" / "settings.json"
+    raise ValueError(f"unsupported runtime: {runtime}")
+
+
+def adapter_command(repo: pathlib.Path, runtime: str, event: str) -> str:
+    script = pathlib.Path(__file__).resolve()
+    parts = [
+        sys.executable,
+        str(script),
+        "--adapter",
+        "--repo",
+        str(repo),
+        "--runtime",
+        runtime,
+        "--event",
+        event,
+    ]
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def command_exists(rows: list[Any], command: str) -> bool:
+    # Compare both as raw strings and as shlex-split token lists so equivalent
+    # commands written with different quoting (e.g. by hand vs. via shlex.quote)
+    # are not duplicated on a rerun.
+    try:
+        target_tokens = shlex.split(command)
+    except ValueError:
+        target_tokens = None
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for hook in row.get("hooks", []):
+            if not isinstance(hook, dict):
+                continue
+            existing = hook.get("command")
+            if existing == command:
+                return True
+            if target_tokens is None or not isinstance(existing, str):
+                continue
+            try:
+                if shlex.split(existing) == target_tokens:
+                    return True
+            except ValueError:
+                continue
+    return False
+
+
+def ensure_gitignored(repo: pathlib.Path, path: pathlib.Path) -> dict[str, Any]:
+    """Ensure the repo's .gitignore excludes `path`.
+
+    Rationale: runtime hook config (e.g. .codex/hooks.json,
+    .claude/settings.local.json) contains absolute paths into $HOME after
+    `--apply`. If committed, those paths leak the operator's home directory
+    into git history. We append a gitignore entry on demand so the leak is
+    blocked by default. No-op if the file is not under the repo or already
+    ignored, and no-op when no .git directory is present (path is not a
+    git repo). Returns a small report dict for the caller to surface.
+    """
+    try:
+        rel = path.resolve().relative_to(repo.resolve())
+    except ValueError:
+        return {"status": "outside_repo", "path": str(path)}
+    if not (repo / ".git").exists():
+        return {"status": "not_a_git_repo", "path": str(rel)}
+
+    gitignore = repo / ".gitignore"
+    entry = "/" + str(rel).replace("\\", "/")
+    backup_entry = entry + ".agent-learning-bak-*"
+    existing = gitignore.read_text(encoding="utf-8") if gitignore.exists() else ""
+    lines = {line.strip() for line in existing.splitlines() if line.strip()}
+    dir_entry = "/" + rel.parts[0] + "/"
+    existing_path = lines & {entry, str(rel).replace("\\", "/"), dir_entry}
+    existing_backup = lines & {backup_entry, str(rel).replace("\\", "/") + ".agent-learning-bak-*", dir_entry}
+    needed = []
+    if not existing_path:
+        needed.append(entry)
+    if not existing_backup:
+        needed.append(backup_entry)
+    if not needed:
+        return {"status": "already_ignored", "path": entry, "backup_path": backup_entry}
+
+    header = "\n# agent-learning-compounder: hook config contains absolute $HOME paths\n"
+    suffix = "" if existing.endswith("\n") or not existing else "\n"
+    gitignore.write_text(existing + suffix + header + "\n".join(needed) + "\n", encoding="utf-8")
+    return {"status": "added", "path": entry, "backup_path": backup_entry, "gitignore": str(gitignore)}
+
+
+def ensure_repo_hook_config_untracked(repo: pathlib.Path, path: pathlib.Path) -> dict[str, Any]:
+    """Refuse repo-local hook config writes when the target is tracked by git."""
+    try:
+        rel = path.resolve().relative_to(repo.resolve())
+    except ValueError:
+        return {"status": "outside_repo", "path": str(path)}
+    if not (repo / ".git").exists():
+        return {"status": "not_a_git_repo", "path": str(rel)}
+    if not shutil.which("git"):
+        raise ValueError(f"cannot verify whether {rel} is tracked because git is unavailable")
+
+    result = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--error-unmatch", "--", str(rel)],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode == 0:
+        raise ValueError(
+            f"{rel} is tracked by git; refusing to write absolute-path runtime hook config. "
+            "Remove it from the index, keep it local/ignored, or use --scope user."
+        )
+    return {"status": "untracked", "path": str(rel)}
+
+
+def hook_entry(command: str) -> dict[str, Any]:
+    return {
+        "matcher": "",
+        "hooks": [
+            {
+                "type": "command",
+                "command": command,
+            }
+        ],
+    }
+
+
+def merge_runtime_hooks(
+    repo: pathlib.Path,
+    runtime: str,
+    scope: str,
+    events: list[str],
+    apply: bool,
+) -> dict[str, Any]:
+    path = runtime_config_path(repo, runtime, scope)
+    data = load_json(path)
+    hooks = data.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        raise ValueError(f"{path} has a non-object hooks field")
+
+    added: list[str] = []
+    already_present: list[str] = []
+    for event in events:
+        command = adapter_command(repo, runtime, event)
+        rows = hooks.setdefault(event, [])
+        if not isinstance(rows, list):
+            raise ValueError(f"{path} hooks.{event} must be a list")
+        if command_exists(rows, command):
+            already_present.append(event)
+            continue
+        added.append(event)
+        if apply:
+            rows.append(hook_entry(command))
+
+    backup = None
+    gitignore_report: dict[str, Any] | None = None
+    tracking_report: dict[str, Any] | None = None
+    if apply and added:
+        if scope == "repo":
+            tracking_report = ensure_repo_hook_config_untracked(repo, path)
+        if path.exists():
+            stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            backup = path.with_name(f"{path.name}.agent-learning-bak-{stamp}")
+            backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+        write_json(path, data)
+        if scope == "repo":
+            gitignore_report = ensure_gitignored(repo, path)
+
+    return {
+        "runtime": runtime,
+        "scope": scope,
+        "config_path": str(path),
+        "applied": apply,
+        "added": added,
+        "already_present": already_present,
+        "backup": str(backup) if backup else None,
+        "gitignore": gitignore_report,
+        "tracking": tracking_report,
+    }
+
+
+def nested(payload: dict[str, Any], *keys: str) -> Any:
+    value: Any = payload
+    for key in keys:
+        if not isinstance(value, dict):
+            return None
+        value = value.get(key)
+    return value
+
+
+def _manifest_expected_root(config: dict[str, Any], repo: pathlib.Path) -> pathlib.Path:
+    repo_state = config.get("repo_state_dir")
+    if isinstance(repo_state, str):
+        return pathlib.Path(repo_state).expanduser().resolve() / "hooks"
+    state_dir = config.get("state_dir")
+    personal = config.get("personal")
+    if state_dir is not None or personal is not None:
+        return repo_state_dir(repo, state_dir, personal) / "hooks"
+    raise ValueError("config missing repo_state_dir; rerun init")
+
+
+def _assert_regular_executable_command(path: pathlib.Path, *, label: str) -> None:
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError as error:
+        raise ValueError(f"{label} is not present: {path}") from error
+
+    if stat.S_ISLNK(mode):
+        raise ValueError(f"{label} must not be a symlink: {path}")
+    if not stat.S_ISREG(mode):
+        raise ValueError(f"{label} must be a regular file: {path}")
+    if not os.access(path, os.X_OK):
+        raise ValueError(f"{label} must be executable: {path}")
+
+
+def _validate_configured_hook_command(config: dict[str, Any], repo: pathlib.Path) -> pathlib.Path:
+    command_value = config.get("hook_command")
+    if not isinstance(command_value, str):
+        raise ValueError("agent-learning hook configuration is missing a string hook_command")
+
+    command = pathlib.Path(command_value).expanduser()
+    if not command.is_absolute():
+        raise ValueError(f"hook_command must be absolute: {command_value}")
+    _assert_regular_executable_command(command, label="Configured hook_command")
+
+    manifest_path = config.get("hook_manifest")
+    if isinstance(manifest_path, str):
+        manifest_file = pathlib.Path(manifest_path).expanduser()
+        if not manifest_file.exists():
+            raise ValueError(f"hook_manifest is missing: {manifest_file}")
+        manifest = load_json(manifest_file)
+        manifest_command = manifest.get("hook_command")
+        if isinstance(manifest_command, str):
+            manifest_command_path = pathlib.Path(manifest_command).expanduser().resolve()
+            command_resolved = command.resolve()
+            if command_resolved != manifest_command_path:
+                raise ValueError(
+                    "Configured hook_command does not match hook_manifest.hook_command "
+                    f"({manifest_command_path})"
+                )
+
+    expected_root = _manifest_expected_root(config, repo).resolve()
+    try:
+        command.resolve().relative_to(expected_root)
+    except ValueError as error:
+        raise ValueError(
+            "Configured hook_command must be inside configured repo_state_dir/hooks: "
+            f"got {command}"
+        ) from error
+
+    return command
+
+
+def enriched_event(raw: dict[str, Any], repo: pathlib.Path, runtime: str, event: str) -> dict[str, Any]:
+    payload = dict(raw)
+    payload["event"] = raw.get("event") or raw.get("type") or raw.get("hook_event") or event
+    payload["runtime"] = raw.get("runtime") or runtime
+    payload["repo"] = str(repo)
+    payload["cwd"] = raw.get("cwd") or str(repo)
+
+    tool = raw.get("tool") or raw.get("tool_name") or raw.get("toolName") or nested(raw, "tool", "name")
+    if tool and not payload.get("tool"):
+        payload["tool"] = tool
+
+    tool_input = raw.get("tool_input") if isinstance(raw.get("tool_input"), dict) else {}
+    path = (
+        raw.get("path")
+        or raw.get("file")
+        or raw.get("skill_path")
+        or tool_input.get("path")
+        or tool_input.get("file_path")
+        or tool_input.get("filepath")
+    )
+    if path and not payload.get("path"):
+        payload["path"] = path
+
+    command = raw.get("command") or tool_input.get("command") or tool_input.get("cmd")
+    if command and not payload.get("command"):
+        payload["command"] = command
+    return payload
+
+
+def single_arg(value: Any, fallback: str) -> str:
+    if isinstance(value, list):
+        return str(value[-1]) if value else fallback
+    return str(value or fallback)
+
+
+def run_adapter(args: argparse.Namespace) -> int:
+    repo = pathlib.Path(args.repo).expanduser().resolve()
+    config = agent_config(repo)
+    hook_command = _validate_configured_hook_command(config, repo)
+    runtime = single_arg(args.runtime, "unknown")
+    event = single_arg(args.event, "Unknown")
+    raw_text = sys.stdin.read().strip()
+    if raw_text:
+        try:
+            raw = json.loads(raw_text)
+        except json.JSONDecodeError:
+            raw = {"label": "non-json-runtime-hook"}
+    else:
+        raw = {}
+    if not isinstance(raw, dict):
+        raw = {"label": "non-object-runtime-hook"}
+
+    payload = enriched_event(raw, repo, runtime, event)
+    result = subprocess.run(
+        [str(hook_command)],
+        input=json.dumps(payload, sort_keys=True),
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if result.stdout:
+        sys.stdout.write(result.stdout)
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+    return result.returncode
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--runtime", action="append", choices=sorted(RUNTIMES))
+    parser.add_argument("--scope", choices=["repo", "user"], default="repo")
+    parser.add_argument("--event", action="append", help="Runtime hook event to install; defaults to common session/tool events.")
+    parser.add_argument("--apply", action="store_true", help="Write config changes. Without this, only print the plan.")
+    parser.add_argument("--dry-run", action="store_true", help="Explicit no-op flag for readability; dry-run is the default.")
+    parser.add_argument("--adapter", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+
+    repo = pathlib.Path(args.repo).expanduser().resolve()
+    runtimes = args.runtime or sorted(RUNTIMES)
+    events = args.event or DEFAULT_EVENTS
+
+    try:
+        if args.adapter:
+            return run_adapter(args)
+        agent_config(repo)
+        reports = [
+            merge_runtime_hooks(repo, runtime, args.scope, events, args.apply)
+            for runtime in runtimes
+        ]
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+    print(
+        json.dumps(
+            {
+                "repo": str(repo),
+                "mode": "apply" if args.apply else "dry-run",
+                "runtimes": reports,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

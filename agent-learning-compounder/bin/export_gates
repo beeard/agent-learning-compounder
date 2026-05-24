@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""Export a compact gate registry from a validated agent-learning report."""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import datetime as dt
+import pathlib
+import re
+import sys
+
+from validate_outputs import validate
+
+
+SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
+DOMAIN_RE = re.compile(r"^###\s+domain:\s*(.+?)\s*$", re.M | re.I)
+
+
+@dataclasses.dataclass(frozen=True)
+class Gate:
+    domain: str
+    gate_category: str
+    gate: str
+    level: str | None = None
+    evidence_unit: str | None = None
+    evidence_count: str | None = None
+
+
+def strip_value(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        return value[1:-1].strip()
+    return value
+
+
+def section_text(report: str, heading: str) -> str:
+    matches = list(SECTION_RE.finditer(report))
+    for index, match in enumerate(matches):
+        if match.group(1).strip().lower() == heading.lower():
+            start = match.end()
+            end = matches[index + 1].start() if index + 1 < len(matches) else len(report)
+            return report[start:end].strip()
+    return ""
+
+
+def find_level(text: str) -> str | None:
+    patterns = (
+        r"^\s*-\s+\*\*level:\*\*\s*(.+?)\s*$",
+        r"^\s*-\s+level:\s*(.+?)\s*$",
+        r"^\s*level:\s*(.+?)\s*$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text, re.M | re.I)
+        if match:
+            return strip_value(match.group(1))
+    return None
+
+
+def find_evidence_count(text: str) -> tuple[str, str] | tuple[None, None]:
+    patterns = (
+        ("matching_lines", r"\bmatching_lines:\s*(\d+)\b"),
+        ("baseline_sources", r"\bbaseline_sources:\s*(\d+)\b"),
+        ("matching_lines", r"\bevidence:\s*(\d+)\s+matching user lines\b"),
+        ("sessions", r"\bevidence:\s*(\d+)\s+of\s+\d+\s+sessions\b"),
+    )
+    for unit, pattern in patterns:
+        match = re.search(pattern, text, re.I)
+        if match:
+            return unit, match.group(1)
+    return None, None
+
+
+def parse_gate_lines(domain: str, text: str) -> list[Gate]:
+    gates: list[Gate] = []
+    level = find_level(text)
+    evidence_unit, evidence_count = find_evidence_count(text)
+    pending_category: str | None = None
+
+    for line in text.splitlines():
+        category_match = re.match(r"^\s*-?\s*(?:gate_)?category:\s*(.+?)\s*$", line, re.I)
+        if category_match:
+            pending_category = strip_value(category_match.group(1))
+            continue
+
+        gate_match = re.match(r"^\s*-?\s*gate:\s*(.+?)\s*$", line, re.I)
+        if gate_match and pending_category:
+            gates.append(
+                Gate(
+                    domain=domain,
+                    gate_category=pending_category,
+                    gate=strip_value(gate_match.group(1)),
+                    level=level,
+                    evidence_unit=evidence_unit,
+                    evidence_count=evidence_count,
+                )
+            )
+            pending_category = None
+
+    return gates
+
+
+def parse_domain_sections(agent_compensation: str) -> list[Gate]:
+    matches = list(DOMAIN_RE.finditer(agent_compensation))
+    gates: list[Gate] = []
+    for index, match in enumerate(matches):
+        domain = strip_value(match.group(1))
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(agent_compensation)
+        gates.extend(parse_gate_lines(domain, agent_compensation[start:end]))
+    return gates
+
+
+def parse_yaml_style_blocks(agent_compensation: str) -> list[Gate]:
+    gates: list[Gate] = []
+    blocks = re.split(r"(?m)^\s*-\s+domain:\s*", agent_compensation)
+    for block in blocks[1:]:
+        first_line, _, rest = block.partition("\n")
+        domain = strip_value(first_line)
+        category_match = re.search(r"^\s*category:\s*(.+?)\s*$", rest, re.M | re.I)
+        gate_match = re.search(r"^\s*gate:\s*(.+?)\s*$", rest, re.M | re.I)
+        if not category_match or not gate_match:
+            continue
+        evidence_unit, evidence_count = find_evidence_count(rest)
+        gates.append(
+            Gate(
+                domain=domain,
+                gate_category=strip_value(category_match.group(1)),
+                gate=strip_value(gate_match.group(1)),
+                level=find_level(rest),
+                evidence_unit=evidence_unit,
+                evidence_count=evidence_count,
+            )
+        )
+    return gates
+
+
+def parse_gates(report: str) -> list[Gate]:
+    agent_compensation = section_text(report, "agent_compensation")
+    gates = parse_domain_sections(agent_compensation)
+    gates.extend(parse_yaml_style_blocks(agent_compensation))
+
+    seen: set[tuple[str, str, str]] = set()
+    deduped: list[Gate] = []
+    for gate in gates:
+        key = (gate.domain, gate.gate_category, gate.gate)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(gate)
+    return deduped
+
+
+def render_registry(report_path: pathlib.Path, gates: list[Gate], max_domains: int | None = None) -> str:
+    now = dt.datetime.now(dt.timezone.utc)
+    selected_domains: list[str] = []
+    selected_gates: list[Gate] = []
+
+    for gate in gates:
+        if gate.domain not in selected_domains:
+            if max_domains is not None and len(selected_domains) >= max_domains:
+                continue
+            selected_domains.append(gate.domain)
+        selected_gates.append(gate)
+
+    lines = [
+        "# Approved Agent Gates",
+        "",
+        f"- generated_at: {now.isoformat()}",
+        f"- date: {now.date().isoformat()}",
+        f"- source_report: {report_path}",
+        f"- domains: {', '.join(selected_domains) if selected_domains else 'none'}",
+        "",
+        "## gates",
+        "",
+    ]
+    for gate in selected_gates:
+        lines.extend(
+            [
+                f"- domain: {gate.domain}",
+                f"  gate_category: {gate.gate_category}",
+                f"  gate: {gate.gate}",
+            ]
+        )
+        if gate.level:
+            lines.append(f"  level: {gate.level}")
+        if gate.evidence_unit and gate.evidence_count:
+            lines.append(f"  {gate.evidence_unit}: {gate.evidence_count}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--report", required=True, help="Validated agent-learning report.md to export from.")
+    parser.add_argument("--output", required=True, help="Markdown registry output path.")
+    parser.add_argument("--max-domains", type=int, default=None, help="Maximum number of domains to export.")
+    args = parser.parse_args(argv)
+
+    if args.max_domains is not None and args.max_domains < 1:
+        parser.error("--max-domains must be at least 1")
+
+    report_path = pathlib.Path(args.report).resolve()
+    output_path = pathlib.Path(args.output)
+    report = report_path.read_text(encoding="utf-8")
+
+    errors = validate(report)
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+
+    gates = parse_gates(report)
+    if not gates:
+        print("no agent_compensation gates found", file=sys.stderr)
+        return 1
+
+    output_path.write_text(render_registry(report_path, gates, args.max_domains), encoding="utf-8")
+    print(f"exported {len(gates)} gates to {output_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Export compact active skill context for future session-start loading."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import pathlib
+import sys
+from typing import Any
+
+from scrub_secrets import scrub
+
+
+def load_json(path: str | pathlib.Path | None) -> dict[str, Any]:
+    if not path:
+        return {}
+    candidate = pathlib.Path(path)
+    if not candidate.exists():
+        return {}
+    return json.loads(candidate.read_text(encoding="utf-8"))
+
+
+def safe_line(value: str) -> str | None:
+    cleaned = " ".join(value.strip().split())
+    if not cleaned:
+        return None
+    if scrub(cleaned) != cleaned or "[REDACTED" in cleaned:
+        return None
+    forbidden = ("raw_prompt", "raw_tool_output", "raw_hook_payload", "tool_output", "full prompt")
+    if any(marker in cleaned.lower() for marker in forbidden):
+        return None
+    return cleaned
+
+
+def render_context(skill_map: dict[str, Any] | None = None, usage: dict[str, Any] | None = None, impact: dict[str, Any] | None = None) -> str:
+    skill_map = skill_map or {}
+    usage = usage or {}
+    impact = impact or {}
+    now = dt.datetime.now(dt.timezone.utc)
+    lines = [
+        "# Active Skill Context",
+        "",
+        f"- generated_at: {now.isoformat()}",
+        f"- repo: {skill_map.get('repo', 'unknown')}",
+        "",
+        "## required_at_session_start",
+        "- latest-approved-gates.md",
+        "- latest-skill-context.md",
+    ]
+    available = {item.get("name") for item in skill_map.get("skills", []) if item.get("valid", True)}
+    required = ["session-start", *usage.get("expected", [])]
+    if "next-session" in available:
+        required.append("next-session when scope is empty")
+    for skill in sorted(dict.fromkeys(item for item in required if item)):
+        if skill not in {"latest-approved-gates.md", "latest-skill-context.md"}:
+            lines.append(f"- {skill}")
+
+    lines.extend(["", "## skill_health_alerts"])
+    emitted = False
+    for item in skill_map.get("invalid", []):
+        path = safe_line(str(item.get("path") or item.get("name") or "unknown"))
+        if path:
+            lines.append(f"- invalid: {path}")
+            emitted = True
+    for skill in usage.get("missed", []):
+        safe = safe_line(str(skill))
+        if safe:
+            lines.append(f"- missed_expected_skill: {safe}")
+            emitted = True
+    loaded = set(usage.get("loaded", []))
+    applied = set(usage.get("applied", []))
+    failed = set(usage.get("failed", []))
+    for skill in sorted((loaded - applied) | failed):
+        safe = safe_line(str(skill))
+        if safe:
+            lines.append(f"- loaded_but_not_applied: {safe}")
+            emitted = True
+    if not emitted:
+        lines.append("- none")
+
+    lines.extend(["", "## candidate_adjustments"])
+    emitted = False
+    for row in impact.get("skills", []):
+        candidate = safe_line(str(row.get("candidate_adjustment", "")))
+        if candidate:
+            lines.append(f"- {candidate}")
+            emitted = True
+    if not emitted:
+        lines.append("- none")
+    return "\n".join(lines) + "\n"
+
+
+def write_context(output: pathlib.Path, skill_map: dict[str, Any] | None = None, usage: dict[str, Any] | None = None, impact: dict[str, Any] | None = None) -> pathlib.Path:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    text = render_context(skill_map, usage, impact)
+    if scrub(text) != text or "[REDACTED" in text:
+        raise ValueError("skill context contains secret-like content")
+    output.write_text(text, encoding="utf-8")
+    return output
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--skill-map")
+    parser.add_argument("--skill-usage")
+    parser.add_argument("--skill-impact")
+    parser.add_argument("--output", required=True)
+    args = parser.parse_args(argv)
+
+    try:
+        write_context(pathlib.Path(args.output), load_json(args.skill_map), load_json(args.skill_usage), load_json(args.skill_impact))
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    print(f"exported skill context to {args.output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

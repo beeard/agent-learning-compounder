@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""Validate agent-learning reports before durable append or reuse."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import pathlib
+import re
+import sys
+
+from scrub_secrets import scrub
+
+
+def _build_psych_re() -> re.Pattern[str]:
+    """Build the psychological/ability claim regex.
+
+    Subject names default to the generic "user|brukeren". Operators with a
+    personal deployment can extend the list via the AGENT_LEARNING_SUBJECT_NAMES
+    env var (comma- or whitespace-separated, e.g. "Tom,Lisa"). Each entry is
+    re.escape'd before being OR'd into the pattern.
+    """
+    extras = os.environ.get("AGENT_LEARNING_SUBJECT_NAMES", "")
+    names = ["user", "brukeren"]
+    for raw in re.split(r"[,\s]+", extras):
+        token = raw.strip()
+        if token and token.lower() not in {n.lower() for n in names}:
+            names.append(token)
+    subject_alt = "|".join(re.escape(name) for name in names)
+    # State verbs only fire when paired with an adjective_tail term. Bare
+    # "user is X" for arbitrary X must not trigger — that swept up neutral
+    # claims like "user is great" before review7.
+    state_verbs = "is|er|are|was|were|has|have|had"
+    # Judgment verbs imply a deficiency on their own (and the existing
+    # metachars test asserts "Foo.Bar shows weakness" still fires via the
+    # bare-verb branch, where "weakness" is not in adjective_tail).
+    judgment_verbs = (
+        "lacks|shows|demonstrates|exhibits|displays|appears|seems|tends|"
+        "mangler|evner ikke"
+    )
+    adjective_tail = (
+        "weak|poor|bad|incompetent|inadequate|unable|incapable|stupid|lazy|"
+        "svak|darlig|dårlig"
+    )
+    return re.compile(
+        r"\b(" + subject_alt + r")\s+"
+        r"(?:"
+        r"(?:" + state_verbs + r")\s+(?:" + adjective_tail + r")\b"
+        r"|(?:" + judgment_verbs + r")\b"
+        r"|(?:" + adjective_tail + r")\b"
+        r")",
+        re.I,
+    )
+
+
+PSYCH_RE = _build_psych_re()
+REQUIRED_MARKERS = (
+    "confirmed_current",
+    "memory_derived",
+    "needs_verification",
+    "agent_compensation",
+    "self_healing_loop",
+)
+SECTION_RE = re.compile(r"^##\s+(.+?)\s*$", re.M)
+QUOTE_RE = re.compile(r'quote:\s*"([^"]+)"', re.I)
+WEAK_QUOTE_WORDS = 3
+WEAK_CONFIRMED_SOURCE_RE = re.compile(r"\bsource:\s*(?:baseline|corpus|baseline and corpus|baseline summary)\s*$", re.I)
+RAW_HOOK_RE = re.compile(
+    r"\b(raw_hook_payload|raw_prompt|raw_tool_output|full prompt|tool output|tool_output|hook payload)\b",
+    re.I,
+)
+CAUSAL_SKILL_RE = re.compile(r"\bskill\s+caused\s+failure\b", re.I)
+
+
+def sections(text: str) -> dict[str, str]:
+    matches = list(SECTION_RE.finditer(text))
+    result: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        name = match.group(1).strip().lower()
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        result[name] = text[start:end].strip()
+    return result
+
+
+def bullet_lines(section: str) -> list[str]:
+    return [line.strip() for line in section.splitlines() if line.strip().startswith("- ")]
+
+
+def word_count(value: str) -> int:
+    return len(value.strip().split())
+
+
+def validate_bucket_lines(report_sections: dict[str, str], errors: list[str]) -> None:
+    for line in bullet_lines(report_sections.get("confirmed_current", "")):
+        if not line.startswith("- [confirmed_current]"):
+            errors.append("confirmed_current bullet missing [confirmed_current]")
+        if "source:" not in line.lower():
+            errors.append("confirmed_current bullet missing source:")
+        elif WEAK_CONFIRMED_SOURCE_RE.search(line):
+            errors.append("confirmed_current source must name a concrete file, command, or metadata source")
+
+    for line in bullet_lines(report_sections.get("memory_derived", "")):
+        if not line.startswith("- [memory_derived]"):
+            errors.append("memory_derived bullet missing [memory_derived]")
+        lowered = line.lower()
+        if not any(marker in lowered for marker in ("source:", "quote:", "origin:", "count:", "evidence:")):
+            errors.append("memory_derived bullet missing evidence marker")
+
+    for line in bullet_lines(report_sections.get("needs_verification", "")):
+        if not line.startswith("- [needs_verification]"):
+            errors.append("needs_verification bullet missing [needs_verification]")
+        if "verify:" not in line.lower():
+            errors.append("needs_verification bullet missing verify:")
+
+
+def validate_evidence_shape(text: str, errors: list[str]) -> None:
+    if re.search(r"\brepeat_count\s*[:=]\s*\d+\b", text, re.I):
+        errors.append("repeat_count must name its unit")
+
+    agent_compensation = sections(text).get("agent_compensation", "")
+    for match in QUOTE_RE.finditer(agent_compensation):
+        if word_count(match.group(1)) < WEAK_QUOTE_WORDS:
+            errors.append("gate quote too weak")
+
+    for domain_match in re.finditer(r"^###\s+domain:\s*(.+?)\s*$", agent_compensation, re.M | re.I):
+        start = domain_match.end()
+        next_domain = re.search(r"^###\s+domain:\s*", agent_compensation[start:], re.M | re.I)
+        end = start + next_domain.start() if next_domain else len(agent_compensation)
+        block = agent_compensation[start:end]
+        if not re.search(r"^\s*(?:-\s+)?gate_category:\s*\S+", block, re.M | re.I) and not re.search(r"^\s*(?:-\s+)?category:\s*\S+", block, re.M | re.I):
+            errors.append(f"agent_compensation domain {domain_match.group(1)} missing gate_category")
+        if not re.search(r"^\s*(?:-\s+)?gate:\s*\S+", block, re.M | re.I):
+            errors.append(f"agent_compensation domain {domain_match.group(1)} missing gate")
+
+    skill_health = sections(text).get("skill_health", "")
+    for line in bullet_lines(skill_health):
+        lowered = line.lower()
+        if not any(marker in lowered for marker in ("source:", "count:", "verify:", "evidence:")):
+            errors.append("skill_health bullet missing evidence marker")
+
+
+def validate(text: str) -> list[str]:
+    errors: list[str] = []
+    report_sections = sections(text)
+    if scrub(text) != text:
+        errors.append("secret-like content")
+    if "[REDACTED" in text:
+        errors.append("redacted marker in report")
+    if re.search(r"^##\s+Unsupported Claims\b", text, re.M | re.I):
+        errors.append("unsupported claims section is not allowed")
+    if RAW_HOOK_RE.search(text):
+        errors.append("raw hook payload")
+    if CAUSAL_SKILL_RE.search(text):
+        errors.append("causal skill overclaim")
+    if PSYCH_RE.search(text):
+        errors.append("psychological or ability claim")
+    for marker in REQUIRED_MARKERS:
+        if marker not in text:
+            errors.append(f"missing required marker: {marker}")
+    if "source:" not in text and "quote:" not in text:
+        errors.append("missing evidence marker: source or quote")
+    validate_bucket_lines(report_sections, errors)
+    validate_evidence_shape(text, errors)
+    return errors
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("report")
+    args = parser.parse_args(argv)
+
+    text = pathlib.Path(args.report).read_text(encoding="utf-8")
+    errors = validate(text)
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+    print("validation passed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

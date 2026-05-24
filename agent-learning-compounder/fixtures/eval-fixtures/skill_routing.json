@@ -1,0 +1,62 @@
+[
+  {
+    "id": "ports_contract",
+    "scope": "packages/ports/src/contracts.ts",
+    "expected": ["session-start", "port-vocab-gate"]
+  },
+  {
+    "id": "empty_scope",
+    "scope": "",
+    "expected": ["next-session"]
+  },
+  {
+    "id": "completion_commit",
+    "scope": "done, validate and prepare commit",
+    "expected": ["session-end"]
+  },
+  {
+    "id": "ui_design",
+    "scope": "apps/web dashboard UI design polish",
+    "expected": ["session-start", "tm-design"]
+  },
+  {
+    "id": "learning_roadmap",
+    "scope": "agent-learning-compounder self-healing roadmap",
+    "expected": ["agent-learning-compounder"]
+  },
+  {
+    "id": "quick3_adapter",
+    "scope": "packages/adapters/quick3/readback smoke",
+    "expected": ["session-start"]
+  },
+  {
+    "id": "cloudflare_worker",
+    "scope": "Cloudflare Worker binding change",
+    "expected": ["session-start"]
+  },
+  {
+    "id": "review_auth",
+    "scope": "review packages/auth route handlers",
+    "expected": ["session-start"]
+  },
+  {
+    "id": "next_session_phrase",
+    "scope": "what should I work on next",
+    "expected": ["next-session"]
+  },
+  {
+    "id": "plan_packet",
+    "scope": "docs/plans/2026-05-21-worker-ingest-plan.md",
+    "expected": ["session-start"]
+  },
+  {
+    "id": "browser_skill",
+    "scope": "use browser automation to inspect the local app",
+    "expected": ["agent-browser"]
+  },
+  {
+    "id": "plain_small_question",
+    "scope": "what time is it",
+    "expected": []
+  }
+]

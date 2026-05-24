@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""Refresh compact agent-learning state and queue candidate skill improvements."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import stat
+import pathlib
+import sys
+from typing import Any
+
+from build_repo_baseline import build as build_baseline
+from evaluate_skill_impact import evaluate as evaluate_impact
+from export_skill_context import write_context
+from extract_skill_usage import build_usage, read_events
+from map_active_skills import build_map
+from scrub_secrets import scrub
+from state_paths import repo_state_dir, resolve_state_dir
+
+
+def write_json(path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return path
+
+
+def stable_queue_id(row: dict[str, Any]) -> str:
+    key = "|".join(
+        [
+            str(row.get("skill", "")),
+            str(row.get("impact_signal", "")),
+            str(row.get("candidate_adjustment", "")),
+        ]
+    )
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
+
+
+def existing_queue_ids(path: pathlib.Path) -> set[str]:
+    if not path.exists():
+        return set()
+    ids = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if payload.get("id"):
+            ids.add(str(payload["id"]))
+    return ids
+
+
+def assert_regular_file_destination(path: pathlib.Path, *, label: str) -> None:
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(mode):
+        raise ValueError(f"{label} is a symlink; refusing to write queue output to {path}")
+    if not stat.S_ISREG(mode):
+        raise ValueError(f"{label} is not a regular file; refusing to write queue output to {path}")
+
+
+def queue_candidate_adjustments(path: pathlib.Path, impact: dict[str, Any]) -> dict[str, int]:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    assert_regular_file_destination(path, label="Improvement queue")
+    queued = 0
+    suppressed_needs_review = 0
+    suppressed_redacted = 0
+    now = dt.datetime.now(dt.timezone.utc).isoformat()
+    # Open + flock the queue file so concurrent refreshes cannot interleave
+    # writes or each see a stale view of existing ids. We re-read ids AFTER
+    # acquiring the exclusive lock so a sibling that already appended is
+    # visible here.
+    with path.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            handle.seek(0)
+            seen: set[str] = set()
+            for line in handle.read().splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if payload.get("id"):
+                    seen.add(str(payload["id"]))
+            handle.seek(0, 2)  # back to end for appends
+            for row in impact.get("skills", []):
+                signal = str(row.get("impact_signal", ""))
+                candidate = str(row.get("candidate_adjustment", "")).strip()
+                if signal == "needs_review":
+                    suppressed_needs_review += 1
+                    continue
+                if not candidate or signal == "correlated_with_success":
+                    continue
+                item = {
+                    "schema_version": 1,
+                    "id": stable_queue_id(row),
+                    "queued_at": now,
+                    "status": "candidate",
+                    "source": "refresh_learning_state.py",
+                    "skill": row.get("skill"),
+                    "impact_signal": signal,
+                    "confidence": row.get("confidence"),
+                    "candidate_adjustment": candidate,
+                    "evidence": {
+                        "expected_sessions": row.get("expected_sessions", 0),
+                        "loaded_sessions": row.get("loaded_sessions", 0),
+                        "missed_sessions": row.get("missed_sessions", 0),
+                        "corrections_after_loaded": row.get("corrections_after_loaded", 0),
+                        "corrections_after_missed": row.get("corrections_after_missed", 0),
+                    },
+                }
+                if item["id"] in seen:
+                    continue
+                rendered = scrub(json.dumps(item, sort_keys=True, separators=(",", ":")))
+                if "[REDACTED" in rendered:
+                    suppressed_redacted += 1
+                    continue
+                handle.write(rendered + "\n")
+                seen.add(str(item["id"]))
+                queued += 1
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    return {
+        "queued": queued,
+        "suppressed_needs_review": suppressed_needs_review,
+        "suppressed_redacted": suppressed_redacted,
+    }
+
+
+def has_event_rows(path: pathlib.Path) -> bool:
+    if not path.exists():
+        return False
+    return any(line.strip() for line in path.read_text(encoding="utf-8").splitlines())
+
+
+def refresh(
+    repo: pathlib.Path,
+    state_dir: str | pathlib.Path | None = None,
+    personal: str | pathlib.Path | None = None,
+    events: pathlib.Path | None = None,
+    queue: pathlib.Path | None = None,
+) -> dict[str, Any]:
+    repo = repo.expanduser().resolve()
+    repo_state = repo_state_dir(repo, state_dir, personal)
+    reports = repo_state / "reports"
+    repo_state.mkdir(parents=True, exist_ok=True)
+    reports.mkdir(parents=True, exist_ok=True)
+
+    # Resolve runtime from the state-root config.json the installer writes.
+    # Falls back silently to "auto" if config or runtime key is absent.
+    runtime = "auto"
+    try:
+        state_root = resolve_state_dir(state_dir, personal, repo)
+        config_path = state_root / "config.json"
+        if config_path.exists():
+            cfg = json.loads(config_path.read_text(encoding="utf-8"))
+            if isinstance(cfg, dict) and isinstance(cfg.get("runtime"), str):
+                runtime = cfg["runtime"]
+    except (OSError, json.JSONDecodeError):
+        runtime = "auto"
+
+    baseline = build_baseline(repo, runtime=runtime)
+    skill_map = build_map(repo, runtime=runtime)
+    event_log = events or repo_state / "hook-events.jsonl"
+    event_log_present = has_event_rows(event_log)
+    if event_log_present:
+        usage = build_usage(read_events(event_log), skill_map)
+        impact = evaluate_impact(usage)
+    else:
+        usage = {}
+        impact = {}
+        print(
+            "refresh: hook-events.jsonl is empty; skill-context will be empty",
+            file=sys.stderr,
+        )
+
+    touched = [
+        write_json(repo_state / "baseline.json", baseline),
+        write_json(repo_state / "skill-map.json", skill_map),
+        write_json(repo_state / "skill-usage.json", usage),
+        write_json(repo_state / "skill-impact.json", impact),
+        write_context(reports / "latest-skill-context.md", skill_map, usage, impact),
+    ]
+    queue_path = queue or repo_state / "improvement-queue.jsonl"
+    queue_stats = queue_candidate_adjustments(queue_path, impact)
+    queue_path.touch(exist_ok=True)
+    touched.append(queue_path)
+
+    queued = queue_stats["queued"]
+    suppressed = queue_stats["suppressed_needs_review"]
+    suppressed_redacted = queue_stats["suppressed_redacted"]
+    if suppressed:
+        print(f"refresh: suppressed {suppressed} needs_review rows", file=sys.stderr)
+    if suppressed_redacted:
+        print(
+            f"refresh: suppressed {suppressed_redacted} rows containing secret-like content",
+            file=sys.stderr,
+        )
+
+    return {
+        "repo": str(repo),
+        "repo_state_dir": str(repo_state),
+        "event_log": str(event_log),
+        "event_log_present": event_log_present,
+        "queued_candidates": queued,
+        "suppressed_needs_review": suppressed,
+        "suppressed_redacted": suppressed_redacted,
+        "touched": [str(path) for path in touched],
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--state-dir")
+    parser.add_argument("--personal")
+    parser.add_argument("--events")
+    parser.add_argument("--queue")
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+
+    try:
+        result = refresh(
+            pathlib.Path(args.repo),
+            args.state_dir,
+            args.personal,
+            pathlib.Path(args.events) if args.events else None,
+            pathlib.Path(args.queue) if args.queue else None,
+        )
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        pathlib.Path(args.output).write_text(rendered, encoding="utf-8")
+    else:
+        sys.stdout.write(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

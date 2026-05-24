@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Map active Codex/Claude skills and basic health signals for a repo."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import hashlib
+import json
+import pathlib
+import re
+import sys
+from typing import Any
+
+
+RESOURCE_RE = re.compile(r"\b((?:references|scripts)/[A-Za-z0-9._/-]+)")
+RUNTIME_HINT_RE = re.compile(r"\bruntime\s*[:=]\s*(codex|claude|all)\b", re.IGNORECASE)
+RUNTIMES = ("auto", "codex", "claude", "all")
+
+
+def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
+    if not text.startswith("---"):
+        return {}, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}, text
+    data: dict[str, str] = {}
+    for line in parts[1].splitlines():
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        data[key.strip()] = value.strip().strip('"')
+    return data, parts[2]
+
+
+def display_path(repo: pathlib.Path, path: pathlib.Path) -> str:
+    try:
+        return str(path.resolve().relative_to(repo.resolve()))
+    except ValueError:
+        return str(path.resolve())
+
+
+def agents_rules(repo: pathlib.Path) -> list[dict[str, str]]:
+    rules: list[dict[str, str]] = []
+    for name in ("AGENTS.md", "CLAUDE.md", "GEMINI.md"):
+        path = repo / name
+        if not path.exists():
+            continue
+        for index, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            clean = " ".join(line.strip().lstrip("-* ").split())
+            lowered = clean.lower()
+            if clean and any(token in lowered for token in ("skill", "skills/", "packages/ports", "session-start", "load")):
+                rules.append({"fact": clean[:220], "source": f"{name}:{index}"})
+    return rules[:40]
+
+
+def referenced_resources(body: str) -> list[str]:
+    resources = []
+    for match in RESOURCE_RE.finditer(body):
+        resources.append(match.group(1).rstrip(").,;:"))
+    return sorted(set(resources))
+
+
+def parse_skill(path: pathlib.Path, repo: pathlib.Path, scope: str, priority_base: int, rules_text: str) -> tuple[dict[str, Any], list[dict[str, str]]]:
+    text = path.read_text(encoding="utf-8", errors="replace")
+    frontmatter, body = parse_frontmatter(text)
+    name = frontmatter.get("name") or path.parent.name
+    description = frontmatter.get("description", "")
+    missing: list[dict[str, str]] = []
+    refs_missing = False
+    scripts_missing = False
+    for resource in referenced_resources(body):
+        if not (path.parent / resource).exists():
+            missing.append({"skill": name, "path": display_path(repo, path), "missing": resource})
+            refs_missing = refs_missing or resource.startswith("references/")
+            scripts_missing = scripts_missing or resource.startswith("scripts/")
+    priority = priority_base + (10 if name.lower() in rules_text else 0)
+    item = {
+        "name": name,
+        "path": display_path(repo, path),
+        "scope": scope,
+        "valid": bool(frontmatter.get("name") and description),
+        "description": description,
+        "hash": hashlib.sha256(text.encode("utf-8")).hexdigest()[:16],
+        "mtime": int(path.stat().st_mtime),
+        "references_ok": not refs_missing,
+        "scripts_ok": not scripts_missing,
+        "priority": priority,
+    }
+    return item, missing
+
+
+def runtime_from_env() -> str | None:
+    value = os.environ.get("AGENT_LEARNING_RUNTIME", "").strip().lower()
+    if value in {"codex", "claude", "all"}:
+        return value
+    return None
+
+
+def runtime_from_instructions(repo: pathlib.Path) -> str | None:
+    for path in (repo / "AGENTS.md", repo / "CLAUDE.md", repo / "GEMINI.md"):
+        if not path.exists():
+            continue
+        try:
+            for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                match = RUNTIME_HINT_RE.search(line)
+                if match:
+                    return match.group(1).lower()
+        except OSError:
+            continue
+    return None
+
+
+def resolve_runtime(runtime: str, repo: pathlib.Path) -> str:
+    if runtime != "auto":
+        return runtime
+    runtime = runtime_from_env() or runtime_from_instructions(repo) or "codex"
+    return runtime
+
+
+def skill_roots(
+    repo: pathlib.Path,
+    global_roots: list[pathlib.Path],
+    runtime: str,
+) -> list[tuple[pathlib.Path, str, int]]:
+    runtime = resolve_runtime(runtime, repo)
+    roots: list[tuple[pathlib.Path, str, int]] = []
+    if runtime in {"codex", "all"}:
+        roots.append((repo / ".agents" / "skills", "repo", 100))
+    if runtime in {"claude", "all"}:
+        roots.append((repo / ".claude" / "skills", "repo", 90))
+    for root in global_roots:
+        roots.append((root.expanduser(), "global", 50))
+    return roots
+
+
+def default_global_roots(runtime: str) -> list[pathlib.Path]:
+    candidates: list[pathlib.Path] = []
+    if runtime in {"codex", "all"}:
+        candidates.extend(
+            [
+                pathlib.Path("~/.agents/skills").expanduser(),
+                pathlib.Path("~/.codex/skills").expanduser(),
+            ]
+        )
+    if runtime in {"claude", "all"}:
+        candidates.append(pathlib.Path("~/.claude/skills").expanduser())
+    return [path for path in candidates if path.exists()]
+
+
+def build_map(
+    repo: pathlib.Path,
+    global_roots: list[pathlib.Path] | None = None,
+    runtime: str = "auto",
+) -> dict[str, Any]:
+    repo = repo.expanduser().resolve()
+    runtime = resolve_runtime(runtime, repo)
+    rules = agents_rules(repo)
+    rules_text = "\n".join(rule["fact"].lower() for rule in rules)
+    skills: list[dict[str, Any]] = []
+    missing_dependencies: list[dict[str, str]] = []
+    resolved_global_roots = default_global_roots(runtime)
+    if global_roots is not None:
+        resolved_global_roots.extend(pathlib.Path(path).expanduser() for path in global_roots)
+    for root, scope, priority in skill_roots(repo, resolved_global_roots, runtime):
+        if not root.exists():
+            continue
+        # Single-level glob: active skills live at <root>/<skill-name>/SKILL.md
+        # by Claude/Codex convention. build_repo_baseline.skill_files uses
+        # rglob for broader audit; keep the two divergent on purpose.
+        for path in sorted(root.glob("*/SKILL.md")):
+            item, missing = parse_skill(path, repo, scope, priority, rules_text)
+            skills.append(item)
+            missing_dependencies.extend(missing)
+
+    by_name: dict[str, list[dict[str, Any]]] = {}
+    for item in skills:
+        by_name.setdefault(item["name"], []).append(item)
+    duplicates = [
+        {"name": name, "paths": [item["path"] for item in rows]}
+        for name, rows in sorted(by_name.items())
+        if len(rows) > 1
+    ]
+    invalid = [
+        {"name": item["name"], "path": item["path"], "reason": "missing name or description frontmatter"}
+        for item in skills
+        if not item["valid"]
+    ]
+    return {
+        "repo": str(repo),
+        "skills": sorted(skills, key=lambda item: (-item["priority"], item["name"], item["path"])),
+        "duplicates": duplicates,
+        "invalid": invalid,
+        "missing_dependencies": missing_dependencies,
+        "agents_rules": rules,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--global-skill-root", action="append", default=[])
+    parser.add_argument("--runtime", choices=RUNTIMES, default="auto")
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+
+    data = build_map(
+        pathlib.Path(args.repo),
+        [pathlib.Path(path) for path in args.global_skill_root] if args.global_skill_root else None,
+        runtime=args.runtime,
+    )
+    rendered = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        pathlib.Path(args.output).write_text(rendered, encoding="utf-8")
+    else:
+        sys.stdout.write(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

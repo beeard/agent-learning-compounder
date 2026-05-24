@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""Evaluate skill usage impact as correlation, never hard causality."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import sys
+from typing import Any
+
+
+def evaluate(usage: dict[str, Any]) -> dict[str, Any]:
+    skills = sorted(set(usage.get("expected", [])) | set(usage.get("loaded", [])) | set(usage.get("missed", [])) | set(usage.get("failed", [])))
+    rows = []
+    sessions = usage.get("sessions") or []
+    for skill in skills:
+        expected_sessions = sum(1 for session in sessions if skill in session.get("expected", []))
+        loaded_sessions = sum(1 for session in sessions if skill in session.get("loaded", []))
+        missed_sessions = sum(1 for session in sessions if skill in session.get("missed", []))
+        corrections_after_loaded = sum(1 for session in sessions if session.get("correction") and skill in session.get("loaded", []))
+        corrections_after_missed = sum(1 for session in sessions if session.get("correction") and skill in session.get("missed", []))
+        if corrections_after_missed > corrections_after_loaded:
+            signal = "missed_expected_skill_correlates_with_scope_correction"
+        elif missed_sessions:
+            signal = "missed_expected_skill"
+        elif corrections_after_loaded:
+            signal = "loaded_but_not_applied"
+        elif loaded_sessions:
+            signal = "correlated_with_success"
+        else:
+            signal = "needs_review"
+        confidence = "medium" if expected_sessions >= 2 else "low"
+        if corrections_after_missed:
+            candidate = f"Load {skill} before matching scopes and verify its required gate was applied."
+        elif missed_sessions:
+            candidate = f"Check routing so {skill} loads when expected."
+        elif corrections_after_loaded:
+            candidate = f"Review {skill} instructions for easier application evidence."
+        else:
+            candidate = f"Keep {skill} routing under observation."
+        rows.append(
+            {
+                "skill": skill,
+                "expected_sessions": expected_sessions,
+                "loaded_sessions": loaded_sessions,
+                "missed_sessions": missed_sessions,
+                "corrections_after_loaded": corrections_after_loaded,
+                "corrections_after_missed": corrections_after_missed,
+                "impact_signal": signal,
+                "confidence": confidence,
+                "candidate_adjustment": candidate,
+            }
+        )
+    return {"skills": rows}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--usage", required=True)
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+
+    result = evaluate(json.loads(pathlib.Path(args.usage).read_text(encoding="utf-8")))
+    rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        pathlib.Path(args.output).write_text(rendered, encoding="utf-8")
+    else:
+        sys.stdout.write(rendered)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

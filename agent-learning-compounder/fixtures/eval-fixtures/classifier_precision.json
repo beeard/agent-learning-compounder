@@ -1,0 +1,52 @@
+[
+  {
+    "id": "repo_workflow_from_next_session",
+    "lines": ["whats next in this repo; read AGENTS.md, local skills, and backlog before picking work"],
+    "expected_domains": ["repo-workflow"]
+  },
+  {
+    "id": "validation_before_completion",
+    "lines": ["Do not speculate; run the test, lint, build, and typecheck commands before claiming done"],
+    "expected_domains": ["validation"]
+  },
+  {
+    "id": "external_runtime_truth",
+    "lines": ["Check live production logs and quote the actual runtime state before recommending action"],
+    "expected_domains": ["external-runtime-truth"]
+  },
+  {
+    "id": "scope_drift_boundary",
+    "lines": ["Hold deg til write-scope, avgrens the packet, and keep overflow out of scope"],
+    "expected_domains": ["scope-drift"]
+  },
+  {
+    "id": "quick3_readback_safety",
+    "lines": ["Quick3 additionalTexts mutation needs same-run smoke and readback evidence"],
+    "expected_domains": ["quick3"]
+  },
+  {
+    "id": "cloudflare_config",
+    "lines": ["Cloudflare Worker KV and Durable Object binding config must be checked before rollout"],
+    "expected_domains": ["cloudflare"]
+  },
+  {
+    "id": "teams_m365_live_surface",
+    "lines": ["Use Teams M365 Planner and SharePoint connector state for the operating model"],
+    "expected_domains": ["teams-m365"]
+  },
+  {
+    "id": "git_release_boundary",
+    "lines": ["Before commit, push, PR, merge, or ship, inspect dirty state and quote validation"],
+    "expected_domains": ["git-release", "validation"]
+  },
+  {
+    "id": "agent_memory_handoff",
+    "lines": ["Use the compound learning handoff and mark stale memory as needs_verification"],
+    "expected_domains": ["agent-memory-handoff"]
+  },
+  {
+    "id": "warehouse_workers_noise",
+    "lines": ["The warehouse workers discussed shift planning and lunch coverage without any platform rollout"],
+    "expected_domains": []
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {"id": "missed_session_start", "skill": "session-start", "signal": "missed_expected_skill"},
+    {"id": "missed_port_vocab", "skill": "port-vocab-gate", "signal": "missed_expected_skill"},
+    {"id": "loaded_not_applied", "skill": "session-start", "signal": "loaded_but_not_applied"},
+    {"id": "invalid_skill", "skill": "broken-skill", "signal": "invalid"},
+    {"id": "stale_skill", "skill": "session-end", "signal": "needs_review"},
+    {"id": "correction_after_missed", "skill": "tm-design", "signal": "correlated_with_failure"},
+    {"id": "loaded_success", "skill": "port-vocab-gate", "signal": "correlated_with_success"},
+    {"id": "candidate_adjustment", "skill": "agent-learning-compounder", "signal": "candidate_skill_adjustment"}
+  ]
+}

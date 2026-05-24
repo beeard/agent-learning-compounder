@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+"""Append a bounded, scrubbed hook event to agent-learning JSONL telemetry."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import pathlib
+import re
+import stat
+import sys
+from typing import Any
+
+from scrub_secrets import scrub
+from state_paths import repo_state_dir, resolve_state_dir
+
+
+DEFAULT_MAX_HOOK_EVENT_BYTES = 5_000_000
+MAX_HOOK_EVENT_BACKUPS = 3
+
+
+# normalize_event uses an allowlist (constructs a fresh dict with only
+# vetted keys), so raw-payload keys like prompt/tool_output/transcript are
+# dropped by construction. No blocklist is needed at the entry point.
+UUID_RE = re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b", re.I)
+
+
+def snake(value: str) -> str:
+    value = re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", value)
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
+    value = re.sub(r"[^A-Za-z0-9]+", "_", value)
+    return value.strip("_").lower() or "unknown"
+
+
+def slug(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "unknown"
+
+
+def bounded(value: Any, limit: int = 160) -> str | None:
+    if value is None:
+        return None
+    text = scrub(str(value).replace("\n", " "))
+    if "[REDACTED" in text:
+        return None
+    text = " ".join(text.split())
+    return text[:limit] if text else None
+
+
+def safe_session(value: Any) -> str:
+    text = str(value or "session")
+    if UUID_RE.search(text):
+        return "session"
+    return slug(text)[:80]
+
+
+def _stable_path_token(path: pathlib.Path) -> str:
+    token = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:12]
+    return f"<outside_repo:{token}>"
+
+
+def normalize_path(path_value: Any, repo: pathlib.Path | None) -> str | None:
+    if not path_value:
+        return None
+    path = pathlib.Path(str(path_value)).expanduser()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path
+    if repo:
+        try:
+            return str(resolved.relative_to(repo.resolve()))
+        except ValueError:
+            return _stable_path_token(resolved)
+    if path.is_absolute():
+        return _stable_path_token(resolved)
+    return str(path)
+
+
+def parse_json_or_label(raw: str, source: str) -> dict[str, Any]:
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {
+            "event": "MalformedJson",
+            "runtime": "collect_hook_event",
+            "label": bounded(f"malformed_json_{source}", 80),
+        }
+    if isinstance(value, dict):
+        return value
+    return {
+        "event": "MalformedJson",
+        "runtime": "collect_hook_event",
+        "label": bounded(f"non_object_json_{source}", 80),
+    }
+
+
+def assert_regular_file_destination(path: pathlib.Path, *, label: str) -> None:
+    try:
+        mode = path.lstat().st_mode
+    except FileNotFoundError:
+        return
+    if stat.S_ISLNK(mode):
+        raise ValueError(f"{label} is a symlink; refusing to write output to {path}")
+    if not stat.S_ISREG(mode):
+        raise ValueError(f"{label} is not a regular file; refusing to write output to {path}")
+
+
+def skill_from_path(path_value: str | None) -> str | None:
+    if not path_value:
+        return None
+    parts = pathlib.PurePath(path_value).parts
+    for index, part in enumerate(parts):
+        if part == "skills" and index + 1 < len(parts):
+            return parts[index + 1]
+    return None
+
+
+def normalize_event(raw: dict[str, Any], repo_arg: pathlib.Path | None = None) -> dict[str, Any]:
+    repo = repo_arg or pathlib.Path(str(raw.get("repo") or raw.get("cwd") or ".")).expanduser()
+    path = normalize_path(raw.get("path") or raw.get("file") or raw.get("skill_path"), repo)
+    event = {
+        "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "event": snake(str(raw.get("event") or raw.get("type") or raw.get("hook_event") or "unknown")),
+        "runtime": slug(str(raw.get("runtime") or raw.get("source") or "unknown")),
+        "repo": str(repo.resolve()) if repo else None,
+        "session_id": safe_session(raw.get("session_id") or raw.get("session") or raw.get("conversation_id")),
+    }
+    skill = bounded(raw.get("skill") or raw.get("skill_name")) or skill_from_path(path)
+    if skill:
+        event["skill"] = skill
+    tool = bounded(raw.get("tool") or raw.get("tool_name"))
+    if tool:
+        event["tool"] = tool
+    outcome = bounded(raw.get("outcome") or raw.get("status"))
+    if outcome:
+        event["outcome"] = outcome
+    if path:
+        event["path"] = path
+    scope = bounded(raw.get("scope"))
+    if scope:
+        event["scope"] = scope
+    label = bounded(raw.get("label") or raw.get("reason"))
+    if label:
+        event["label"] = label
+    command = bounded(raw.get("command"), 80)
+    if command:
+        event["command_class"] = command.split()[0]
+
+    return {key: value for key, value in event.items() if value is not None}
+
+
+def default_output(repo: pathlib.Path, state_dir: str | None, personal: str | None) -> pathlib.Path:
+    return repo_state_dir(repo, state_dir, personal) / "hook-events.jsonl"
+
+
+def _retention_max_from_payload(data: dict[str, Any]) -> int | None:
+    retention = data.get("retention") or {}
+    value = retention.get("max_hook_event_bytes") if isinstance(retention, dict) else None
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def _load_json_config(path: pathlib.Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load_max_hook_event_bytes(repo: pathlib.Path, state_dir: str | None = None, personal: str | None = None) -> int:
+    """Read `retention.max_hook_event_bytes` from .agent-learning.json.
+
+    Returns DEFAULT_MAX_HOOK_EVENT_BYTES on any error so a missing or
+    malformed config never breaks the hook adapter.
+    """
+    candidates: list[pathlib.Path] = []
+    integration_config = repo / ".agent-learning.json"
+    integration_payload = _load_json_config(integration_config)
+    if integration_payload is not None:
+        value = _retention_max_from_payload(integration_payload)
+        if value is not None:
+            return value
+        configured_state_dir = integration_payload.get("state_dir")
+        if isinstance(configured_state_dir, str) and configured_state_dir:
+            candidates.append(pathlib.Path(configured_state_dir).expanduser() / "config.json")
+
+    candidates.append(resolve_state_dir(state_dir, personal, repo) / "config.json")
+
+    seen: set[pathlib.Path] = set()
+    for candidate in candidates:
+        resolved = candidate.expanduser().resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        payload = _load_json_config(resolved)
+        if payload is None:
+            continue
+        value = _retention_max_from_payload(payload)
+        if value is not None:
+            return value
+    return DEFAULT_MAX_HOOK_EVENT_BYTES
+
+
+def _chmod_quiet(path: pathlib.Path, mode: int) -> None:
+    try:
+        os.chmod(path, mode)
+    except OSError:
+        # Best-effort: permissions changes shouldn't break the hook flow.
+        pass
+
+
+def rotate_if_needed(output: pathlib.Path, max_bytes: int) -> None:
+    """If output exceeds max_bytes, rotate to a timestamped .bak file."""
+    try:
+        size = output.stat().st_size
+    except OSError:
+        return
+    if size <= max_bytes:
+        return
+    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    backup = output.with_name(f"{output.name}.{stamp}.bak")
+    try:
+        output.rename(backup)
+    except OSError:
+        return
+    _chmod_quiet(backup, 0o600)
+    # Cap old backups: keep the newest MAX_HOOK_EVENT_BACKUPS.
+    try:
+        backups = sorted(
+            output.parent.glob(f"{output.name}.*.bak"),
+            key=lambda p: p.name,
+        )
+        for stale in backups[:-MAX_HOOK_EVENT_BACKUPS]:
+            try:
+                stale.unlink()
+            except OSError:
+                pass
+    except OSError:
+        pass
+
+
+def load_input(args: argparse.Namespace) -> dict[str, Any]:
+    if args.event:
+        return parse_json_or_label(args.event, "event")
+    if args.input:
+        try:
+            payload_text = pathlib.Path(args.input).read_text(encoding="utf-8")
+        except OSError as error:
+            raise ValueError(f"cannot read --input {args.input}: {error}") from error
+        return parse_json_or_label(payload_text, "input")
+    data = sys.stdin.read().strip()
+    return parse_json_or_label(data or "{}", "stdin")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--event", help="JSON object to append. Defaults to stdin.")
+    parser.add_argument("--input", help="Path containing one JSON object.")
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--state-dir")
+    parser.add_argument("--personal")
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+
+    repo = pathlib.Path(args.repo).expanduser().resolve()
+    output = pathlib.Path(args.output) if args.output else default_output(repo, args.state_dir, args.personal)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        event = normalize_event(load_input(args), repo)
+        assert_regular_file_destination(output, label="Hook event output")
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 1
+    rendered = scrub(json.dumps(event, sort_keys=True, separators=(",", ":")))
+    if "[REDACTED" in rendered:
+        print("event contains secret-like content after normalization", file=sys.stderr)
+        return 1
+    max_bytes = load_max_hook_event_bytes(repo, args.state_dir, args.personal)
+    rotate_if_needed(output, max_bytes)
+    # os.open with mode=0o600 narrows the file-creation window so a new log
+    # file is never readable by group/other, even briefly. mode is ignored on
+    # existing files; _chmod_quiet below upgrades pre-existing logs that
+    # predate this hardening.
+    try:
+        fd = os.open(str(output), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+        try:
+            os.write(fd, (rendered + "\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError as error:
+        print(f"failed to write hook event log to {output}: {error}", file=sys.stderr)
+        return 1
+    _chmod_quiet(output, 0o600)
+    print(f"appended hook event to {output}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

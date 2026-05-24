@@ -1,0 +1,12 @@
+{"event":"InstructionsLoaded","runtime":"Codex","session_id":"fixture-01","skill":"session-start","cwd":"/repo"}
+{"event":"InstructionsLoaded","runtime":"Codex","session_id":"fixture-01","skill":"port-vocab-gate","cwd":"/repo"}
+{"event":"SkillApplied","runtime":"Codex","session_id":"fixture-01","skill":"port-vocab-gate","cwd":"/repo"}
+{"event":"UserCorrection","runtime":"Codex","session_id":"fixture-02","outcome":"correction","cwd":"/repo"}
+{"event":"PreToolUse","runtime":"Claude Code","session_id":"fixture-03","tool_name":"Read","path":"/repo/.agents/skills/session-start/SKILL.md","cwd":"/repo","prompt":"do not persist this prompt"}
+{"event":"PostToolUseFailure","runtime":"Claude Code","session_id":"fixture-03","tool_name":"Bash","outcome":"failure","cwd":"/repo","tool_output":"do not persist this output"}
+{"event":"SessionEnd","runtime":"Codex","session_id":"fixture-04","outcome":"success","cwd":"/repo"}
+{"event":"ConfigChange","runtime":"Codex","session_id":"fixture-05","label":"skill-map-refresh","cwd":"/repo"}
+{"event":"FileChanged","runtime":"Codex","session_id":"fixture-06","path":"/repo/AGENTS.md","cwd":"/repo"}
+{"event":"SubagentStart","runtime":"Codex","session_id":"fixture-07","label":"review","cwd":"/repo"}
+{"event":"SubagentStop","runtime":"Codex","session_id":"fixture-07","outcome":"success","cwd":"/repo"}
+{"event":"UnexpectedFutureHook","runtime":"Codex","session_id":"fixture-08","label":"safe","cwd":"/repo"}

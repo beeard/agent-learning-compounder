@@ -1,0 +1,7 @@
+interface:
+  display_name: "Agent Learning Compounder"
+  short_description: "Evidence-backed agent learning"
+  default_prompt: "Use $agent-learning-compounder to mine repo/session evidence into gates/context."
+
+policy:
+  allow_implicit_invocation: true

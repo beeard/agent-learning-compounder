@@ -1,0 +1,1 @@
+../bin/evaluate_classifier

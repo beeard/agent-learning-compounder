@@ -1,0 +1,507 @@
+#!/usr/bin/env python3
+"""Build a compact read-only baseline for an agent target repository."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import re
+import sys
+from typing import Any
+
+from map_active_skills import resolve_runtime
+from scrub_secrets import scrub as scrub_secrets
+
+
+SOURCE_CANDIDATES = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    "README.md",
+    "DESIGN.md",
+    "docs/CHANGELOG.md",
+    "docs/plans/BACKLOG.md",
+    "docs/api-arkitektur.md",
+]
+
+CI_CANDIDATES = [
+    ".github/workflows",
+    ".gitlab-ci.yml",
+    "azure-pipelines.yml",
+]
+
+STACK_FILES = [
+    "package.json",
+    "pnpm-lock.yaml",
+    "package-lock.json",
+    "yarn.lock",
+    ".nvmrc",
+    ".node-version",
+    ".tool-versions",
+    "pyproject.toml",
+    "Cargo.toml",
+    "go.mod",
+    "wrangler.jsonc",
+    "wrangler.toml",
+]
+
+ENTRYPOINT_SCRIPT_NAMES = ("dev", "start", "build", "deploy", "preview", "serve", "worker:dev")
+VALIDATION_SCRIPT_NAMES = ("test", "typecheck", "lint", "build", "validate", "check")
+
+INSTRUCTION_CANDIDATES = [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "GEMINI.md",
+    ".cursor/rules",
+    ".github/copilot-instructions.md",
+]
+
+RULE_KEYWORDS = (
+    "must",
+    "always",
+    "never",
+    "before",
+    "do not",
+    "don't",
+    "read ",
+    "run ",
+    "verify",
+    "validate",
+    "validation",
+    "source-of-truth",
+    "source of truth",
+    "gate",
+    "skill",
+    "backlog",
+    "changelog",
+    "quick3",
+    "cloudflare",
+    "auth",
+    "port",
+    "secret",
+    "design",
+    "figjam",
+    "scope",
+)
+
+MAX_INSTRUCTION_DEPTH = 2
+MAX_RULES_PER_FILE = 12
+MAX_GOTCHAS = 20
+
+
+def line_number(path: pathlib.Path, needle: str | None = None) -> int:
+    if needle is None:
+        return 1
+    try:
+        for index, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+            if needle in line:
+                return index
+    except OSError:
+        return 1
+    return 1
+
+
+def display_path(repo: pathlib.Path, path: pathlib.Path) -> str:
+    try:
+        return str(path.resolve().relative_to(repo))
+    except ValueError:
+        return str(path.resolve())
+
+
+def source_ref(repo: pathlib.Path, path: pathlib.Path, needle: str | None = None, line: int | None = None) -> str:
+    return f"{display_path(repo, path)}:{line or line_number(path, needle)}"
+
+
+def clean_instruction_line(line: str) -> str:
+    stripped = line.strip()
+    stripped = stripped.lstrip("-*0123456789. ")
+    stripped = " ".join(stripped.split())
+    words = stripped.split()
+    return " ".join(words[:32])
+
+
+def is_include_directive(line: str) -> str | None:
+    stripped = line.strip()
+    if not stripped.startswith("@"):
+        return None
+    remainder = stripped[1:].strip()
+    if remainder.lower().startswith("include "):
+        remainder = remainder[8:].strip()
+    target = remainder
+    if not target.endswith((".md", ".MD")):
+        return None
+    return target
+
+
+def is_relative_to(path: pathlib.Path, parent: pathlib.Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def resolve_include(repo: pathlib.Path, current_file: pathlib.Path, target: str) -> pathlib.Path:
+    path = pathlib.Path(target)
+    if path.is_absolute():
+        raise ValueError(f"absolute @include paths are not supported: {target}")
+    include_path = (current_file.parent / path).resolve()
+    if not is_relative_to(include_path, repo):
+        raise ValueError(f"out-of-repo @include blocked: {target}")
+    return include_path
+
+
+def instruction_files(repo: pathlib.Path) -> list[pathlib.Path]:
+    return [repo / path for path in INSTRUCTION_CANDIDATES if (repo / path).exists()]
+
+
+def skill_root_paths(repo: pathlib.Path, runtime: str) -> list[pathlib.Path]:
+    runtime = resolve_runtime(runtime, repo)
+    roots: list[pathlib.Path] = []
+    if runtime in {"codex", "all"}:
+        roots.append(repo / ".agents" / "skills")
+    if runtime in {"claude", "all"}:
+        roots.append(repo / ".claude" / "skills")
+    return roots
+
+
+def instruction_rule_evidence(
+    repo: pathlib.Path,
+    path: pathlib.Path,
+    depth: int = 0,
+    seen: set[pathlib.Path] | None = None,
+) -> list[dict[str, str]]:
+    seen = seen or set()
+    path = path.resolve()
+    if path in seen or not path.exists() or depth > MAX_INSTRUCTION_DEPTH:
+        return []
+    seen.add(path)
+
+    evidence: list[dict[str, str]] = []
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return evidence
+
+    rules_for_file = 0
+    for index, raw_line in enumerate(lines, start=1):
+        include = is_include_directive(raw_line)
+        if include:
+            try:
+                include_path = resolve_include(repo, path, include)
+            except ValueError as error:
+                evidence.append(
+                    {
+                        "kind": "include",
+                        "fact": f"Instruction file `{display_path(repo, path)}` include rejected: {error}",
+                        "source": source_ref(repo, path, line=index),
+                    }
+                )
+                continue
+            evidence.append(
+                {
+                    "kind": "include",
+                    "fact": f"Instruction file `{display_path(repo, path)}` includes `{display_path(repo, include_path)}`.",
+                    "source": source_ref(repo, path, line=index),
+                }
+            )
+            evidence.extend(instruction_rule_evidence(repo, include_path, depth + 1, seen))
+            continue
+
+        clean = clean_instruction_line(raw_line)
+        if not clean or clean.startswith("<") or scrub_secrets(clean) != clean:
+            continue
+        lowered = clean.lower()
+        if raw_line.lstrip().startswith("#") and any(keyword in lowered for keyword in ("skill", "instruction", "validation", "gotcha", "source")):
+            evidence.append(
+                {
+                    "kind": "section",
+                    "fact": f"Instruction section present: {clean.lstrip('# ').strip()}",
+                    "source": source_ref(repo, path, line=index),
+                }
+            )
+            continue
+        if rules_for_file >= MAX_RULES_PER_FILE:
+            continue
+        if any(keyword in lowered for keyword in RULE_KEYWORDS):
+            evidence.append(
+                {
+                    "kind": "rule",
+                    "fact": f"Instruction rule: {clean}",
+                    "source": source_ref(repo, path, line=index),
+                }
+            )
+            rules_for_file += 1
+    return evidence
+
+
+def instruction_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    seen: set[pathlib.Path] = set()
+    for path in instruction_files(repo):
+        evidence.extend(instruction_rule_evidence(repo, path, seen=seen))
+    return evidence
+
+
+def package_commands(repo: pathlib.Path) -> list[dict[str, str]]:
+    package_json = repo / "package.json"
+    if not package_json.exists():
+        return []
+    try:
+        data = json.loads(package_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    scripts = data.get("scripts", {})
+    runner = "pnpm" if (repo / "pnpm-lock.yaml").exists() else "npm run"
+    commands: list[dict[str, str]] = []
+    for name in VALIDATION_SCRIPT_NAMES:
+        if name in scripts:
+            commands.append(
+                {
+                    "command": f"{runner} {name}",
+                    "script": name,
+                    "source": source_ref(repo, package_json, f'"{name}"'),
+                }
+            )
+    return commands
+
+
+def package_data(repo: pathlib.Path) -> dict[str, Any]:
+    package_json = repo / "package.json"
+    if not package_json.exists():
+        return {}
+    try:
+        return json.loads(package_json.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def purpose_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    readme = next((repo / name for name in ("README.md", "README.rst", "docs/README.md") if (repo / name).exists()), None)
+    if readme:
+        try:
+            for index, line in enumerate(readme.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+                clean = " ".join(line.strip().strip("#").split())
+                if clean and not clean.startswith("[") and len(clean.split()) >= 4:
+                    evidence.append({"fact": f"Repo purpose/readme signal: {clean_instruction_line(clean)}", "source": source_ref(repo, readme, line=index)})
+                    break
+        except OSError:
+            pass
+    package = package_data(repo)
+    if package.get("description"):
+        evidence.append(
+            {
+                "fact": f"Package description: {clean_instruction_line(str(package['description']))}",
+                "source": source_ref(repo, repo / "package.json", '"description"'),
+            }
+        )
+    return evidence
+
+
+def entrypoint_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    package = package_data(repo)
+    scripts = package.get("scripts", {}) if isinstance(package.get("scripts"), dict) else {}
+    runner = "pnpm" if (repo / "pnpm-lock.yaml").exists() else "npm run"
+    for name in ENTRYPOINT_SCRIPT_NAMES:
+        if name in scripts:
+            evidence.append(
+                {
+                    "fact": f"Entrypoint `{runner} {name}` is defined.",
+                    "command": f"{runner} {name}",
+                    "source": source_ref(repo, repo / "package.json", f'"{name}"'),
+                }
+            )
+    for path_name in ("wrangler.jsonc", "wrangler.toml"):
+        path = repo / path_name
+        if path.exists():
+            evidence.append({"fact": f"Cloudflare/Wrangler config `{path_name}` is present.", "source": source_ref(repo, path)})
+    return evidence
+
+
+def ci_files(repo: pathlib.Path) -> list[pathlib.Path]:
+    files: list[pathlib.Path] = []
+    workflow_dir = repo / ".github" / "workflows"
+    if workflow_dir.exists():
+        files.extend(sorted(path for path in workflow_dir.iterdir() if path.suffix in {".yml", ".yaml"}))
+    for path_name in (".gitlab-ci.yml", "azure-pipelines.yml"):
+        path = repo / path_name
+        if path.exists():
+            files.append(path)
+    return files
+
+
+def ci_validation_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    command_re = re.compile(r"^\s*(?:-\s*)?(?:run|script):\s*(.+?)\s*$", re.I)
+    interesting = re.compile(r"\b(test|typecheck|lint|build|validate|check|pnpm|npm|pytest|cargo test|go test)\b", re.I)
+    for path in ci_files(repo):
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError:
+            continue
+        evidence.append({"fact": f"CI config `{display_path(repo, path)}` is present.", "source": source_ref(repo, path)})
+        for index, line in enumerate(lines, start=1):
+            match = command_re.match(line)
+            if match and interesting.search(match.group(1)):
+                command = match.group(1).strip().strip('"').strip("'")
+                evidence.append(
+                    {
+                        "command": command,
+                        "script": "ci",
+                        "source": source_ref(repo, path, line=index),
+                    }
+                )
+    return evidence
+
+
+def stack_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    package = package_data(repo)
+    package_json = repo / "package.json"
+    if package:
+        if package.get("packageManager"):
+            evidence.append({"fact": f"Package manager pin: `{package['packageManager']}`.", "source": source_ref(repo, package_json, '"packageManager"')})
+        if package.get("engines"):
+            evidence.append({"fact": f"Runtime engines declared in package.json: {json.dumps(package['engines'], sort_keys=True)}.", "source": source_ref(repo, package_json, '"engines"')})
+        evidence.append({"fact": "JavaScript/TypeScript package manifest is present.", "source": source_ref(repo, package_json)})
+    for path_name in STACK_FILES:
+        path = repo / path_name
+        if not path.exists() or path_name == "package.json":
+            continue
+        if path_name.endswith(".lock") or path_name == "pnpm-lock.yaml" or path_name in {".nvmrc", ".node-version", ".tool-versions", "go.mod", "Cargo.toml", "pyproject.toml", "package-lock.json"}:
+            evidence.append({"fact": f"Stack/runtime file `{path_name}` is present.", "source": source_ref(repo, path)})
+    return evidence
+
+
+def gotcha_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    gotcha_re = re.compile(r"\b(gotcha|footgun|known issue|do not|don't|never|must not|blocker|danger|warning|caution|bug-i-vente)\b", re.I)
+    candidates = [
+        repo / path
+        for path in relative_existing(
+            repo,
+            ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "README.md", "docs/README.md", "DESIGN.md"],
+        )
+    ]
+    for path in candidates:
+        try:
+            for index, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+                clean = clean_instruction_line(line)
+                if clean and gotcha_re.search(clean) and scrub_secrets(clean) == clean:
+                    evidence.append({"fact": f"Gotcha/risk rule: {clean}", "source": source_ref(repo, path, line=index)})
+                    if len(evidence) >= MAX_GOTCHAS:
+                        return evidence
+        except OSError:
+            continue
+    return evidence
+
+
+def backlog_changelog_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence: list[dict[str, str]] = []
+    for path_name in ("docs/plans/BACKLOG.md", "BACKLOG.md", "TODO.md", "docs/CHANGELOG.md", "CHANGELOG.md"):
+        path = repo / path_name
+        if path.exists():
+            evidence.append({"fact": f"Planning/history file `{path_name}` is present.", "source": source_ref(repo, path)})
+    return evidence
+
+
+def relative_existing(repo: pathlib.Path, paths: list[str]) -> list[str]:
+    return [path for path in paths if (repo / path).exists()]
+
+
+def source_file_evidence(repo: pathlib.Path) -> list[dict[str, str]]:
+    evidence = []
+    for path in relative_existing(repo, SOURCE_CANDIDATES):
+        evidence.append(
+            {
+                "path": path,
+                "source": source_ref(repo, repo / path),
+                "fact": f"`{path}` exists as a repo source-of-truth file.",
+            }
+        )
+    return evidence
+
+
+def skill_files(repo: pathlib.Path, runtime: str = "auto") -> list[dict[str, str]]:
+    runtime = resolve_runtime(runtime, repo)
+    files = []
+    for root in skill_root_paths(repo, runtime):
+        if root.exists():
+            for skill in sorted(root.rglob("SKILL.md")):
+                files.append(
+                    {
+                        "path": str(skill.relative_to(repo)),
+                        "source": source_ref(repo, skill),
+                    }
+                )
+    return files
+
+
+def docs_summary(repo: pathlib.Path) -> list[str]:
+    docs = repo / "docs"
+    if not docs.exists():
+        return []
+    return [str(path.relative_to(repo)) for path in sorted(docs.rglob("*.md"))[:40]]
+
+
+def legacy_paths(items: list[dict[str, str]]) -> list[str]:
+    return [item["path"] for item in items]
+
+
+def legacy_commands(items: list[dict[str, str]]) -> list[str]:
+    return [item["command"] for item in items]
+
+
+def build(repo: pathlib.Path, runtime: str = "auto") -> dict[str, Any]:
+    repo = repo.resolve()
+    source_evidence = source_file_evidence(repo)
+    instruction_rules = instruction_evidence(repo)
+    skill_evidence = skill_files(repo, runtime=runtime)
+    validation_evidence = package_commands(repo)
+    ci_evidence = ci_validation_evidence(repo)
+    all_validation = [*validation_evidence, *[item for item in ci_evidence if "command" in item]]
+    entrypoints = entrypoint_evidence(repo)
+    purpose = purpose_evidence(repo)
+    stack = stack_evidence(repo)
+    gotchas = gotcha_evidence(repo)
+    planning = backlog_changelog_evidence(repo)
+    return {
+        "repo": str(repo),
+        "purpose_evidence": purpose,
+        "entrypoint_evidence": entrypoints,
+        "source_files": legacy_paths(source_evidence),
+        "source_evidence": source_evidence,
+        "instruction_evidence": instruction_rules,
+        "skills": legacy_paths(skill_evidence),
+        "skill_evidence": skill_evidence,
+        "validation_commands": legacy_commands(all_validation),
+        "validation_evidence": all_validation,
+        "ci_evidence": ci_evidence,
+        "stack_evidence": stack,
+        "gotcha_evidence": gotchas,
+        "planning_evidence": planning,
+        "docs_sample": docs_summary(repo),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", default=".")
+    parser.add_argument("--runtime", choices=("auto", "codex", "claude", "all"), default="auto")
+    parser.add_argument("--output")
+    args = parser.parse_args(argv)
+
+    data = build(pathlib.Path(args.repo), runtime=args.runtime)
+    text = json.dumps(data, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        pathlib.Path(args.output).write_text(text, encoding="utf-8")
+    else:
+        sys.stdout.write(text)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,1 @@
+../bin/extract_skill_usage

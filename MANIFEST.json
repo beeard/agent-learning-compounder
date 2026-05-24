@@ -1,0 +1,39 @@
+{
+  "name": "agent-learning-compounder",
+  "version": "2026.05.24+review7-production",
+  "schema_version": 1,
+  "created_date": "2026-05-24",
+  "description": "Portable Codex/Claude skill for durable, evidence-backed agent learning and skill-health feedback.",
+  "requirements": {
+    "python": ">=3.10",
+    "shell": "POSIX sh"
+  },
+  "install": {
+    "default_root": "${AGENTS_HOME:-$HOME/.agents}/skills",
+    "claude_root": "${CLAUDE_HOME:-$HOME/.claude}/skills",
+    "codex_home_root": "${CODEX_HOME:-$HOME/.codex}/skills",
+    "custom_root_flag": "--target DIR"
+  },
+  "entrypoints": [
+    "scripts/init_learning_system.py",
+    "scripts/install_runtime_hooks.py",
+    "scripts/refresh_learning_state.py",
+    "scripts/collect_hook_event.py"
+  ],
+  "required_docs": [
+    "README.md",
+    "CHANGES.md",
+    "agent-learning-compounder/SKILL.md",
+    "agent-learning-compounder/references/agent-quickstart.md",
+    "agent-learning-compounder/references/architecture.md",
+    "agent-learning-compounder/references/production-hardening-plan.md",
+    "agent-learning-compounder/references/production-signoff.md"
+  ],
+  "excluded_from_package": [
+    "__pycache__",
+    "*.pyc",
+    ".agent-learning.json",
+    "review-patches.diff",
+    "runtime state"
+  ]
+}

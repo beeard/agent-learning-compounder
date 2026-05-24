@@ -1,0 +1,1 @@
+../bin/map_active_skills

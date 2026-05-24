@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""Run deterministic pressure checks for agent-learning-compounder."""
+
+from __future__ import annotations
+
+import json
+import pathlib
+import subprocess
+import sys
+import tempfile
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+SCRIPTS = ROOT / "scripts"
+
+
+def run_script(name: str, *args: str, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SCRIPTS / name), *map(str, args)],
+        input=input_text,
+        cwd=ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
+def scenario_repo_onboarding(tmp: pathlib.Path) -> None:
+    repo = tmp / "repo"
+    repo.mkdir()
+    (repo / "AGENTS.md").write_text("- Before work, read skills.\n- Never skip validation.\n")
+    (repo / "README.md").write_text("# Demo Repo\n\nRuns the demo worker.\n")
+    (repo / "package.json").write_text(json.dumps({"scripts": {"test": "vitest", "lint": "eslint ."}, "packageManager": "pnpm@9.0.0"}))
+    workflows = repo / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    (workflows / "ci.yml").write_text("jobs:\n  test:\n    steps:\n      - run: pnpm test\n")
+
+    baseline = tmp / "baseline.json"
+    result = run_script("build_repo_baseline.py", "--repo", str(repo), "--output", str(baseline))
+    require(result.returncode == 0, result.stderr)
+    data = json.loads(baseline.read_text())
+    require(data["instruction_evidence"], "instruction evidence missing")
+    require(any(item.get("command") == "pnpm test" for item in data["validation_evidence"]), "validation command missing")
+    require(data["purpose_evidence"], "purpose evidence missing")
+    require(data["stack_evidence"], "stack evidence missing")
+
+
+def scenario_session_distillation(tmp: pathlib.Path) -> None:
+    sessions = tmp / "sessions"
+    sessions.mkdir()
+    (sessions / "one.jsonl").write_text(
+        json.dumps({"message": {"role": "user", "content": "verify live runtime before deploy"}})
+        + "\n"
+        + json.dumps({"message": {"role": "user", "content": "token ghp_test1234567890test1234567890test1234"}})
+        + "\n"
+    )
+    corpus = tmp / "corpus.txt"
+    result = run_script("extract_sessions.py", "--path", str(sessions), "--output", str(corpus))
+    require(result.returncode == 0, result.stderr)
+    text = corpus.read_text()
+    require("[REDACTED:github_pat]" in text, "fake secret not scrubbed")
+    require("session_ref=" in text, "session refs missing")
+
+
+def scenario_handoff_and_evergreen(tmp: pathlib.Path) -> None:
+    personal = tmp / "personal"
+    reports = personal / "reports" / "agent-learning"
+    reports.mkdir(parents=True)
+    (personal / "insights.md").write_text("")
+    (personal / "learning.md").write_text("")
+    (personal / "preferences.md").write_text("I prefer Yarn for JavaScript projects.\n")
+    (reports / "2026-01-01.md").write_text(
+        "# Agent Learning Report\n\n## agent_compensation\n### domain: validation\n- level: 2\n- gate_category: validation-check\n- gate: Run validation.\n"
+    )
+    baseline = tmp / "baseline.json"
+    baseline.write_text(
+        json.dumps(
+            {
+                "repo": str(tmp / "repo"),
+                "source_files": ["AGENTS.md"],
+                "source_evidence": [{"fact": "`AGENTS.md` exists.", "source": "AGENTS.md:1"}],
+                "validation_commands": ["pnpm test", "pnpm lint", "pnpm typecheck", "pnpm build"],
+                "validation_evidence": [{"command": "pnpm test", "script": "test", "source": "package.json:4"}],
+                "skills": [],
+            }
+        )
+    )
+    corpus = tmp / "corpus.txt"
+    corpus.write_text("user: verify before completion with pnpm [session_ref=test-session]\n")
+    report = tmp / "report.md"
+    result = run_script(
+        "distill_learning.py",
+        "--corpus",
+        str(corpus),
+        "--baseline",
+        str(baseline),
+        "--output",
+        str(report),
+        "--personal",
+        str(personal),
+    )
+    require(result.returncode == 0, result.stderr)
+    rendered = report.read_text()
+    require("Prior agent-learning report found" in rendered, "prior report continuity missing")
+    require("level_change: validation: 2 -> 3" in rendered, "level change missing")
+    require("## proposed_evergreen_diffs" in rendered, "evergreen proposal missing")
+
+
+def write_skill(root: pathlib.Path, name: str, description: str = "Use when testing.") -> None:
+    path = root / name / "SKILL.md"
+    path.parent.mkdir(parents=True)
+    path.write_text(f"---\nname: {name}\ndescription: {description}\n---\n\n# {name}\n")
+
+
+def scenario_self_healing_pipeline(tmp: pathlib.Path) -> None:
+    repo = tmp / "repo"
+    repo.mkdir()
+    (repo / "AGENTS.md").write_text("When scope touches packages/ports/**, use port-vocab-gate.\n")
+    skill_root = repo / ".agents" / "skills"
+    write_skill(skill_root, "session-start")
+    write_skill(skill_root, "port-vocab-gate", "Use when port contracts are touched.")
+
+    skill_map = tmp / "skill-map.json"
+    result = run_script("map_active_skills.py", "--repo", str(repo), "--output", str(skill_map))
+    require(result.returncode == 0, result.stderr)
+    mapped = json.loads(skill_map.read_text())
+    require(any(skill["name"] == "port-vocab-gate" for skill in mapped["skills"]), "port-vocab-gate missing from skill map")
+
+    route = run_script("evaluate_skill_routing.py", "--scope", "packages/ports/src/contracts.ts", "--skill-map", str(skill_map))
+    require(route.returncode == 0, route.stderr)
+    routed = json.loads(route.stdout)
+    require(routed["expected"] == ["session-start", "port-vocab-gate"], "routing did not expect port-vocab gate")
+
+    events = tmp / "hook-events.jsonl"
+    secret_event = json.dumps(
+        {
+            "event": "PreToolUse",
+            "runtime": "Claude Code",
+            "session_id": "11111111-2222-4333-8444-555555555555",
+            "cwd": str(repo),
+            "path": str(repo / ".agents" / "skills" / "session-start" / "SKILL.md"),
+            "prompt": "raw prompt should not persist",
+            "payload": {"token": "ghp_abcdefghijklmnopqrstuvwxyz123456"},
+        }
+    )
+    result = run_script("collect_hook_event.py", "--repo", str(repo), "--output", str(events), input_text=secret_event)
+    require(result.returncode == 0, result.stderr)
+    event_text = events.read_text()
+    require("raw prompt" not in event_text, "raw prompt persisted")
+    require("abcdefghijklmnopqrstuvwxyz" not in event_text, "secret payload persisted")
+
+    events.write_text(
+        event_text
+        + json.dumps({"session_id": "s1", "event": "scope", "scope": "packages/ports/src/contracts.ts"}) + "\n"
+        + json.dumps({"session_id": "s1", "event": "InstructionsLoaded", "skill": "session-start"}) + "\n"
+        + json.dumps({"session_id": "s1", "event": "UserCorrection", "outcome": "correction"}) + "\n"
+    )
+    usage = tmp / "usage.json"
+    impact = tmp / "impact.json"
+    context = tmp / "latest-skill-context.md"
+    result = run_script("extract_skill_usage.py", "--events", str(events), "--skill-map", str(skill_map), "--output", str(usage))
+    require(result.returncode == 0, result.stderr)
+    result = run_script("evaluate_skill_impact.py", "--usage", str(usage), "--output", str(impact))
+    require(result.returncode == 0, result.stderr)
+    result = run_script("export_skill_context.py", "--skill-map", str(skill_map), "--skill-usage", str(usage), "--skill-impact", str(impact), "--output", str(context))
+    require(result.returncode == 0, result.stderr)
+    context_text = context.read_text()
+    require("missed_expected_skill: port-vocab-gate" in context_text, "skill context missing missed skill")
+    require("raw_prompt" not in context_text and "[REDACTED" not in context_text, "skill context leaked raw payload markers")
+
+
+def main() -> int:
+    checks = [
+        scenario_repo_onboarding,
+        scenario_session_distillation,
+        scenario_handoff_and_evergreen,
+        scenario_self_healing_pipeline,
+    ]
+    with tempfile.TemporaryDirectory() as tmp:
+        root = pathlib.Path(tmp)
+        for check in checks:
+            scenario_root = root / check.__name__
+            scenario_root.mkdir()
+            check(scenario_root)
+    print(f"pressure checks passed: {len(checks)}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

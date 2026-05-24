@@ -1,0 +1,1 @@
+../bin/collect_hook_event

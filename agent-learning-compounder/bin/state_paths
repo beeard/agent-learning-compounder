@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""Portable state-path helpers for agent-learning-compounder."""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import pathlib
+import re
+
+
+def slugify(value: str, fallback: str = "repo") -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-").lower()
+    return slug or fallback
+
+
+def repo_id(repo: pathlib.Path) -> str:
+    resolved = str(repo.expanduser().resolve())
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:12]
+    return f"{slugify(pathlib.Path(resolved).name)}-{digest}"
+
+
+def resolve_state_dir(
+    state_dir: str | pathlib.Path | None = None,
+    personal: str | pathlib.Path | None = None,
+    repo: str | pathlib.Path | None = None,
+) -> pathlib.Path:
+    """Resolve the agent-learning state root using a fixed precedence chain.
+
+    Precedence (highest wins):
+      1. ``state_dir`` argument (typically ``--state-dir``)
+      2. ``AGENT_LEARNING_STATE_DIR`` environment variable
+      3. ``personal`` argument (typically ``--personal``) — resolves under
+         ``<personal>/reports/agent-learning``
+      4. ``<repo>/.agent-learning`` when ``repo`` is supplied
+      5. ``$XDG_STATE_HOME/agent-learning`` when set
+      6. ``~/.local/state/agent-learning`` as the final fallback
+
+    This precedence is part of the public contract; tests in
+    ``fixtures/tests/test_state_paths_precedence.py`` lock it in place.
+    Callers that want the XDG/home fallback even when a repo path is known
+    must pass ``repo=None``.
+    """
+    if state_dir:
+        return pathlib.Path(state_dir).expanduser().resolve()
+
+    env_state = os.environ.get("AGENT_LEARNING_STATE_DIR")
+    if env_state:
+        return pathlib.Path(env_state).expanduser().resolve()
+
+    if personal:
+        return (pathlib.Path(personal).expanduser().resolve() / "reports" / "agent-learning")
+
+    if repo is not None:
+        return pathlib.Path(repo).expanduser().resolve() / ".agent-learning"
+
+    xdg = os.environ.get("XDG_STATE_HOME")
+    if xdg:
+        return (pathlib.Path(xdg).expanduser().resolve() / "agent-learning")
+    return pathlib.Path.home() / ".local" / "state" / "agent-learning"
+
+
+def repo_state_dir(repo: str | pathlib.Path, state_dir: str | pathlib.Path | None = None, personal: str | pathlib.Path | None = None) -> pathlib.Path:
+    root = resolve_state_dir(state_dir, personal, repo)
+    return root / "repos" / repo_id(pathlib.Path(repo))
+
+
+def is_relative_to(path: pathlib.Path, parent: pathlib.Path) -> bool:
+    try:
+        path.resolve().relative_to(parent.resolve())
+    except ValueError:
+        return False
+    return True
