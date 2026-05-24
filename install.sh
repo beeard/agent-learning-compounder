@@ -6,8 +6,15 @@ usage() {
 Install agent-learning-compounder.
 
 Usage:
+  ./install.sh                                            (zero-config: detect runtime, verify)
   ./install.sh [--codex|--codex-home|--claude|--target DIR] [--runtime codex|claude|all|auto] [--verify]
   ./install.sh --bootstrap-repo DIR [--runtime codex|claude|all|auto] [--verify] [--apply-runtime-hooks]
+
+Zero-config behavior (when no runtime/target flag is passed and
+AGENT_LEARNING_RUNTIME is unset):
+  - Detect runtime from filesystem (~/.claude/ vs ~/.agents/);
+    prompt once if both are present, default to codex if neither.
+  - Run --verify automatically.
 
 Defaults:
   --codex         Install to ${AGENTS_HOME:-$HOME/.agents}/skills
@@ -31,12 +38,24 @@ USAGE
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 skill_src="$script_dir/agent-learning-compounder"
 
+sanitizer="$script_dir/scripts/sanitize_skill_tree.sh"
+if [ ! -f "$sanitizer" ]; then
+  echo "missing $sanitizer (required for install-time sanitization)" >&2
+  exit 1
+fi
+# shellcheck source=scripts/sanitize_skill_tree.sh
+. "$sanitizer"
+
 target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
 runtime="auto"
 bootstrap_repo=""
 apply_runtime_hooks=0
 verify=0
 target_root_explicit=0
+# Stays 1 while no runtime/target/bootstrap flag has been passed; the
+# zero-arg install path picks the runtime by filesystem detection and
+# turns on --verify only when this is still 1 after arg parsing.
+auto_detect=1
 
 runtime_hint() {
   repo="$1"
@@ -84,6 +103,27 @@ resolve_runtime() {
   fi
 
   printf 'codex'
+}
+
+# Pick a runtime from filesystem evidence. Used by the zero-arg install path
+# only -- explicit flags and env vars take precedence and bypass this.
+# Echoes one of: codex, claude, both, neither.
+detect_runtime() {
+  claude_dir="${CLAUDE_HOME:-$HOME/.claude}"
+  codex_dir="${AGENTS_HOME:-$HOME/.agents}"
+  claude_present=0
+  codex_present=0
+  [ -d "$claude_dir" ] && claude_present=1
+  [ -d "$codex_dir" ] && codex_present=1
+  if [ "$claude_present" = 1 ] && [ "$codex_present" = 0 ]; then
+    printf 'claude'
+  elif [ "$codex_present" = 1 ] && [ "$claude_present" = 0 ]; then
+    printf 'codex'
+  elif [ "$claude_present" = 1 ] && [ "$codex_present" = 1 ]; then
+    printf 'both'
+  else
+    printf 'neither'
+  fi
 }
 
 runtime_targets() {
@@ -147,22 +187,19 @@ copy_skill() {
   sanitize_skill_tree "$dest"
 }
 
-sanitize_skill_tree() {
-  root="$1"
-  find "$root" \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.agent-learning' \) -type d -prune -exec rm -rf {} +
-  find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
-}
-
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --codex)
       target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
+      auto_detect=0
       ;;
     --codex-home)
       target_root="${CODEX_HOME:-$HOME/.codex}/skills"
+      auto_detect=0
       ;;
     --claude)
       target_root="${CLAUDE_HOME:-$HOME/.claude}/skills"
+      auto_detect=0
       ;;
     --target)
       shift
@@ -172,6 +209,7 @@ while [ "$#" -gt 0 ]; do
       fi
       target_root="$1"
       target_root_explicit=1
+      auto_detect=0
       ;;
     --runtime)
       shift
@@ -188,6 +226,7 @@ while [ "$#" -gt 0 ]; do
           exit 2
           ;;
       esac
+      auto_detect=0
       ;;
     --bootstrap-repo)
       shift
@@ -196,6 +235,7 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       bootstrap_repo="$1"
+      auto_detect=0
       ;;
     --apply-runtime-hooks)
       apply_runtime_hooks=1
@@ -224,6 +264,41 @@ fi
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required" >&2
   exit 1
+fi
+
+# Zero-arg path: detect the runtime from filesystem state and turn on
+# --verify by default. Skipped when any explicit flag set auto_detect=0,
+# and skipped when AGENT_LEARNING_RUNTIME is set so env-var configuration
+# still wins (consistent with resolve_runtime's precedence).
+if [ "$auto_detect" = 1 ] && [ -z "${AGENT_LEARNING_RUNTIME:-}" ]; then
+  detected=$(detect_runtime)
+  case "$detected" in
+    claude)
+      echo "auto-detected runtime: claude (~/.claude/ present)" >&2
+      runtime="claude"
+      ;;
+    codex)
+      echo "auto-detected runtime: codex (~/.agents/ present)" >&2
+      runtime="codex"
+      ;;
+    both)
+      printf 'both ~/.claude/ and ~/.agents/ present. Install runtime? [codex/claude] (default codex): ' >&2
+      choice=""
+      if [ -r /dev/tty ]; then
+        read -r choice < /dev/tty || choice=""
+      fi
+      case "$choice" in
+        c|C|claude|Claude|CLAUDE) runtime="claude" ;;
+        *) runtime="codex" ;;
+      esac
+      echo "selected runtime: $runtime" >&2
+      ;;
+    neither|*)
+      echo "no runtime directory found; defaulting to codex (~/.agents/skills)" >&2
+      runtime="codex"
+      ;;
+  esac
+  verify=1
 fi
 
 if [ -n "$bootstrap_repo" ]; then

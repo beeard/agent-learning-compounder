@@ -22,36 +22,67 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 
 
-def load_sessions(events_path: Path):
+def load_sessions(events_path: Path, *, include_rotated: bool = True):
     """Returns dict cid -> {gates: set[str], outcome: str|None,
                             probe_decisions: dict[gate_id, 'load'|'skip']}.
 
     A session's per-gate probe decision is whichever value was most recently
     seen for that gate_id across the session's instructions_loaded events.
+
+    Reads the live hook events file plus, when ``include_rotated`` is true,
+    every ``<name>.*.bak`` sibling produced by ``collect_hook_event.rotate_if_needed``.
+    Sessions are keyed by ``correlation_id``, which is stable across files,
+    so a session that straddles a rotation (instructions_loaded in a .bak
+    and session_end in the live file) still pairs up. Without this merge,
+    every rotation throws away the cohort window down to whatever fits in
+    ``DEFAULT_MAX_HOOK_EVENT_BYTES`` and gates with N>min_n yesterday flip
+    to ``needs_review`` overnight.
+
+    Per-line resilience:
+      - Malformed JSON lines are skipped (matches the policy in
+        ``refresh_learning_state.queue_candidate_adjustments``). A single
+        torn line in hook-events.jsonl previously aborted the entire
+        scoring pass and, transitively, the entire refresh.
+      - v1 rows (``schema_version < 2``) are skipped: they predate
+        ``gate_loaded_ids`` and ``probe_decisions``, and counting them
+        toward cohorts would silently inflate ``n_absent`` for every gate
+        and bias delta toward correlated_with_failure during a v1->v2
+        migration window.
     """
     sessions = defaultdict(lambda: {"gates": set(), "outcome": None, "probe_decisions": {}})
-    with events_path.open(encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            row = json.loads(line)
-            cid = row.get("correlation_id")
-            if not cid:
-                continue
-            evt = row.get("event")
-            if evt == "instructions_loaded":
-                for gid in row.get("gate_loaded_ids", []) or []:
-                    sessions[cid]["gates"].add(gid)
-                for entry in row.get("probe_decisions", []) or []:
-                    if not isinstance(entry, dict):
-                        continue
-                    gid = entry.get("gate_id")
-                    decision = entry.get("decision")
-                    if isinstance(gid, str) and decision in ("load", "skip"):
-                        sessions[cid]["probe_decisions"][gid] = decision
-            elif evt == "session_end":
-                sessions[cid]["outcome"] = row.get("outcome")
+    paths = [events_path]
+    if include_rotated:
+        paths.extend(sorted(events_path.parent.glob(f"{events_path.name}.*.bak")))
+    for path in paths:
+        if not path.exists():
+            continue
+        with path.open(encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if row.get("schema_version", 1) < 2:
+                    continue
+                cid = row.get("correlation_id")
+                if not cid:
+                    continue
+                evt = row.get("event")
+                if evt == "instructions_loaded":
+                    for gid in row.get("gate_loaded_ids", []) or []:
+                        sessions[cid]["gates"].add(gid)
+                    for entry in row.get("probe_decisions", []) or []:
+                        if not isinstance(entry, dict):
+                            continue
+                        gid = entry.get("gate_id")
+                        decision = entry.get("decision")
+                        if isinstance(gid, str) and decision in ("load", "skip"):
+                            sessions[cid]["probe_decisions"][gid] = decision
+                elif evt == "session_end":
+                    sessions[cid]["outcome"] = row.get("outcome")
     return dict(sessions)
 
 

@@ -115,15 +115,12 @@ If they are missing, stale, or unreadable, treat the repo as uninitialized.
 
 - `references/architecture.md`: production architecture, trust boundaries, and
   runtime contracts.
-- `references/production-hardening-plan.md`: audit-driven hardening phases and
-  evidence gates.
 - `references/agent-quickstart.md`: agent-facing operating guide.
 - `references/baseline-repo.md`: repo baseline behavior.
 - `references/distill-sessions.md`: transcript mining and quote rules.
 - `references/capability-rubric.md`: AI-dependence levels.
 - `references/output-schema.md`: report shape and append behavior.
 - `references/gate-registry.md`: approved-gate export and next-session loading.
-- `references/self-healing-roadmap.md`: hook telemetry and skill health.
 - `references/pressure-tests.md`: durable write readiness.
 - `references/source-adapters.md`: new agent runtimes.
 - `references/threat-model.md`: writes, network access, and trust policy.

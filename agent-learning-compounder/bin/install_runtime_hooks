@@ -34,9 +34,28 @@ def load_json(path: pathlib.Path) -> dict[str, Any]:
     return payload
 
 
-def write_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
+def _write_text_no_follow(path: pathlib.Path, text: str) -> None:
+    """Write text to `path` refusing to follow symlinks.
+
+    Mirrors the os.open(O_NOFOLLOW | O_CREAT | O_WRONLY | O_TRUNC, 0o600)
+    pattern in bin/collect_hook_event so a pre-existing symlink at `path`
+    causes an OSError instead of clobbering the symlink target.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW
+    try:
+        fd = os.open(str(path), flags, 0o600)
+    except OSError as error:
+        # ELOOP / EMLINK on most platforms when O_NOFOLLOW trips on a symlink.
+        raise ValueError(
+            f"refusing to write {path}: target exists and is a symlink"
+        ) from error
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
+
+
+def write_json(path: pathlib.Path, payload: dict[str, Any]) -> None:
+    _write_text_no_follow(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
 def agent_config(repo: pathlib.Path) -> dict[str, Any]:
@@ -218,7 +237,7 @@ def merge_runtime_hooks(
         if path.exists():
             stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
             backup = path.with_name(f"{path.name}.agent-learning-bak-{stamp}")
-            backup.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+            _write_text_no_follow(backup, path.read_text(encoding="utf-8"))
         write_json(path, data)
         if scope == "repo":
             gitignore_report = ensure_gitignored(repo, path)

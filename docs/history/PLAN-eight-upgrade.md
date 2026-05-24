@@ -1,5 +1,7 @@
 # agent-learning-compounder: Eight-Upgrade Implementation Plan
 
+> **Frozen historical work order.** All phases shipped in `2026.05.24+review7-plus1`; for the active status see `CHANGES.md`. Kept here for archaeological reference only — do not use the checkboxes below to schedule new work.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Extend the vendored `agent-learning-compounder` (review7-production) with eight upgrades that turn it from a one-way distiller into a convergent, federated, queryable learning system.

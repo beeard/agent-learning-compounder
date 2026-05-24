@@ -707,14 +707,6 @@ def export_approved_gates(report_path: pathlib.Path, report: str, output: pathli
     return output
 
 
-def is_relative_to(path: pathlib.Path, parent: pathlib.Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True
-
-
 def resolve_personal_arg(value: str | None) -> pathlib.Path | None:
     if value:
         return pathlib.Path(value).expanduser()

@@ -12,6 +12,7 @@ import pathlib
 import re
 import sys
 
+from state_paths import atomic_rewrite
 from validate_outputs import validate
 
 
@@ -172,22 +173,68 @@ def _load_probes(path: pathlib.Path | None) -> dict:
     return data if isinstance(data, dict) else {}
 
 
-def render_registry(
-    report_path: pathlib.Path,
-    gates: list[Gate],
-    max_domains: int | None = None,
-    probes: dict | None = None,
-) -> str:
-    now = dt.datetime.now(dt.timezone.utc)
+def _select_for_render(gates: list[Gate], max_domains: int | None) -> list[Gate]:
+    """Apply the --max-domains cap. Pulled out so main() can identify which
+    gate_ids the next render will actually cover (for inherited-block dedup)
+    without re-implementing the selection rule."""
     selected_domains: list[str] = []
-    selected_gates: list[Gate] = []
-
+    selected: list[Gate] = []
     for gate in gates:
         if gate.domain not in selected_domains:
             if max_domains is not None and len(selected_domains) >= max_domains:
                 continue
             selected_domains.append(gate.domain)
-        selected_gates.append(gate)
+        selected.append(gate)
+    return selected
+
+
+def preserved_inherited_blocks(existing_text: str) -> dict[str, str]:
+    """Return {gate_id: block_text} for blocks in `existing_text` that carry a
+    `derived_from:` line. Local (non-inherited) blocks are not preserved
+    because they get re-rendered from the report on every export.
+
+    The returned block text starts with `- domain:` and contains its
+    indented field lines, no trailing newline. Callers append them after
+    the freshly-rendered local blocks.
+    """
+    if not existing_text:
+        return {}
+    blocks_by_id: dict[str, str] = {}
+    # Split BEFORE each "- domain:" marker (zero-width lookahead) so the
+    # marker stays attached to the block. Tolerates CRLF and a file with
+    # no leading newline before the first block, matching the pattern
+    # gates_promote/gates_inherit use elsewhere.
+    parts = re.split(r"(?m)^(?=-\s+domain:)", existing_text)
+    for part in parts:
+        if not re.match(r"-\s+domain:", part):
+            continue
+        # Anchored to the canonical indented field position so a local
+        # gate whose `gate:` text legitimately contains the literal
+        # substring "derived_from:" (e.g. an instruction about checking
+        # the derived_from field) is not silently treated as inherited
+        # and pinned across re-exports.
+        if not re.search(r"^\s+derived_from:\s*\S", part, re.MULTILINE):
+            continue
+        match = re.search(r"^\s*gate_id:\s*([a-f0-9]{12})\s*$", part, re.MULTILINE)
+        if not match:
+            continue
+        blocks_by_id[match.group(1)] = part.rstrip()
+    return blocks_by_id
+
+
+def render_registry(
+    report_path: pathlib.Path,
+    gates: list[Gate],
+    max_domains: int | None = None,
+    probes: dict | None = None,
+    preserve_blocks: list[str] | None = None,
+) -> str:
+    now = dt.datetime.now(dt.timezone.utc)
+    selected_gates = _select_for_render(gates, max_domains)
+    selected_domains: list[str] = []
+    for gate in selected_gates:
+        if gate.domain not in selected_domains:
+            selected_domains.append(gate.domain)
 
     lines = [
         "# Approved Agent Gates",
@@ -222,6 +269,15 @@ def render_registry(
             lines.append(f"  level: {gate.level}")
         if gate.evidence_unit and gate.evidence_count:
             lines.append(f"  {gate.evidence_unit}: {gate.evidence_count}")
+    # Preserve federation-inherited blocks across re-exports. Without
+    # this, every export wipes blocks containing `derived_from:` (written
+    # by gates_inherit) and refresh._inherited_gates() sees them as gone,
+    # queueing federated gates for retirement instead of demotion.
+    # Inherited blocks intentionally live outside --max-domains: they were
+    # chosen by a sibling repo's operator, not by this repo's report.
+    if preserve_blocks:
+        for block in preserve_blocks:
+            lines.extend(block.rstrip().split("\n"))
     lines.append("")
     return "\n".join(lines)
 
@@ -260,10 +316,26 @@ def main(argv: list[str] | None = None) -> int:
     probes_path = pathlib.Path(args.probes) if args.probes else None
     probes = _load_probes(probes_path)
 
-    output_path.write_text(
-        render_registry(report_path, gates, args.max_domains, probes=probes),
-        encoding="utf-8",
-    )
+    # Read + preserve + write under one sidecar lock so a concurrent
+    # gates_inherit cannot land an inherited block between the read and
+    # the write -- pre-B-5 export would render from a pre-inherit snapshot
+    # and silently overwrite the freshly-appended block. gates_inherit
+    # uses the same `atomic_rewrite` on the same path, so the lockfile
+    # `<output>.lock` is the shared mutex.
+    with atomic_rewrite(output_path) as (existing_text, commit):
+        inherited = preserved_inherited_blocks(existing_text)
+        new_gate_ids = {
+            _gate_id(g.domain, g.gate_category, g.gate)
+            for g in _select_for_render(gates, args.max_domains)
+        }
+        preserve = [block for gid, block in inherited.items() if gid not in new_gate_ids]
+        commit(render_registry(
+            report_path,
+            gates,
+            args.max_domains,
+            probes=probes,
+            preserve_blocks=preserve,
+        ))
     print(f"exported {len(gates)} gates to {output_path}")
     return 0
 

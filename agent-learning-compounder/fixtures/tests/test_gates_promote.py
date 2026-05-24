@@ -189,6 +189,92 @@ class GatesPromoteInheritRoundTrip(unittest.TestCase):
             self.assertIn(f"derived_from: repo-A:{gate_id}:", text)
             self.assertIn("gate_category: docs-check", text)
 
+    def test_promote_then_inherit_preserves_level(self):
+        """Non-default severity (level: 3) must round-trip through promote +
+        inherit. Previously ``build_record`` silently dropped ``level``, so the
+        inherited block came out without it and effectively reset to default."""
+        import re
+        INHERIT = REPO_ROOT / "bin" / "gates_inherit"
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            report = tdp / "report.md"
+            report.write_text(SAMPLE_REPORT_CONTENT)
+            origin_gates = tdp / "origin-gates.md"
+            shared = tdp / "shared"
+            subprocess.run(
+                [str(EXPORT_GATES), "--report", str(report),
+                 "--output", str(origin_gates)],
+                check=True,
+            )
+            # Sanity-check that export emitted ``level: 3`` for our source block.
+            origin_text = origin_gates.read_text()
+            self.assertIn("level: 3", origin_text)
+            m = re.search(r"gate_id:\s*([a-f0-9]{12})", origin_text)
+            gate_id = m.group(1)
+
+            subprocess.run([
+                str(PROMOTE),
+                "--gates", str(origin_gates),
+                "--gate-id", gate_id,
+                "--origin-repo", "repo-A",
+                "--shared-root", str(shared),
+            ], check=True)
+
+            # The shared record itself must carry the level so other repos see it.
+            record = json.loads(
+                (shared / "gates" / f"{gate_id}.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(record.get("level"), "3")
+
+            target_gates = tdp / "target-gates.md"
+            target_gates.write_text("# Approved Agent Gates\n\n")
+            subprocess.run([
+                str(INHERIT),
+                "--shared-root", str(shared),
+                "--target-gates", str(target_gates),
+                "--gate-id", gate_id,
+            ], check=True)
+
+            inherited = target_gates.read_text()
+            # The inherited block must carry the level line back into YAML form.
+            level_line = re.search(
+                rf"gate_id:\s*{gate_id}.*?^\s*level:\s*3\s*$",
+                inherited,
+                re.DOTALL | re.MULTILINE,
+            )
+            self.assertIsNotNone(
+                level_line,
+                f"expected ``level: 3`` to appear in inherited block:\n{inherited}",
+            )
+
+    def test_promote_without_level_omits_field(self):
+        """When the source block has no level (older gates), the shared record
+        must omit the field entirely rather than inventing a default."""
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            gates = tdp / "no-level-gates.md"
+            shared = tdp / "shared"
+            gates.write_text(
+                "# Approved Agent Gates\n\n"
+                "## gates\n\n"
+                "- domain: tests\n"
+                "  gate_id: abcdef012345\n"
+                "  gate_category: validation-check\n"
+                "  gate: Run validation.\n",
+                encoding="utf-8",
+            )
+            subprocess.run([
+                str(PROMOTE),
+                "--gates", str(gates),
+                "--gate-id", "abcdef012345",
+                "--origin-repo", "repo-abc",
+                "--shared-root", str(shared),
+            ], check=True)
+            record = json.loads(
+                (shared / "gates" / "abcdef012345.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("level", record)
+
 
 if __name__ == "__main__":
     unittest.main()

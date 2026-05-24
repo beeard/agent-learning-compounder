@@ -75,6 +75,54 @@ class QueueDedup(unittest.TestCase):
         self.assertEqual(on_disk, original)
         self.assertIn("would_remove=1", proc.stdout)
 
+    def test_does_not_collapse_across_distinct_domains(self):
+        """Two ``operator_proposed_gate`` rows with identical ``text`` but
+        different ``domain`` must both survive — the gate proposal is a
+        legitimately distinct candidate for each domain."""
+        self._write([
+            {"id": "a", "kind": "operator_proposed_gate", "domain": "cloudflare",
+             "text": "Always quote one line of deploy output.",
+             "ts": "2026-01-01T00:00:00Z"},
+            {"id": "b", "kind": "operator_proposed_gate", "domain": "rails",
+             "text": "Always quote one line of deploy output.",
+             "ts": "2026-02-01T00:00:00Z"},
+        ])
+        rows = self._run()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({r["id"] for r in rows}, {"a", "b"})
+
+    def test_does_not_collapse_across_distinct_skills(self):
+        """Two ``gate_retirement_candidate`` rows with identical
+        ``candidate_adjustment`` wording but different ``skill`` must both
+        survive — retirement is per-skill."""
+        self._write([
+            {"id": "a", "kind": "gate_retirement_candidate", "skill": "frontend-design",
+             "text": "Retire: gate no longer triggers in last 30 sessions.",
+             "ts": "2026-01-01T00:00:00Z"},
+            {"id": "b", "kind": "gate_retirement_candidate", "skill": "build-mcp-server",
+             "text": "Retire: gate no longer triggers in last 30 sessions.",
+             "ts": "2026-02-01T00:00:00Z"},
+        ])
+        rows = self._run()
+        self.assertEqual(len(rows), 2)
+        self.assertEqual({r["id"] for r in rows}, {"a", "b"})
+
+    def test_still_collapses_within_same_bucket(self):
+        """Within the same (kind, domain, skill) bucket, near-paraphrases
+        must still collapse — the bucketing only widens the safe set, it
+        doesn't disable dedup."""
+        self._write([
+            {"id": "a", "kind": "operator_proposed_gate", "domain": "cloudflare",
+             "text": "Always quote one line of deploy output.",
+             "ts": "2026-01-01T00:00:00Z"},
+            {"id": "b", "kind": "operator_proposed_gate", "domain": "cloudflare",
+             "text": "Always quote a line of deploy output.",
+             "ts": "2026-02-01T00:00:00Z"},
+        ])
+        rows = self._run("--keep", "oldest")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["id"], "a")
+
     def test_symlinked_queue_rejected(self):
         import os
         real = self.queue.with_suffix(".real.jsonl")

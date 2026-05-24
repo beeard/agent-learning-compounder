@@ -4,7 +4,8 @@
 
 Eight-upgrade extension on top of `2026.05.24+review7-production`. All
 upstream hardening properties preserved; additions are additive. See
-`PLAN.md` for the full implementation plan.
+`docs/history/PLAN-eight-upgrade.md` for the (now-frozen) implementation
+work order.
 
 Post-review fixes:
 - `bin/gates_promote` and `bin/gates_inherit` now require 12 lowercase hex
@@ -16,6 +17,12 @@ Post-review fixes:
   skill roots.
 - Optional dependency docs now distinguish archive-root and installed-root
   `requirements-optional.txt` paths.
+- Release packaging is now reproducible. The exclusion set previously inlined
+  in `install.sh` lives in `scripts/sanitize_skill_tree.sh` and is sourced by
+  both the installer and the new `scripts/build_release.sh`. Archives are
+  rebuilt with sorted filenames, a fixed mtime, numeric ownership, and a
+  gzip header with no embedded timestamp, so two runs produce byte-identical
+  output. `dist/SHA256SUMS` now covers every archive in `dist/`.
 
 New capabilities:
 - **Phase 1 (schema versioning + replay):** `bin/collect_hook_event` now

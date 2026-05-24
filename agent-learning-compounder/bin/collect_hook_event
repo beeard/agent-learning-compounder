@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
+import fcntl
 import hashlib
 import json
 import os
@@ -292,34 +294,75 @@ def _chmod_quiet(path: pathlib.Path, mode: int) -> None:
         pass
 
 
+def _lock_path_for(output: pathlib.Path) -> pathlib.Path:
+    """Sidecar lock path that both rotate and append agree on.
+
+    Co-located with the log so all writers see the same lock target
+    regardless of how the log path was resolved.
+    """
+    return output.with_name(f"{output.name}.lock")
+
+
+@contextlib.contextmanager
+def _rotation_lock(output: pathlib.Path, *, exclusive: bool):
+    """flock(LOCK_EX|LOCK_SH) on the sidecar lock file.
+
+    Pattern mirrors refresh_learning_state.py: open a long-lived fd, flock
+    it for the duration of the critical section, release on exit. The lock
+    file is created mode 0o600 on first use and never deleted; deletion
+    would race with concurrent lockers.
+    """
+    lock_path = _lock_path_for(output)
+    # O_CREAT so the first caller in a fresh state dir creates the lock
+    # file; subsequent callers just open it. 0o600 keeps the lock file
+    # from being world-visible — symmetric with the log permissions.
+    fd = os.open(str(lock_path), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
 def rotate_if_needed(output: pathlib.Path, max_bytes: int) -> None:
-    """If output exceeds max_bytes, rotate to a timestamped .bak file."""
-    try:
-        size = output.stat().st_size
-    except OSError:
-        return
-    if size <= max_bytes:
-        return
-    stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = output.with_name(f"{output.name}.{stamp}.bak")
-    try:
-        output.rename(backup)
-    except OSError:
-        return
-    _chmod_quiet(backup, 0o600)
-    # Cap old backups: keep the newest MAX_HOOK_EVENT_BACKUPS.
-    try:
-        backups = sorted(
-            output.parent.glob(f"{output.name}.*.bak"),
-            key=lambda p: p.name,
-        )
-        for stale in backups[:-MAX_HOOK_EVENT_BACKUPS]:
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-    except OSError:
-        pass
+    """If output exceeds max_bytes, rotate to a timestamped .bak file.
+
+    Holds LOCK_EX on the sidecar lock for the entire stat+rename window
+    so concurrent appenders (which take LOCK_SH around their open+write)
+    cannot keep writing into the renamed inode.
+    """
+    with _rotation_lock(output, exclusive=True):
+        try:
+            size = output.stat().st_size
+        except OSError:
+            return
+        if size <= max_bytes:
+            return
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+        backup = output.with_name(f"{output.name}.{stamp}.bak")
+        try:
+            output.rename(backup)
+        except OSError:
+            return
+        _chmod_quiet(backup, 0o600)
+        # Cap old backups: keep the newest MAX_HOOK_EVENT_BACKUPS.
+        # The glob excludes the sidecar lock file because *.lock does not
+        # match *.bak.
+        try:
+            backups = sorted(
+                output.parent.glob(f"{output.name}.*.bak"),
+                key=lambda p: p.name,
+            )
+            for stale in backups[:-MAX_HOOK_EVENT_BACKUPS]:
+                try:
+                    stale.unlink()
+                except OSError:
+                    pass
+        except OSError:
+            pass
 
 
 def load_input(args: argparse.Namespace) -> dict[str, Any]:
@@ -364,12 +407,24 @@ def main(argv: list[str] | None = None) -> int:
     # file is never readable by group/other, even briefly. mode is ignored on
     # existing files; _chmod_quiet below upgrades pre-existing logs that
     # predate this hardening.
+    #
+    # LOCK_EX around the open+write window: cooperates with rotate_if_needed
+    # (which also takes LOCK_EX), AND serializes concurrent appenders. The
+    # previous LOCK_SH permitted concurrent appenders, relying on O_APPEND
+    # being atomic up to PIPE_BUF (4096 on Linux). With a full v2 event --
+    # MAX_GATE_LOADED_IDS * MAX_GATE_LOADED_ID_LEN = 4096B for
+    # gate_loaded_ids alone, plus probe_decisions and headers -- one line
+    # routinely exceeds PIPE_BUF, two concurrent appenders interleave bytes
+    # mid-line, evaluate_gate_effectiveness.load_sessions sees torn JSON,
+    # and (combined with the unguarded json.loads pre-C7) the entire
+    # scoring pass aborts.
     try:
-        fd = os.open(str(output), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
-        try:
-            os.write(fd, (rendered + "\n").encode("utf-8"))
-        finally:
-            os.close(fd)
+        with _rotation_lock(output, exclusive=True):
+            fd = os.open(str(output), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
+            try:
+                os.write(fd, (rendered + "\n").encode("utf-8"))
+            finally:
+                os.close(fd)
     except OSError as error:
         print(f"failed to write hook event log to {output}: {error}", file=sys.stderr)
         return 1
