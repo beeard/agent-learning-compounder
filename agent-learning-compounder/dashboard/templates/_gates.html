@@ -1,0 +1,21 @@
+<table>
+  <thead><tr><th>Domain</th><th>Category</th><th>Gate ID</th><th>Gate</th></tr></thead>
+  <tbody>
+  {% set ns = namespace(domain='', cat='', gid='') %}
+  {% for line in gates_md.splitlines() %}
+    {% if line.startswith('- domain:') %}{% set ns.domain = line.split(':', 1)[1].strip() %}{% endif %}
+    {% if 'gate_id:' in line %}{% set ns.gid = line.split('gate_id:', 1)[1].strip() %}{% endif %}
+    {% if 'gate_category:' in line %}{% set ns.cat = line.split('gate_category:', 1)[1].strip() %}{% endif %}
+    {% if line.lstrip().startswith('gate:') and not line.lstrip().startswith('gate_id:') and not line.lstrip().startswith('gate_category:') %}
+      <tr>
+        <td>{{ ns.domain }}</td>
+        <td>{{ ns.cat }}</td>
+        <td><code>{{ ns.gid }}</code></td>
+        <td>{{ line.split('gate:', 1)[1].strip() }}</td>
+      </tr>
+    {% endif %}
+  {% else %}
+    <tr><td colspan="4">No gates loaded.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>

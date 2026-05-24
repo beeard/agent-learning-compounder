@@ -1,0 +1,10 @@
+<table>
+  <thead><tr><th>Gate ID</th><th>Skip rate</th></tr></thead>
+  <tbody>
+    {% for gid, p in probes.items() %}
+    <tr><td><code>{{ gid }}</code></td><td>{{ '%.0f%%' | format(p.rate * 100) }}</td></tr>
+    {% else %}
+    <tr><td colspan="2">No active probes.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>

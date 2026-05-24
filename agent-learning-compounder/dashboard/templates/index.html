@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>agent-learning-compounder dashboard</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <h1>Agent Learning Compounder</h1>
+    <p>Repo: <code>{{ repo }}</code></p>
+  </header>
+  <main>
+    <section id="gates" hx-get="/_gates" hx-trigger="load, every 30s">
+      <h2>Approved gates</h2>
+    </section>
+    <section id="queue" hx-get="/_queue" hx-trigger="load, every 30s">
+      <h2>Improvement queue</h2>
+    </section>
+    <section id="probes" hx-get="/_probes" hx-trigger="load, every 30s">
+      <h2>Active probes</h2>
+    </section>
+  </main>
+</body>
+</html>

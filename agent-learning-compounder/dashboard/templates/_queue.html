@@ -1,0 +1,15 @@
+<table>
+  <thead><tr><th>ID</th><th>Kind</th><th>Text</th><th>When</th></tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><code>{{ row.id }}</code></td>
+      <td>{{ row.kind | default('candidate') }}</td>
+      <td>{{ row.text }}</td>
+      <td>{{ row.ts }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="4">Empty queue.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
