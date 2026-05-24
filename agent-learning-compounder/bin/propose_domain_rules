@@ -18,6 +18,9 @@ import sys
 from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
+
 STOP_WORDS = {
     "the", "a", "an", "and", "or", "but", "is", "are", "was", "were",
     "be", "to", "of", "in", "on", "for", "at", "by", "from", "with",
@@ -29,16 +32,64 @@ STOP_WORDS = {
 }
 
 HEADER_RE = re.compile(r"^\[session=(\S+)\s+outcome=(\w+)\]\s*(.*)$")
+EXTRACT_SESSION_RE = re.compile(r"^(\w+):\s*(.*?)\s*\[session_ref=([^\]]+)\]\s*$")
 TOKEN_RE = re.compile(r"[a-z][a-z0-9_-]{2,}")
+
+# Heuristic correction signals — words/phrases that tend to appear in user
+# turns when the agent is being corrected. Case-insensitive substring match.
+CORRECTION_PATTERNS = (
+    "wait,", "actually,", "no,", "wrong", "revert", "undo", "let me try",
+    "fix the", "instead", "i meant", "should be", "let's redo", "stop,",
+)
 
 
 def parse_chunks(corpus_path: Path):
+    """Yield (outcome, text) pairs.
+
+    Accepts two input formats:
+
+    1. Strict: each line starts with ``[session=<id> outcome=<state>] <text>``.
+       Used by hand-built fixtures and the integration tests.
+
+    2. extract_sessions output: each line is ``<role>: <text> [session_ref=<ref>]``.
+       Lines from the same session_ref are grouped; a per-session outcome is
+       inferred by scanning the user-turn text for correction phrases
+       (see CORRECTION_PATTERNS). Sessions without any correction signal
+       are tagged ``clean``.
+
+    Format 1 takes priority; if any line matches the strict header, that
+    branch is used for the entire corpus. Otherwise format 2 is attempted.
+    Lines matching neither are silently skipped.
+    """
     text = corpus_path.read_text(encoding="utf-8")
-    for line in text.splitlines():
+    lines = text.splitlines()
+
+    strict_chunks = []
+    for line in lines:
         m = HEADER_RE.match(line)
+        if m:
+            strict_chunks.append((m.group(2), m.group(3).lower()))
+    if strict_chunks:
+        yield from strict_chunks
+        return
+
+    # Fallback: extract_sessions format. Group by session_ref.
+    sessions: dict[str, dict[str, list[str]]] = {}
+    for line in lines:
+        m = EXTRACT_SESSION_RE.match(line)
         if not m:
             continue
-        yield m.group(2), m.group(3).lower()
+        role, body, ref = m.group(1), m.group(2), m.group(3)
+        bucket = sessions.setdefault(ref, {"user": [], "all": []})
+        bucket["all"].append(body)
+        if role == "user":
+            bucket["user"].append(body)
+
+    for ref, buckets in sessions.items():
+        joined_user = " ".join(buckets["user"]).lower()
+        is_correction = any(p in joined_user for p in CORRECTION_PATTERNS)
+        outcome = "correction" if is_correction else "clean"
+        yield outcome, " ".join(buckets["all"]).lower()
 
 
 def tokens(text):
@@ -82,6 +133,11 @@ def main():
     args = parse_args()
     if not args.corpus.is_file():
         print(f"corpus not a regular file: {args.corpus}", file=sys.stderr)
+        return 2
+    try:
+        assert_regular_file_destination(args.output, label="Proposals output")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     chunks = list(parse_chunks(args.corpus))
     scores = score_terms(chunks)

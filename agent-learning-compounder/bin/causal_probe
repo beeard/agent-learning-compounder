@@ -7,27 +7,62 @@ returns a deterministic 'load' or 'skip' verdict by hashing
 
 Unregistered gates always 'load'.
 
-Note: the probes file is operator-controlled local state (not adversarial
-input), so this script intentionally skips the symlink-rejection pattern
-used by hook-event ingest tools.
+The probes file is treated like any other operator state write target:
+symlinks at the destination are rejected via assert_regular_file_destination.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import hashlib
 import json
+import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
+
+
+@contextlib.contextmanager
+def _locked_probes(path: Path):
+    """Open (or create) the probes file under an exclusive lock and yield
+    the current data plus a setter that rewrites the file atomically while
+    the lock is still held. Closes the writes-loss window between separate
+    register/unregister processes."""
+    try:
+        assert_regular_file_destination(path, label="Probes file")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        sys.exit(2)
+    fd = os.open(str(path), os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        with os.fdopen(fd, "r+", encoding="utf-8", closefd=False) as fh:
+            fh.seek(0)
+            raw = fh.read()
+            data = json.loads(raw) if raw.strip() else {}
+
+            def commit(new_data):
+                fh.seek(0)
+                fh.truncate()
+                fh.write(json.dumps(new_data, indent=2, sort_keys=True))
+
+            yield data, commit
+    finally:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+        except Exception:
+            pass
+        os.close(fd)
+
 
 def load_probes(path: Path) -> dict:
+    """Snapshot read for `decide` and `list` — no lock needed."""
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def save_probes(path: Path, data: dict):
-    path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
 
 
 def decide(gate_id: str, session_id: str, rate: float) -> str:
@@ -37,19 +72,19 @@ def decide(gate_id: str, session_id: str, rate: float) -> str:
 
 
 def cmd_register(args):
-    data = load_probes(args.probes)
     if not (0.0 <= args.rate <= 1.0):
         print(f"rate must be between 0.0 and 1.0; got {args.rate}", file=sys.stderr)
         return 2
-    data[args.gate_id] = {"rate": args.rate}
-    save_probes(args.probes, data)
+    with _locked_probes(args.probes) as (data, commit):
+        data[args.gate_id] = {"rate": args.rate}
+        commit(data)
     return 0
 
 
 def cmd_unregister(args):
-    data = load_probes(args.probes)
-    data.pop(args.gate_id, None)
-    save_probes(args.probes, data)
+    with _locked_probes(args.probes) as (data, commit):
+        data.pop(args.gate_id, None)
+        commit(data)
     return 0
 
 

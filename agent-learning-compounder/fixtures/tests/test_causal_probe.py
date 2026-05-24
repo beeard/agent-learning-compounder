@@ -42,18 +42,22 @@ class CausalProbe(unittest.TestCase):
         self.assertIn(out_a, {"load", "skip"})
 
     def test_skip_rate_roughly_holds_over_n(self):
+        """Sample size capped at 200 by default; set RUN_SLOW=1 for the 1000-iter version."""
         subprocess.run([str(PROBE), "--probes", str(self.probes),
                         "register", "--gate-id", "g_aaa111", "--rate", "0.30"],
                        check=True)
+        import os as _os
+        n = 1000 if _os.environ.get("RUN_SLOW") else 200
+        delta = 0.05 if n >= 1000 else 0.08
         decisions = []
-        for i in range(1000):
+        for i in range(n):
             d = subprocess.check_output([
                 str(PROBE), "--probes", str(self.probes),
                 "decide", "--gate-id", "g_aaa111", "--session-id", f"s{i}",
             ], text=True).strip()
             decisions.append(d)
         skip_rate = decisions.count("skip") / len(decisions)
-        self.assertAlmostEqual(skip_rate, 0.30, delta=0.05)
+        self.assertAlmostEqual(skip_rate, 0.30, delta=delta)
 
     def test_unregistered_gate_always_loads(self):
         self.probes.write_text("{}")

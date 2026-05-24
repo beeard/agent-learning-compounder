@@ -64,11 +64,17 @@ more evidence.
       "correction_rate_loaded": 0.083,
       "correction_rate_absent": 0.500,
       "delta": 0.417,
-      "label": "correlated_with_success"
+      "label": "correlated_with_success",
+      "causal_signal": "causal_correlated_with_success"
     }
   ]
 }
 ```
+
+`causal_signal` is populated when the gate has an active probe (Phase 3B)
+that produced enough load+skip cohort samples; otherwise it's
+`needs_review`. Values: `causal_correlated_with_success`,
+`causal_correlated_with_failure`, `causal_no_signal`, `needs_review`.
 
 ## Invocation
 

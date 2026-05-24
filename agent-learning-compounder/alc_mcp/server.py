@@ -17,9 +17,16 @@ import hashlib
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Any
+
+# Reuse the symlink-rejection helper from the collector. Path-insert keeps the
+# import valid whether the server is invoked as `python3 -m alc_mcp.server`
+# from the package root or run directly from the alc_mcp/ directory.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
 
 
 def _latest_gates_path(repo: Path) -> Path:
@@ -99,6 +106,9 @@ async def get_skill_context_handler(args: dict) -> str:
 async def report_outcome_handler(args: dict) -> dict:
     repo = Path(args["repo"]).resolve()
     log = _hook_events_path(repo)
+    # Refuse to follow a symlink at the destination — matches the defense
+    # pattern in collect_hook_event for adversarial telemetry redirection.
+    assert_regular_file_destination(log, label="MCP report_outcome target")
     row = {
         "schema_version": 2,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -117,6 +127,7 @@ async def report_outcome_handler(args: dict) -> dict:
 async def propose_gate_handler(args: dict) -> dict:
     repo = Path(args["repo"]).resolve()
     queue = _improvement_queue_path(repo)
+    assert_regular_file_destination(queue, label="MCP propose_gate target")
     h = hashlib.sha256(
         f"{args['domain']}|{args['category']}|{args['gate']}".encode("utf-8")
     ).hexdigest()[:12]

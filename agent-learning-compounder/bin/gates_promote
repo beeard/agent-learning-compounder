@@ -15,6 +15,9 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
+
 
 # Each gate block emitted by ``bin/export_gates`` looks like:
 #
@@ -69,7 +72,7 @@ def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str
     return {
         "domain": block["domain"],
         "gate_id": block["gate_id"],
-        "category": block.get("gate_category", ""),
+        "gate_category": block.get("gate_category", ""),
         "gate": block.get("gate", ""),
         "origin_repo": origin_repo,
         "promoted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -103,6 +106,11 @@ def main(argv: list[str] | None = None) -> int:
     out_dir = args.shared_root / "gates"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{args.gate_id}.json"
+    try:
+        assert_regular_file_destination(out_path, label="Promote output")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     out_path.write_text(
         json.dumps(record, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

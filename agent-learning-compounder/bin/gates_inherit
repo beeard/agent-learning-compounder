@@ -10,6 +10,9 @@ import json
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
+
 
 def gate_already_present(target: Path, gate_id: str) -> bool:
     return gate_id in target.read_text(encoding="utf-8")
@@ -43,6 +46,11 @@ def main():
         return 2
     if not args.target_gates.is_file():
         print(f"target gates not found: {args.target_gates}", file=sys.stderr)
+        return 2
+    try:
+        assert_regular_file_destination(args.target_gates, label="Target gates")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     if gate_already_present(args.target_gates, args.gate_id):
         return 0

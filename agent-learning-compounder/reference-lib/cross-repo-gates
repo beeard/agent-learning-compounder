@@ -50,9 +50,12 @@ line that marks the gate as inherited.
 
 `refresh_learning_state` (after Phase 2B) classifies each gate's effectiveness.
 When an inherited gate (block has a `derived_from:` line) hits
-`label == "correlated_with_failure"` AND `n_loaded >= 20`, the refresh queues
-an `inherited_gate_demote_candidate` row in `improvement-queue.jsonl` carrying
-the `gate_id`, `derived_from` value, and evidence stats.
+`label` in `{"correlated_with_failure", "no_signal"}` AND `n_loaded >= 20`,
+the refresh queues an `inherited_gate_demote_candidate` row in
+`improvement-queue.jsonl` carrying the `gate_id`, `derived_from` value, and
+evidence stats. (The `no_signal` trigger surfaces gates that are merely
+ineffective in this repo, not just actively harmful — they are still
+candidates for demotion.)
 
 Non-inherited gates that meet the same conditions queue as the original
 `gate_retirement_candidate`. A gate is queued as exactly one of the two — never

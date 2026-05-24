@@ -77,6 +77,27 @@ class ProposeDomainRules(unittest.TestCase):
         result = json.loads(self.output.read_text())
         self.assertEqual(result["proposals"], [])
 
+    def test_accepts_extract_sessions_format(self):
+        """Lines from `extract_sessions` (`role: text [session_ref=...]`) should
+        be parsed via the fallback; sessions containing correction-pattern
+        words in user turns are tagged correction, others clean."""
+        self.corpus.write_text(
+            "user: please fix the hyperdrive timeout, instead try the new client. [session_ref=s1]\n"
+            "assistant: ok, switching to the new client. [session_ref=s1]\n"
+            "user: thanks, that worked. [session_ref=s1]\n"
+            "user: just run the build please. [session_ref=s2]\n"
+            "assistant: build green. [session_ref=s2]\n"
+        )
+        subprocess.run(
+            [str(PROPOSE), "--corpus", str(self.corpus), "--output", str(self.output),
+             "--top-k", "10", "--min-score", "0.5"],
+            check=True,
+        )
+        terms = [p["term"] for p in json.loads(self.output.read_text())["proposals"]]
+        # 'hyperdrive' came from the correction session, 'build' from the clean one.
+        # The proposer should surface 'hyperdrive' (correction-correlated).
+        self.assertIn("hyperdrive", terms)
+
 
 class RefreshWiresDomainRuleProposer(unittest.TestCase):
     """refresh_learning_state should append domain_rule_candidate rows when given a corpus."""

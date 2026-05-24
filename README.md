@@ -3,6 +3,13 @@
 Portable skill package for mining repo baselines, session evidence, hook telemetry,
 and skill-health signals into durable future-agent context.
 
+This version (`2026.05.24+review7-plus1`) layers eight upgrades on top of
+upstream `review7-production`: schema-versioned hook events with replay, semantic
+queue dedup, stable per-gate IDs with effectiveness scoring, domain-rule mining,
+deterministic A/B causal probes, cross-repo gate federation, an optional MCP
+server, and an optional operator dashboard. See `CHANGES.md` and `PLAN.md` for
+details.
+
 ## Requirements
 
 - Python 3.10+
@@ -11,11 +18,27 @@ and skill-health signals into durable future-agent context.
 
 Windows users should install through WSL or another POSIX shell environment.
 
+### Optional extras
+
+Some features depend on packages NOT installed by default. The package degrades
+gracefully when they are absent (tests skip, code paths fall back or
+raise on first use).
+
+```bash
+pip install -r requirements-optional.txt
+```
+
+- `mcp` — required for `alc_mcp/server.py` (the MCP stdio server).
+- `fastapi`, `jinja2`, `uvicorn`, `httpx` — required for `bin/serve_dashboard`
+  (the operator dashboard).
+- `sentence-transformers` — optional embedding backend for `bin/queue_dedup`
+  (default backend is stdlib trigram-Dice).
+
 ## Install
 
 ```bash
-tar -xzf agent-learning-compounder-2026.05.24+review7-production.tar.gz
-cd agent-learning-compounder-2026.05.24+review7-production
+tar -xzf agent-learning-compounder-2026.05.24+review7-plus1.tar.gz
+cd agent-learning-compounder-2026.05.24+review7-plus1
 ./install.sh --codex --verify
 ```
 
@@ -37,7 +60,7 @@ root, and runs self-test:
 
 ```bash
 REPO_ROOT="$PWD" && \
-ARCHIVE="agent-learning-compounder-2026.05.24+review7-production.tar.gz" && \
+ARCHIVE="agent-learning-compounder-2026.05.24+review7-plus1.tar.gz" && \
 WORKDIR="$(mktemp -d)" && \
 tar -xzf "$ARCHIVE" -C "$WORKDIR" && \
 BASE="$(ls -1d "$WORKDIR"/agent-learning-compounder-*)"; \
@@ -186,6 +209,28 @@ python3 "$HOME/.agents/skills/agent-learning-compounder/scripts/install_runtime_
    root.
 2. Re-run repo bootstrap with the same repo and desired state root.
 3. Re-apply runtime hooks only after a fresh dry-run/review cycle.
+
+## New Tooling (review7-plus1)
+
+Eight new binaries land in `bin/` alongside the upstream set:
+
+- `replay_hook_events` — migrate older hook event logs to the latest schema version.
+- `queue_dedup` — collapse semantically near-duplicate improvement-queue rows.
+- `evaluate_gate_effectiveness` — correlation-only effectiveness signals per `gate_id`.
+- `propose_domain_rules` — mine corpus n-grams that correlate with corrections.
+- `causal_probe` — register and decide deterministic A/B skip cohorts per gate.
+- `gates_promote` — promote a gate from a repo into the shared registry.
+- `gates_inherit` — append a shared gate into a target repo with provenance.
+- `serve_dashboard` — launch the localhost operator dashboard.
+
+Two new top-level dirs:
+
+- `alc_mcp/` — stdio MCP server (`python3 -m alc_mcp.server`).
+- `dashboard/` — FastAPI + Jinja2 + HTMX dashboard templates and static files.
+
+Per-feature reference docs under `references/`: `event-schema-evolution.md`,
+`queue-dedup.md`, `gate-effectiveness.md`, `domain-rules-learning.md`,
+`cross-repo-gates.md`.
 
 ## Safety Model
 

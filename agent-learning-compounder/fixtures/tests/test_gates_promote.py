@@ -93,7 +93,7 @@ class GatesPromote(unittest.TestCase):
         self.assertEqual(data["origin_repo"], "repo-abc")
         self.assertEqual(data["domain"], "cloudflare")
         self.assertEqual(data["gate_id"], gate_id)
-        self.assertEqual(data["category"], "docs-check")
+        self.assertEqual(data["gate_category"], "docs-check")
         self.assertIn("Re-read current Cloudflare docs", data["gate"])
         self.assertIn("promoted_at", data)
 
@@ -121,6 +121,50 @@ class GatesPromote(unittest.TestCase):
         record_path = self.shared / "gates" / f"{gate_id}.json"
         data = json.loads(record_path.read_text())
         self.assertEqual(data["note"], "high impact in our cloudflare workflow")
+
+
+class GatesPromoteInheritRoundTrip(unittest.TestCase):
+    """Promote a gate from one repo's gates.md, inherit into another's gates.md,
+    confirming the field names line up across the federation boundary."""
+
+    def test_promote_then_inherit_round_trip(self):
+        import re
+        INHERIT = REPO_ROOT / "bin" / "gates_inherit"
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            report = tdp / "report.md"
+            report.write_text(SAMPLE_REPORT_CONTENT)
+            origin_gates = tdp / "origin-gates.md"
+            shared = tdp / "shared"
+            subprocess.run(
+                [str(EXPORT_GATES), "--report", str(report),
+                 "--output", str(origin_gates)],
+                check=True,
+            )
+            m = re.search(r"gate_id:\s*([a-f0-9]{12})", origin_gates.read_text())
+            gate_id = m.group(1)
+
+            subprocess.run([
+                str(PROMOTE),
+                "--gates", str(origin_gates),
+                "--gate-id", gate_id,
+                "--origin-repo", "repo-A",
+                "--shared-root", str(shared),
+            ], check=True)
+
+            target_gates = tdp / "target-gates.md"
+            target_gates.write_text("# Approved Agent Gates\n\n")
+            subprocess.run([
+                str(INHERIT),
+                "--shared-root", str(shared),
+                "--target-gates", str(target_gates),
+                "--gate-id", gate_id,
+            ], check=True)
+
+            text = target_gates.read_text()
+            self.assertIn(f"gate_id: {gate_id}", text)
+            self.assertIn(f"derived_from: repo-A:{gate_id}:", text)
+            self.assertIn("gate_category: docs-check", text)
 
 
 if __name__ == "__main__":

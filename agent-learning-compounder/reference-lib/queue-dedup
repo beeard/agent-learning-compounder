@@ -13,8 +13,11 @@ near-duplicates.
   separates near-paraphrases more cleanly than true Jaccard at the same
   threshold.
 - `embed`: `sentence-transformers` (BAAI/bge-small-en-v1.5) with cosine
-  similarity. Threshold defaults to 0.85. Falls back to trigram with a stderr
-  notice if the dependency is missing.
+  similarity. Falls back to trigram with a stderr notice if the dependency
+  is missing. Note: the `--threshold` flag has a single default (0.80)
+  shared by both backends. Cosine similarity at 0.80 is roughly comparable
+  to trigram-Dice at 0.80 on short paraphrases; if you switch backends and
+  want a more conservative cut, pass `--threshold 0.85`.
 
 ## Invocation
 

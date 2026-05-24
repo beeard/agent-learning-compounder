@@ -48,33 +48,33 @@ def build_app(repo: Path):
 
     @app.get("/", response_class=HTMLResponse)
     async def index(request: Request):
-        return templates.TemplateResponse("index.html", {
-            "request": request, "repo": str(repo),
-        })
+        return templates.TemplateResponse(
+            request, "index.html", {"repo": str(repo)}
+        )
 
     @app.get("/_gates", response_class=HTMLResponse)
     async def gates(request: Request):
         gates_text = state["gates_md"].read_text(encoding="utf-8") if state["gates_md"].is_file() else ""
-        return templates.TemplateResponse("_gates.html", {
-            "request": request, "gates_md": gates_text,
-        })
+        return templates.TemplateResponse(
+            request, "_gates.html", {"gates_md": gates_text}
+        )
 
     @app.get("/_queue", response_class=HTMLResponse)
     async def queue(request: Request):
         rows = []
         if state["queue"] and state["queue"].is_file():
             rows = [json.loads(ln) for ln in state["queue"].read_text(encoding="utf-8").splitlines() if ln]
-        return templates.TemplateResponse("_queue.html", {
-            "request": request, "rows": rows,
-        })
+        return templates.TemplateResponse(
+            request, "_queue.html", {"rows": rows}
+        )
 
     @app.get("/_probes", response_class=HTMLResponse)
     async def probes(request: Request):
         data = {}
         if state["probes"] and state["probes"].is_file():
             data = json.loads(state["probes"].read_text(encoding="utf-8"))
-        return templates.TemplateResponse("_probes.html", {
-            "request": request, "probes": data,
-        })
+        return templates.TemplateResponse(
+            request, "_probes.html", {"probes": data}
+        )
 
     return app

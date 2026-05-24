@@ -1,5 +1,50 @@
 # Changes
 
+## 2026.05.24+review7-plus1
+
+Eight-upgrade extension on top of `2026.05.24+review7-production`. All
+upstream hardening properties preserved; additions are additive. See
+`PLAN.md` for the full implementation plan.
+
+New capabilities:
+- **Phase 1 (schema versioning + replay):** `bin/collect_hook_event` now
+  stamps `schema_version: 2` on every persisted row and allows
+  `correlation_id` (bounded + scrubbed) and `gate_loaded_ids` (per-member
+  capped) fields. `bin/replay_hook_events` migrates older logs to the
+  latest schema, preserving original `ts` values.
+- **Phase 2A (queue dedup):** `bin/queue_dedup` collapses semantically
+  near-duplicate improvement-queue rows using character-trigram
+  Sørensen-Dice (stdlib) or optional sentence-transformers backend.
+  Wired into `refresh_learning_state` post-append.
+- **Phase 2B (gate effectiveness):** `bin/export_gates` stamps a stable
+  12-char `gate_id` (sha256 of domain|category|gate). `bin/evaluate_gate_effectiveness`
+  computes correlation-only signals per gate (`correlated_with_success`,
+  `correlated_with_failure`, `no_signal`, `needs_review`). Refresh queues
+  low-impact gates as `gate_retirement_candidate` rows for operator review.
+- **Phase 3A (domain rules learner):** `bin/propose_domain_rules` mines
+  the session corpus for correction-correlated n-grams and queues them
+  as `domain_rule_candidate` rows. Refresh-integrated.
+- **Phase 3B (causal probes):** `bin/causal_probe` registers/decides
+  deterministic A/B skip cohorts per gate. `probe_decisions` field added
+  to v2 schema. `evaluate_gate_effectiveness` emits a `causal_signal`
+  per gate when probe cohorts exceed N=5.
+- **Phase 4 (cross-repo federation):** `bin/gates_promote` writes shared
+  registry records; `bin/gates_inherit` appends shared gates to target
+  repos with `derived_from:` provenance lines. Refresh auto-queues
+  `inherited_gate_demote_candidate` for underperforming inherited gates.
+- **Phase 5A (MCP server):** `alc_mcp/server.py` exposes `get_gates`,
+  `report_outcome`, `propose_gate`, `get_skill_context` over stdio MCP.
+  Optional `mcp` SDK dependency.
+- **Phase 5B (operator dashboard):** `dashboard/` (FastAPI + Jinja2 +
+  HTMX) + `bin/serve_dashboard` launcher serve a localhost-only view of
+  gates, queue, and active probes. Optional fastapi/jinja2/uvicorn/httpx.
+
+Test deltas: 105 → 160 fixture tests (+55 new). 4 SKIPs are gated on
+optional deps. 1 smoke + 4 pressure scenarios still pass.
+
+New references: `event-schema-evolution.md`, `queue-dedup.md`,
+`gate-effectiveness.md`, `domain-rules-learning.md`, `cross-repo-gates.md`.
+
 ## 2026.05.24+review7-production
 
 Post-review polish on top of `2026.05.24+review6-production`. One behavioral

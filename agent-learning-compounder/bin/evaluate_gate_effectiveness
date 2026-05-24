@@ -18,6 +18,9 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_hook_event import assert_regular_file_destination  # noqa: E402
+
 
 def load_sessions(events_path: Path):
     """Returns dict cid -> {gates: set[str], outcome: str|None,
@@ -160,6 +163,11 @@ def main():
     args = parse_args()
     if not args.events.is_file():
         print(f"events not a regular file: {args.events}", file=sys.stderr)
+        return 2
+    try:
+        assert_regular_file_destination(args.output, label="Effectiveness output")
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 2
     sessions = load_sessions(args.events)
     result = evaluate(sessions, min_n=args.min_n)

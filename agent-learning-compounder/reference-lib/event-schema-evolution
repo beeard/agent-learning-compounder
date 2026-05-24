@@ -9,11 +9,13 @@ by `bin/collect_hook_event`. Older rows that predate this stamp are treated as
 | Version | Added | Removed | Notes |
 | --- | --- | --- | --- |
 | 1 | (initial) | — | implicit; no stamp on disk |
-| 2 | `schema_version`, `correlation_id`, `gate_loaded_ids` | — | introduced by Phase 1 of the eight-upgrade plan |
+| 2 | `schema_version`, `correlation_id`, `gate_loaded_ids`, `probe_decisions` | — | Phase 1 added the first three; Phase 3B (causal probes) added `probe_decisions` to the same v2 schema |
 
 `correlation_id` ties events from a single agent session together for Phase 2B
 gate effectiveness analysis. `gate_loaded_ids` records which approved gates the
-session actually loaded into context.
+session actually loaded into context. `probe_decisions` is a list of
+`{gate_id, decision}` dicts where `decision` is `load` or `skip`, recording
+the per-gate A/B cohort assignment for a session under active probe.
 
 ## Replay
 
