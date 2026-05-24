@@ -21,6 +21,19 @@ from state_paths import repo_state_dir, resolve_state_dir
 DEFAULT_MAX_HOOK_EVENT_BYTES = 5_000_000
 MAX_HOOK_EVENT_BACKUPS = 3
 
+# Bumped to 2 when correlation_id and gate_loaded_ids fields were added.
+# Phase 2B (gate effectiveness) and Phase 3B (causal probe) depend on the
+# discriminator; downstream consumers branch on schema_version.
+SCHEMA_VERSION = 2
+
+# Caps for the list-valued passthrough fields. Tight bounds keep telemetry
+# bounded even under accidental fan-out. Per-member cap drops (not truncates)
+# oversize gate ids — a truncated id would collide with neighbours, which is
+# worse than the id being absent.
+MAX_GATE_LOADED_IDS = 64
+MAX_GATE_LOADED_ID_LEN = 64
+MAX_CORRELATION_ID_LEN = 128
+
 
 # normalize_event uses an allowlist (constructs a fresh dict with only
 # vetted keys), so raw-payload keys like prompt/tool_output/transcript are
@@ -149,6 +162,34 @@ def normalize_event(raw: dict[str, Any], repo_arg: pathlib.Path | None = None) -
     if command:
         event["command_class"] = command.split()[0]
 
+    # v2 passthrough fields. Validation drops malformed values silently
+    # rather than crashing, so a misshapen payload still emits a row.
+    raw_correlation = raw.get("correlation_id")
+    if isinstance(raw_correlation, str) and 0 < len(raw_correlation) <= MAX_CORRELATION_ID_LEN:
+        # Run through bounded() so a secret-shaped correlation_id drops only
+        # the field instead of triggering the whole-row scrubber reject.
+        scrubbed = bounded(raw_correlation, MAX_CORRELATION_ID_LEN)
+        if scrubbed:
+            event["correlation_id"] = scrubbed
+
+    gate_loaded_ids = raw.get("gate_loaded_ids")
+    if isinstance(gate_loaded_ids, list):
+        coerced: list[str] = []
+        for member in gate_loaded_ids:
+            if not isinstance(member, (str, int)):
+                continue
+            text = str(member)
+            # Per-member length cap: drop oversized ids rather than truncating,
+            # since a truncated id might collide with a real one.
+            if len(text) > MAX_GATE_LOADED_ID_LEN:
+                continue
+            coerced.append(text)
+            if len(coerced) >= MAX_GATE_LOADED_IDS:
+                break
+        if coerced:
+            event["gate_loaded_ids"] = coerced
+
+    event["schema_version"] = SCHEMA_VERSION
     return {key: value for key, value in event.items() if value is not None}
 
 
