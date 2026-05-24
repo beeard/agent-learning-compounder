@@ -24,12 +24,11 @@ from map_active_skills import build_map
 from propose_domain_rules import parse_chunks, score_terms
 from queue_dedup import find_duplicates, order_by_keep
 from scrub_secrets import scrub
-from state_paths import repo_state_dir, resolve_state_dir
+from state_paths import atomic_rewrite, atomic_write_text, repo_state_dir, resolve_state_dir
 
 
 def write_json(path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    atomic_write_text(path, json.dumps(payload, indent=2, sort_keys=True) + "\n")
     return path
 
 
@@ -122,10 +121,11 @@ def _post_dedup(
     """Dedup queue in place using trigram-Dice.
 
     Called after queue_candidate_adjustments so duplicate near-paraphrases
-    from prior runs are collapsed in-process. Re-opens the queue under
-    LOCK_EX and rewrites it (truncate-in-place under the lock; serialized
-    against other lock holders but not crash-atomic — a process death
-    mid-write leaves the file truncated). Returns the count of rows removed.
+    from prior runs are collapsed in-process. Holds the sidecar lock for
+    queue_path across read+compute+commit so a sibling refresh cannot
+    interleave appends, and writes the new content via tmp+fsync+rename
+    so SIGKILL mid-write leaves the queue at its prior content rather
+    than truncating it.
 
     Persisted queue rows written by refresh use ``candidate_adjustment``
     rather than ``text``, so we synthesize a view-row carrying ``text``
@@ -133,40 +133,31 @@ def _post_dedup(
     """
     if not queue_path.exists():
         return 0
-    # Read and rewrite under the same LOCK_EX. Reading before the lock
-    # would leave a TOCTOU window where another process could append
-    # rows between the read and the truncate, silently losing them.
-    with queue_path.open("r+", encoding="utf-8") as fh:
-        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
-        try:
-            fh.seek(0)
-            lines = [ln for ln in fh.read().splitlines() if ln]
-            rows = []
-            for ln in lines:
-                try:
-                    rows.append(json.loads(ln))
-                except json.JSONDecodeError:
-                    continue
-            if len(rows) < 2:
-                return 0
-            view = [
-                dict(r, text=r.get("text") or str(r.get("candidate_adjustment", "")))
-                for r in rows
-            ]
-            priority = order_by_keep(view, "oldest")
-            reordered_view = [view[i] for i in priority]
-            reordered_rows = [rows[i] for i in priority]
-            drop = find_duplicates(reordered_view, backend, threshold)
-            if not drop:
-                return 0
-            kept = [r for i, r in enumerate(reordered_rows) if i not in drop]
-            fh.seek(0)
-            fh.truncate()
-            for r in kept:
-                fh.write(json.dumps(r, sort_keys=True) + "\n")
-        finally:
-            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
-    return len(drop)
+    removed = 0
+    with atomic_rewrite(queue_path) as (current_text, commit):
+        lines = [ln for ln in current_text.splitlines() if ln]
+        rows = []
+        for ln in lines:
+            try:
+                rows.append(json.loads(ln))
+            except json.JSONDecodeError:
+                continue
+        if len(rows) < 2:
+            return 0
+        view = [
+            dict(r, text=r.get("text") or str(r.get("candidate_adjustment", "")))
+            for r in rows
+        ]
+        priority = order_by_keep(view, "oldest")
+        reordered_view = [view[i] for i in priority]
+        reordered_rows = [rows[i] for i in priority]
+        drop = find_duplicates(reordered_view, backend, threshold)
+        if not drop:
+            return 0
+        kept = [r for i, r in enumerate(reordered_rows) if i not in drop]
+        commit("\n".join(json.dumps(r, sort_keys=True) for r in kept) + "\n")
+        removed = len(drop)
+    return removed
 
 
 def _inherited_gates(gates_md_path: pathlib.Path) -> dict[str, str]:
