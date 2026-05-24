@@ -16,6 +16,12 @@ Post-review fixes:
   skill roots.
 - Optional dependency docs now distinguish archive-root and installed-root
   `requirements-optional.txt` paths.
+- Release packaging is now reproducible. The exclusion set previously inlined
+  in `install.sh` lives in `scripts/sanitize_skill_tree.sh` and is sourced by
+  both the installer and the new `scripts/build_release.sh`. Archives are
+  rebuilt with sorted filenames, a fixed mtime, numeric ownership, and a
+  gzip header with no embedded timestamp, so two runs produce byte-identical
+  output. `dist/SHA256SUMS` now covers every archive in `dist/`.
 
 New capabilities:
 - **Phase 1 (schema versioning + replay):** `bin/collect_hook_event` now

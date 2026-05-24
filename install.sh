@@ -31,6 +31,14 @@ USAGE
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 skill_src="$script_dir/agent-learning-compounder"
 
+sanitizer="$script_dir/scripts/sanitize_skill_tree.sh"
+if [ ! -f "$sanitizer" ]; then
+  echo "missing $sanitizer (required for install-time sanitization)" >&2
+  exit 1
+fi
+# shellcheck source=scripts/sanitize_skill_tree.sh
+. "$sanitizer"
+
 target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
 runtime="auto"
 bootstrap_repo=""
@@ -145,12 +153,6 @@ copy_skill() {
   dest="$1"
   cp -a "$skill_src" "$dest"
   sanitize_skill_tree "$dest"
-}
-
-sanitize_skill_tree() {
-  root="$1"
-  find "$root" \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.agent-learning' \) -type d -prune -exec rm -rf {} +
-  find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
 }
 
 while [ "$#" -gt 0 ]; do
