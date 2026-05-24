@@ -8,13 +8,13 @@ import datetime as dt
 import fcntl
 import hashlib
 import json
-import stat
 import pathlib
 import sys
 import time
 from typing import Any
 
 from build_repo_baseline import build as build_baseline
+from collect_hook_event import assert_regular_file_destination
 from evaluate_gate_effectiveness import evaluate as evaluate_gates
 from evaluate_gate_effectiveness import load_sessions
 from evaluate_skill_impact import evaluate as evaluate_impact
@@ -42,33 +42,6 @@ def stable_queue_id(row: dict[str, Any]) -> str:
         ]
     )
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
-
-
-def existing_queue_ids(path: pathlib.Path) -> set[str]:
-    if not path.exists():
-        return set()
-    ids = set()
-    for line in path.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if payload.get("id"):
-            ids.add(str(payload["id"]))
-    return ids
-
-
-def assert_regular_file_destination(path: pathlib.Path, *, label: str) -> None:
-    try:
-        mode = path.lstat().st_mode
-    except FileNotFoundError:
-        return
-    if stat.S_ISLNK(mode):
-        raise ValueError(f"{label} is a symlink; refusing to write queue output to {path}")
-    if not stat.S_ISREG(mode):
-        raise ValueError(f"{label} is not a regular file; refusing to write queue output to {path}")
 
 
 def queue_candidate_adjustments(path: pathlib.Path, impact: dict[str, Any]) -> dict[str, int]:

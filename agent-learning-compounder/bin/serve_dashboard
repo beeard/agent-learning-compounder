@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Launch the operator dashboard on localhost."""
+"""Launch the operator dashboard on localhost.
+
+By default refuses any non-loopback --host because the dashboard ships
+without authentication; pass --insecure-public to override (e.g. for
+deliberate trusted-network exposure).
+"""
 from __future__ import annotations
 
 import argparse
@@ -7,16 +12,56 @@ import sys
 from pathlib import Path
 
 
-def parse_args():
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def is_loopback_host(host: str) -> bool:
+    """Return True if `host` refers to a loopback interface."""
+    return host.strip().lower() in LOOPBACK_HOSTS
+
+
+def validate_host(host: str, insecure_public: bool) -> str | None:
+    """Return an error message if the host/flag combination is unsafe, else None."""
+    if is_loopback_host(host):
+        return None
+    if insecure_public:
+        return None
+    return (
+        f"refusing to bind dashboard to non-loopback host {host!r}: "
+        "the dashboard has no authentication. Re-run with --insecure-public "
+        "to acknowledge the risk, or use --host 127.0.0.1 (default)."
+    )
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo", required=True, type=Path)
-    p.add_argument("--host", default="127.0.0.1")
+    p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help=(
+            "Bind address. Non-loopback values (anything other than 127.0.0.1, "
+            "::1, or localhost) require --insecure-public."
+        ),
+    )
     p.add_argument("--port", type=int, default=8765)
-    return p.parse_args()
+    p.add_argument(
+        "--insecure-public",
+        action="store_true",
+        help=(
+            "Allow binding to a non-loopback --host. The dashboard has no auth; "
+            "only use this on a trusted network."
+        ),
+    )
+    return p.parse_args(argv)
 
 
 def main():
     args = parse_args()
+    err = validate_host(args.host, args.insecure_public)
+    if err is not None:
+        print(err, file=sys.stderr)
+        return 2
     try:
         import uvicorn
     except ImportError:

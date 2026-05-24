@@ -22,11 +22,25 @@ import time
 from pathlib import Path
 from typing import Any
 
-# Reuse the symlink-rejection helper from the collector. Path-insert keeps the
-# import valid whether the server is invoked as `python3 -m alc_mcp.server`
+# Reuse helpers from the collector and the state-paths module. Path-insert
+# keeps imports valid whether the server is invoked as `python3 -m alc_mcp.server`
 # from the package root or run directly from the alc_mcp/ directory.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
-from collect_hook_event import assert_regular_file_destination  # noqa: E402
+from collect_hook_event import assert_regular_file_destination, bounded  # noqa: E402
+from scrub_secrets import scrub  # noqa: E402
+from state_paths import repo_state_dir  # noqa: E402
+
+
+# Bounds for handler-side string fields. The collector caps free-form text at
+# 160 chars via `bounded()`; we match that for outcome/evidence/gate text so a
+# tool caller can't bloat a JSONL row beyond the line-per-event invariant.
+_MAX_GATE_ID_LEN = 64
+_MAX_OUTCOME_LEN = 64
+_MAX_DOMAIN_LEN = 80
+_MAX_CATEGORY_LEN = 80
+_MAX_GATE_TEXT_LEN = 200
+_MAX_EVIDENCE_LEN = 500
+_MAX_CORRELATION_ID_LEN = 128
 
 
 def _latest_gates_path(repo: Path) -> Path:
@@ -50,16 +64,54 @@ def _latest_skill_context_path(repo: Path) -> Path:
 
 
 def _improvement_queue_path(repo: Path) -> Path:
-    return next((repo / ".agent-learning" / "repos").rglob("improvement-queue.jsonl"))
+    # Route through state_paths.repo_state_dir so multi-repo state roots (and
+    # --state-dir / AGENT_LEARNING_STATE_DIR overrides) select the correct
+    # subdirectory rather than picking the first one found via rglob().
+    path = repo_state_dir(repo) / "improvement-queue.jsonl"
+    if not path.is_file():
+        raise FileNotFoundError(
+            "improvement queue missing; run init_learning_system first"
+        )
+    return path
 
 
 def _hook_events_path(repo: Path) -> Path:
-    repos_dir = repo / ".agent-learning" / "repos"
-    # find or create the events log
-    rids = list(repos_dir.iterdir())
-    if not rids:
-        raise FileNotFoundError(".agent-learning/repos has no repo-id subdir")
-    return rids[0] / "hook-events.jsonl"
+    # Same multi-repo correctness reason as _improvement_queue_path. The hook
+    # events log is created on first write, so we don't pre-check existence —
+    # the dir is what must exist.
+    state_dir = repo_state_dir(repo)
+    if not state_dir.is_dir():
+        raise FileNotFoundError(
+            "hook events directory missing; run init_learning_system first"
+        )
+    return state_dir / "hook-events.jsonl"
+
+
+def _require_bounded(value: Any, limit: int, field: str) -> str:
+    """Run a user-supplied string through the collector's bounded() helper.
+
+    Returns the sanitized text. Raises ValueError if the result is empty (the
+    input was missing, all whitespace, or contained secret-shaped content that
+    bounded() refused to keep).
+    """
+    if value is None or value == "":
+        raise ValueError(f"{field} is required")
+    text = bounded(value, limit)
+    if not text:
+        raise ValueError(f"{field} rejected (empty after sanitization or contained secret-shaped content)")
+    return text
+
+
+def _reject_if_redacted(row: dict, *, label: str) -> str:
+    """Render row to JSON, run secret scrubber, reject on [REDACTED marker.
+
+    Mirrors collect_hook_event.main()'s post-normalize guard so the MCP path
+    cannot persist secret-shaped values that slipped past the per-field cap.
+    """
+    rendered = scrub(json.dumps(row, sort_keys=True, separators=(",", ":")))
+    if "[REDACTED" in rendered:
+        raise ValueError(f"{label} contains secret-like content after scrubbing")
+    return rendered
 
 
 async def get_gates_handler(args: dict) -> list[dict]:
@@ -109,18 +161,30 @@ async def report_outcome_handler(args: dict) -> dict:
     # Refuse to follow a symlink at the destination — matches the defense
     # pattern in collect_hook_event for adversarial telemetry redirection.
     assert_regular_file_destination(log, label="MCP report_outcome target")
+
+    # Run user-supplied fields through the collector's bounded() helper so a
+    # newline can't break the line-per-event invariant and oversize/secret-
+    # shaped values are dropped before assembly.
+    gate_id = _require_bounded(args.get("gate_id"), _MAX_GATE_ID_LEN, "gate_id")
+    outcome = _require_bounded(args.get("outcome"), _MAX_OUTCOME_LEN, "outcome")
+    correlation_raw = args.get("correlation_id", "")
+    correlation_id = bounded(correlation_raw, _MAX_CORRELATION_ID_LEN) if correlation_raw else ""
+    if correlation_raw and not correlation_id:
+        raise ValueError("correlation_id rejected (empty after sanitization or contained secret-shaped content)")
+
     row = {
         "schema_version": 2,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "event": "tool_report_outcome",
-        "correlation_id": args.get("correlation_id", ""),
-        "gate_loaded_ids": [args["gate_id"]],
-        "outcome": args["outcome"],
+        "correlation_id": correlation_id,
+        "gate_loaded_ids": [gate_id],
+        "outcome": outcome,
     }
+    rendered = _reject_if_redacted(row, label="report_outcome event")
     fd = os.open(str(log), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
     with os.fdopen(fd, "a", encoding="utf-8") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
-        fh.write(json.dumps(row, sort_keys=True) + "\n")
+        fh.write(rendered + "\n")
     return {"recorded": True}
 
 
@@ -128,22 +192,35 @@ async def propose_gate_handler(args: dict) -> dict:
     repo = Path(args["repo"]).resolve()
     queue = _improvement_queue_path(repo)
     assert_regular_file_destination(queue, label="MCP propose_gate target")
+
+    # All user-supplied fields go through bounded() to strip newlines, cap
+    # length, and reject secret-shaped values — matching the collector's
+    # contract so JSONL stays parseable line-by-line.
+    domain = _require_bounded(args.get("domain"), _MAX_DOMAIN_LEN, "domain")
+    category = _require_bounded(args.get("category"), _MAX_CATEGORY_LEN, "category")
+    gate_text = _require_bounded(args.get("gate"), _MAX_GATE_TEXT_LEN, "gate")
+    evidence_raw = args.get("evidence", "")
+    evidence = bounded(evidence_raw, _MAX_EVIDENCE_LEN) if evidence_raw else ""
+    if evidence_raw and not evidence:
+        raise ValueError("evidence rejected (empty after sanitization or contained secret-shaped content)")
+
     h = hashlib.sha256(
-        f"{args['domain']}|{args['category']}|{args['gate']}".encode("utf-8")
+        f"{domain}|{category}|{gate_text}".encode("utf-8")
     ).hexdigest()[:12]
     queue_id = f"proposed-{h}-{int(time.time())}"
     row = {
         "id": queue_id,
         "kind": "operator_proposed_gate",
-        "domain": args["domain"],
-        "category": args["category"],
-        "text": args["gate"],
-        "evidence": args.get("evidence", ""),
+        "domain": domain,
+        "category": category,
+        "text": gate_text,
+        "evidence": evidence,
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
+    rendered = _reject_if_redacted(row, label="propose_gate row")
     with queue.open("a", encoding="utf-8") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
-        fh.write(json.dumps(row, sort_keys=True) + "\n")
+        fh.write(rendered + "\n")
     return {"queue_id": queue_id}
 
 

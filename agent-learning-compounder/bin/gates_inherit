@@ -6,6 +6,7 @@ Idempotent: reruns are no-ops if the gate_id is already present in the target.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import re
 import sys
@@ -17,6 +18,9 @@ from collect_hook_event import assert_regular_file_destination  # noqa: E402
 
 GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
 REQUIRED_RECORD_FIELDS = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "promoted_at")
+# Conflict exit code: distinct from invalid-input (2) so callers can tell apart
+# a same-gate_id / different-origin collision from a malformed-record refusal.
+EXIT_CONFLICT = 3
 
 
 def validate_gate_id(gate_id: str) -> None:
@@ -50,14 +54,58 @@ def gate_already_present(target: Path, gate_id: str) -> bool:
     return bool(pattern.search(target.read_text(encoding="utf-8")))
 
 
-def append_gate(target: Path, record: dict):
-    block = (
-        f"\n- domain: {record['domain']}\n"
-        f"  gate_id: {record['gate_id']}\n"
-        f"  gate_category: {record['gate_category']}\n"
-        f"  gate: {record['gate']}\n"
+def _existing_derived_from(text: str, gate_id: str) -> str | None:
+    """Return the derived_from value for an already-present gate_id, or None.
+
+    Walks block-by-block (split on "- domain:") because the gate_id and
+    derived_from for the same gate live in adjacent indented lines under
+    one block — a flat regex over the whole file could cross block
+    boundaries on a malformed file.
+    """
+    blocks = text.split("\n- domain:")
+    for block in blocks[1:]:
+        block_gate_id: str | None = None
+        derived_from: str | None = None
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if line.startswith("gate_id:"):
+                block_gate_id = line.split(":", 1)[1].strip()
+            elif line.startswith("derived_from:"):
+                derived_from = line.split(":", 1)[1].strip()
+        if block_gate_id == gate_id:
+            return derived_from or ""
+    return None
+
+
+def _gate_block(record: dict) -> str:
+    """Render the gate block once, validating extra fields up front.
+
+    Kept separate from the file write so the validation can run while we
+    hold the file lock without leaving the destination half-written.
+    """
+    lines = [
+        f"\n- domain: {record['domain']}\n",
+        f"  gate_id: {record['gate_id']}\n",
+        f"  gate_category: {record['gate_category']}\n",
+        f"  gate: {record['gate']}\n",
+    ]
+    # Preserve non-default severity when the shared record carries one.
+    # Older records (pre-level) round-trip with no level emitted — no default
+    # invented at the federation boundary.
+    level = record.get("level")
+    if isinstance(level, str) and level:
+        if "\n" in level or "\r" in level:
+            raise ValueError("field contains a newline: level")
+        lines.append(f"  level: {level}\n")
+    lines.append(
         f"  derived_from: {record['origin_repo']}:{record['gate_id']}:{record['promoted_at']}\n"
     )
+    return "".join(lines)
+
+
+def append_gate(target: Path, record: dict):
+    """Append a single gate block, kept for callers/tests that import it."""
+    block = _gate_block(record)
     with target.open("a", encoding="utf-8") as fh:
         fh.write(block)
 
@@ -89,17 +137,60 @@ def main():
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    if gate_already_present(args.target_gates, args.gate_id):
-        return 0
     try:
         record = json.loads(record_path.read_text(encoding="utf-8"))
         if not isinstance(record, dict):
             raise ValueError("record must be a JSON object")
         validate_record(record, args.gate_id)
+        block = _gate_block(record)
     except (json.JSONDecodeError, ValueError) as exc:
         print(f"invalid shared gate record: {exc}", file=sys.stderr)
         return 2
-    append_gate(args.target_gates, record)
+
+    # Open the target r+ and hold LOCK_EX across read+check+write. Two
+    # concurrent inherits of the same gate_id can no longer both observe
+    # absence; the loser sees the winner's row and either no-ops (same
+    # origin_repo) or exits EXIT_CONFLICT (different origin_repo).
+    # Pattern mirrors refresh_learning_state.queue_candidate_adjustments.
+    try:
+        handle = args.target_gates.open("r+", encoding="utf-8")
+    except OSError as exc:
+        print(f"failed to open target gates: {exc}", file=sys.stderr)
+        return 2
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            handle.seek(0)
+            current_text = handle.read()
+            existing_derived = _existing_derived_from(current_text, args.gate_id)
+            if existing_derived is not None:
+                incoming_derived = (
+                    f"{record['origin_repo']}:{record['gate_id']}:{record['promoted_at']}"
+                )
+                # Treat unknown/missing derived_from as "matches nothing":
+                # we can't prove the origin, so refuse rather than silently
+                # accept a possibly-distinct origin's gate as the same row.
+                if existing_derived == incoming_derived:
+                    return 0
+                # Same gate_id, different origin_repo (or different
+                # promoted_at) — provenance would be lost if we silently
+                # no-op'd. Exit non-zero so the caller knows to investigate.
+                print(
+                    f"gate_id {args.gate_id} already inherited from "
+                    f"{existing_derived!r}; refusing to re-inherit from "
+                    f"{incoming_derived!r}",
+                    file=sys.stderr,
+                )
+                return EXIT_CONFLICT
+            # Absent — append under the lock so no concurrent inherit can
+            # interleave a duplicate.
+            handle.seek(0, 2)  # to end
+            handle.write(block)
+            handle.flush()
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
     return 0
 
 

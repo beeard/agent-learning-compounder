@@ -134,20 +134,12 @@ def is_include_directive(line: str) -> str | None:
     return target
 
 
-def is_relative_to(path: pathlib.Path, parent: pathlib.Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True
-
-
 def resolve_include(repo: pathlib.Path, current_file: pathlib.Path, target: str) -> pathlib.Path:
     path = pathlib.Path(target)
     if path.is_absolute():
         raise ValueError(f"absolute @include paths are not supported: {target}")
     include_path = (current_file.parent / path).resolve()
-    if not is_relative_to(include_path, repo):
+    if not include_path.is_relative_to(repo.resolve()):
         raise ValueError(f"out-of-repo @include blocked: {target}")
     return include_path
 

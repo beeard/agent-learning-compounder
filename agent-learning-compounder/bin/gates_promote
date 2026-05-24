@@ -70,7 +70,7 @@ def find_gate(gates_md: Path, gate_id: str) -> dict[str, str] | None:
 
 
 def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str, str]:
-    return {
+    record = {
         "domain": block["domain"],
         "gate_id": block["gate_id"],
         "gate_category": block.get("gate_category", ""),
@@ -79,6 +79,12 @@ def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str
         "promoted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "note": note,
     }
+    # Preserve non-default severity when the source block carries it. Older
+    # gates (pre-level) round-trip with no level field — no default invented.
+    level = block.get("level")
+    if level:
+        record["level"] = level
+    return record
 
 
 def validate_gate_id(gate_id: str) -> None:

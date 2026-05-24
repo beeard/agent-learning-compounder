@@ -48,6 +48,22 @@ def cosine(u, v) -> float:
     return float(sum(a * b for a, b in zip(u, v)))
 
 
+def _bucket_key(row):
+    """Bucket by (kind, domain, skill) so dedup never collapses across them.
+
+    A near-identical ``text`` can be a legitimately distinct candidate in a
+    different domain or for a different skill (e.g. the same proposed gate
+    wording posted against ``cloudflare`` vs ``rails``, or the same retirement
+    candidate adjustment raised for two different skills). Use "" for absent
+    keys so missing/null values still group consistently.
+    """
+    return (
+        row.get("kind", "") or "",
+        row.get("domain", "") or "",
+        row.get("skill", "") or "",
+    )
+
+
 def find_duplicates(rows, backend, threshold):
     texts = [r.get("text", "") for r in rows]
     if backend == "embed":
@@ -61,15 +77,22 @@ def find_duplicates(rows, backend, threshold):
     else:
         def sim(i, j): return cosine(vectors[i], vectors[j])
 
+    # Group row indices by (kind, domain, skill). Only compare rows within
+    # the same bucket; rows in different buckets are never collapsed.
+    buckets: dict[tuple[str, str, str], list[int]] = {}
+    for idx, row in enumerate(rows):
+        buckets.setdefault(_bucket_key(row), []).append(idx)
+
     drop = set()
-    for i in range(len(rows)):
-        if i in drop:
-            continue
-        for j in range(i + 1, len(rows)):
-            if j in drop:
+    for indices in buckets.values():
+        for a, i in enumerate(indices):
+            if i in drop:
                 continue
-            if sim(i, j) >= threshold:
-                drop.add(j)
+            for j in indices[a + 1:]:
+                if j in drop:
+                    continue
+                if sim(i, j) >= threshold:
+                    drop.add(j)
     return drop
 
 

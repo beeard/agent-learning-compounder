@@ -83,6 +83,36 @@ class ExtendedPatternsTests(unittest.TestCase):
         )
         self.assertNotIn("abcdef1234567890XYZ", out)
 
+    def test_azure_storage_account_key(self):
+        # 88-char base64 ending with `==`, no prefix. Surround with whitespace
+        # so the word-boundary lookbehind/lookahead anchor cleanly.
+        key = "A" * 86 + "=="
+        out = scrub(f"storage_key {key} more")
+        self.assertIn("[REDACTED:azure_storage_key]", out)
+        self.assertNotIn(key, out)
+
+    def test_escaped_pem_in_json(self):
+        # Service-account JSON style: PEM rendered with literal `\n` escapes.
+        # The double-backslash form survives an extra JSON encoding pass.
+        secret_body = "MIIBVwIBADANBgkqhkiG9w0BAQEFAASCAUEwggE9AgEAAkEA1234"
+        payload = (
+            '{"private_key": "-----BEGIN PRIVATE KEY-----\\n'
+            + secret_body
+            + '\\n-----END PRIVATE KEY-----"}'
+        )
+        out = scrub(payload)
+        # Either the dedicated escaped-PEM pattern or the generic
+        # private_key_block / secret-assignment pattern must claim it.
+        self.assertNotIn(secret_body, out)
+        self.assertIn("[REDACTED:", out)
+
+    def test_bearer_token_with_base64_chars(self):
+        # base64 bearer payloads contain `+` and `/`; the old charset missed them.
+        token = "ab+cd/efGHij0123456789+/PQRStu=="
+        out = scrub(f"Authorization: Bearer {token}")
+        self.assertIn("[REDACTED:bearer_token]", out)
+        self.assertNotIn(token, out)
+
 
 if __name__ == "__main__":
     unittest.main()

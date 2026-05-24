@@ -129,5 +129,140 @@ class McpServerTools(unittest.TestCase):
         self.assertEqual(rows[0]["outcome"], "loaded_helpful")
 
 
+class McpServerHandlerHardening(unittest.TestCase):
+    """Bug-fix coverage for multi-repo selection, scrubbing, and error clarity.
+
+    These tests exercise the handler functions directly. Per the README, the
+    handlers are import-safe without the `mcp` SDK, so we don't gate on it —
+    that lets the suite catch regressions even on a bare CI image. If the
+    server module can't be imported for any other reason, we still skip
+    cleanly so this file stays useful in degraded environments.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, str(REPO_ROOT))
+        sys.path.insert(0, str(REPO_ROOT / "bin"))
+        try:
+            from alc_mcp.server import (  # noqa: F401
+                propose_gate_handler, report_outcome_handler,
+            )
+        except ImportError as e:
+            self.skipTest(f"alc_mcp.server not importable: {e}")
+        import state_paths  # type: ignore
+        self._state_paths = state_paths
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+
+    def tearDown(self):
+        if hasattr(self, "tmp"):
+            self.tmp.cleanup()
+
+    def _make_repo(self, name: str) -> Path:
+        """Build a minimal initialized repo with its repo_state_dir populated."""
+        repo = self.root / name
+        repo.mkdir(parents=True)
+        # repo_state_dir resolves via resolve_state_dir(None, None, repo) which
+        # returns <repo>/.agent-learning, then appends /repos/<repo_id>.
+        rsd = self._state_paths.repo_state_dir(repo)
+        rsd.mkdir(parents=True, exist_ok=True)
+        (rsd / "improvement-queue.jsonl").write_text("", encoding="utf-8")
+        (rsd / "hook-events.jsonl").write_text("", encoding="utf-8")
+        return repo
+
+    def test_multi_repo_state_root_selects_correct_repo(self):
+        """When the same state root contains multiple repos, handlers must
+        operate on the repo identified by the call args — not the lexicographic
+        first one found via rglob/iterdir."""
+        from alc_mcp.server import propose_gate_handler, report_outcome_handler
+
+        repo_a = self._make_repo("alpha")
+        repo_b = self._make_repo("bravo")
+
+        # Sanity: distinct state dirs.
+        rsd_a = self._state_paths.repo_state_dir(repo_a)
+        rsd_b = self._state_paths.repo_state_dir(repo_b)
+        self.assertNotEqual(rsd_a, rsd_b)
+
+        # propose_gate should land in repo_b's queue only.
+        result = asyncio.run(propose_gate_handler({
+            "repo": str(repo_b),
+            "domain": "tests",
+            "category": "validation-check",
+            "gate": "Run pytest before claiming done.",
+            "evidence": "multi-repo selection test",
+        }))
+        queue_id = result["queue_id"]
+
+        queue_a = (rsd_a / "improvement-queue.jsonl").read_text()
+        queue_b = (rsd_b / "improvement-queue.jsonl").read_text()
+        self.assertNotIn(queue_id, queue_a, "row leaked into wrong repo's queue")
+        self.assertIn(queue_id, queue_b)
+
+        # report_outcome should land in repo_a's events log only.
+        asyncio.run(report_outcome_handler({
+            "repo": str(repo_a),
+            "gate_id": "abc123",
+            "outcome": "loaded_helpful",
+            "correlation_id": "session-multi",
+        }))
+        log_a = (rsd_a / "hook-events.jsonl").read_text()
+        log_b = (rsd_b / "hook-events.jsonl").read_text()
+        self.assertIn("loaded_helpful", log_a)
+        self.assertNotIn("loaded_helpful", log_b)
+
+    def test_report_outcome_newline_in_outcome_keeps_jsonl_parseable(self):
+        """A newline in outcome must not break the line-per-event invariant —
+        either the row is rejected or the newline is sanitized away."""
+        from alc_mcp.server import report_outcome_handler
+
+        repo = self._make_repo("nlrepo")
+        rsd = self._state_paths.repo_state_dir(repo)
+        log = rsd / "hook-events.jsonl"
+
+        payload = {
+            "repo": str(repo),
+            "gate_id": "abc123",
+            "outcome": "loaded_helpful\nFAKE_ROW_INJECTED=true",
+            "correlation_id": "session-nl",
+        }
+
+        try:
+            asyncio.run(report_outcome_handler(payload))
+        except ValueError:
+            # Rejection is an acceptable outcome.
+            pass
+
+        body = log.read_text(encoding="utf-8")
+        non_empty = [ln for ln in body.splitlines() if ln]
+        # The core invariant: a newline in user input must not split one
+        # logical event across multiple JSONL lines. Either zero rows
+        # (rejected) or exactly one parseable row (sanitized).
+        self.assertLessEqual(len(non_empty), 1)
+        for line in non_empty:
+            row = json.loads(line)  # must parse — invariant under test
+            self.assertNotIn("\n", row.get("outcome", ""))
+
+    def test_propose_gate_uninitialized_repo_returns_descriptive_error(self):
+        """When .agent-learning/repos/ doesn't exist, the handler must raise
+        a descriptive error rather than yielding an empty error string."""
+        from alc_mcp.server import propose_gate_handler
+
+        repo = self.root / "uninit"
+        repo.mkdir()
+        # Intentionally do NOT create .agent-learning/repos/.
+
+        with self.assertRaises(Exception) as ctx:
+            asyncio.run(propose_gate_handler({
+                "repo": str(repo),
+                "domain": "tests",
+                "category": "validation-check",
+                "gate": "Some gate",
+            }))
+        message = str(ctx.exception)
+        self.assertTrue(message.strip(), "error message must not be empty")
+        self.assertIn("init_learning_system", message)
+
+
 if __name__ == "__main__":
     unittest.main()

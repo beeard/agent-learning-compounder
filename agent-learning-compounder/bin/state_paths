@@ -63,11 +63,3 @@ def resolve_state_dir(
 def repo_state_dir(repo: str | pathlib.Path, state_dir: str | pathlib.Path | None = None, personal: str | pathlib.Path | None = None) -> pathlib.Path:
     root = resolve_state_dir(state_dir, personal, repo)
     return root / "repos" / repo_id(pathlib.Path(repo))
-
-
-def is_relative_to(path: pathlib.Path, parent: pathlib.Path) -> bool:
-    try:
-        path.resolve().relative_to(parent.resolve())
-    except ValueError:
-        return False
-    return True

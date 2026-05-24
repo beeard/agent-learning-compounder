@@ -26,6 +26,23 @@ def write_json(path: pathlib.Path, data: dict) -> pathlib.Path:
     return path
 
 
+def _read_json_or_none(path: pathlib.Path) -> dict | None:
+    if not path.exists():
+        return None
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def merge_write_json(path: pathlib.Path, data: dict) -> pathlib.Path:
+    """Write JSON merging with existing payload. Current-run keys win on collision."""
+    existing = _read_json_or_none(path) or {}
+    merged = {**existing, **data}
+    return write_json(path, merged)
+
+
 def write_text_if_missing(path: pathlib.Path, text: str) -> pathlib.Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
@@ -168,10 +185,20 @@ def install_refresh_manifest(repo: pathlib.Path, state_root: pathlib.Path, repo_
     return {"refresh_manifest": manifest, "improvement_queue": queue_path}
 
 
-def install_domain_rules(repo_state: pathlib.Path, domain_rules: str | None, domain_preset: str) -> pathlib.Path:
+def install_domain_rules(
+    repo_state: pathlib.Path,
+    domain_rules: str | None,
+    domain_preset: str,
+    explicit: bool = True,
+) -> pathlib.Path:
+    output = repo_state / "domain-rules.active.json"
+    # If the operator did not explicitly pass --domain-rules or --domain-preset
+    # and a domain-rules.active.json already exists, preserve it verbatim so
+    # operator edits are not silently lost.
+    if not explicit and output.exists():
+        return output
     source = pathlib.Path(domain_rules).expanduser() if domain_rules else packaged_domain_rules_path(domain_preset)
     rules = load_domain_rules(source)
-    output = repo_state / "domain-rules.active.json"
     return write_json(
         output,
         {
@@ -271,16 +298,22 @@ def install_repo_integration(
                 "hook_input": "stdin-json",
             }
         )
-    else:
+    config = repo / ".agent-learning.json"
+    ensure_repo_local_config_untracked(repo, config)
+    # Merge with any existing payload so a re-run without --install-hooks does
+    # not silently drop hook_command/hook_manifest/hook_event_log (or any other
+    # keys the current run did not explicitly populate). Current-run keys win
+    # on collision.
+    existing = _read_json_or_none(config) or {}
+    merged = {**existing, **payload}
+    if not hook_paths and not any(k in merged for k in ("hook_command", "hook_manifest", "hook_event_log")):
         print(
             "warning: writing .agent-learning.json without hook_command/hook_manifest/hook_event_log; "
             "install_runtime_hooks --apply will abort. Rerun init with --install-hooks to populate them.",
             file=sys.stderr,
         )
-    config = repo / ".agent-learning.json"
-    ensure_repo_local_config_untracked(repo, config)
     config.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        json.dumps(merged, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
     ensure_repo_local_config_ignored(repo, config)
@@ -352,6 +385,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
 
+    # Detect whether the operator explicitly passed a domain flag. argparse
+    # cannot tell defaulted values from explicit ones, so we inspect argv.
+    raw_argv = list(argv) if argv is not None else sys.argv[1:]
+    domain_explicit = any(
+        a == "--domain-rules" or a.startswith("--domain-rules=")
+        or a == "--domain-preset" or a.startswith("--domain-preset=")
+        for a in raw_argv
+    )
+
     repo = pathlib.Path(args.repo).expanduser().resolve()
     runtime = resolve_runtime(args.runtime, repo)
     state_root = resolve_state_dir(args.state_dir, args.personal, repo)
@@ -359,14 +401,23 @@ def main(argv: list[str] | None = None) -> int:
     repo_state = repo_state_dir(repo, state_root)
     reports = repo_state / "reports"
     reports.mkdir(parents=True, exist_ok=True)
+    domain_rules_output = repo_state / "domain-rules.active.json"
+    domain_rules_preexisted = domain_rules_output.exists()
     try:
-        domain_rules_path = install_domain_rules(repo_state, args.domain_rules, args.domain_preset)
+        domain_rules_path = install_domain_rules(
+            repo_state, args.domain_rules, args.domain_preset, explicit=domain_explicit
+        )
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1
+    config_path = state_root / "config.json"
+    now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+    existing_config = _read_json_or_none(config_path) or {}
+    # Preserve created_at from the first run; only set it when not present.
+    created_at = existing_config.get("created_at") or now_iso
     config = {
         "state_version": 1,
-        "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+        "created_at": created_at,
         "repo": str(repo),
         "repo_id": repo_id(repo),
         "runtime": runtime,
@@ -374,13 +425,30 @@ def main(argv: list[str] | None = None) -> int:
         "personal": str(pathlib.Path(args.personal).expanduser().resolve()) if args.personal else None,
         "retention": {"hook_event_days": 30, "max_hook_event_bytes": 5_000_000},
     }
-    write_json(state_root / "config.json", config)
+    # Merge so any operator-added or future keys are preserved.
+    merge_write_json(config_path, config)
     baseline = build_baseline(repo, runtime=runtime)
     skill_map = build_map(repo, runtime=runtime)
-    write_json(repo_state / "baseline.json", baseline)
-    write_json(repo_state / "skill-map.json", skill_map)
+    baseline_path = repo_state / "baseline.json"
+    skill_map_path = repo_state / "skill-map.json"
+    skill_context_path = reports / "latest-skill-context.md"
+    overwritten = [p for p in (baseline_path, skill_map_path, skill_context_path) if p.exists()]
+    write_json(baseline_path, baseline)
+    write_json(skill_map_path, skill_map)
     gates_path = write_text_if_missing(reports / "latest-approved-gates.md", render_initial_gate_registry(repo))
-    write_context(reports / "latest-skill-context.md", skill_map, {}, {})
+    write_context(skill_context_path, skill_map, {}, {})
+    if overwritten:
+        print(
+            "notice: overwrote refresh-able artifacts: "
+            + ", ".join(str(p) for p in overwritten),
+            file=sys.stderr,
+        )
+    if domain_rules_preexisted and not domain_explicit:
+        print(
+            f"notice: preserved existing {domain_rules_output} (no --domain-rules/--domain-preset given); "
+            "pass one of those flags to overwrite.",
+            file=sys.stderr,
+        )
     refresh_paths = install_refresh_manifest(repo, state_root, repo_state)
     touched = [
         state_root / "config.json",
