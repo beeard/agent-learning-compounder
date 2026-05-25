@@ -123,15 +123,25 @@ class EventWriterTests(unittest.TestCase):
         self.assertEqual(len(set(parsed)), 100)
 
     def test_apply_revert_round_trip_via_event_id(self):
+        # apply/eval/sync callers MUST pre-compute deterministic_id and pass auto_id_fallback=False
+        # per U5.5.0a contract; this round-trip test enforces that contract.
+        actor_kind = "operator"
+        event_type = "patch_reverted"
+        payload_key = "patch-abc:1700000000"
+        expected = event_writer.EventV4.deterministic_id(
+            actor_kind=actor_kind, event_type=event_type, payload_key=payload_key
+        )
         row = {
-            "event": "patch_reverted",
+            "event": event_type,
             "source": "apply",
             "schema_version": 4,
+            "actor": {"kind": actor_kind, "name": "alc_apply"},
+            "telemetry": {},
             "payload": {"original_bytes_b64": base64.b64encode(b"payload" * 200).decode("ascii")},
-            "ts": "1700000000",
+            "ts": "2023-11-14T22:13:20+00:00",
+            "event_id": expected,
         }
-        expected = event_writer.EventV4.deterministic_id(row)
-        event_id = event_writer.write_event(row, source="apply")
+        event_id = event_writer.write_event(row, source="apply", auto_id_fallback=False)
         self.assertEqual(event_id, expected)
 
         lines = [json.loads(ln) for ln in self._event_path().read_text(encoding="utf-8").splitlines() if ln]

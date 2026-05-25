@@ -27,10 +27,7 @@ except ImportError:
 try:
     from bin.event_schema import EventV4
 except ImportError:
-    try:
-        from event_schema_stub import EventV4
-    except ImportError:
-        from bin.event_schema_stub import EventV4
+    from event_schema import EventV4
 
 
 MAX_LINE_LEN = 200
@@ -162,11 +159,39 @@ def _boundary_checks(event: dict[str, Any], source: EventSource) -> None:
             raise ValueError(f"event boundary violation: overlong field {path}")
 
 
+_SOURCE_TO_DEFAULT_ACTOR_KIND = {
+    "hook": "hook",
+    "transcript": "main_agent",
+    "correlation": "main_agent",
+    "background": "background_agent",
+    "apply": "operator",
+    "eval": "eval_judge",
+}
+
+
 def _coerce_row(raw_or_dataclass: Any, source: EventSource, auto_id_fallback: bool) -> dict[str, Any]:
     if isinstance(raw_or_dataclass, EventV4):
         event = raw_or_dataclass.to_dict()
+        had_event_id = bool(event.get("event_id"))
     elif isinstance(raw_or_dataclass, Mapping):
-        event = EventV4.from_dict(raw_or_dataclass).to_dict()
+        raw = dict(raw_or_dataclass)
+        # Early auto_id_fallback gate — before EventV4.from_dict auto-generates an id.
+        had_event_id = bool(raw.get("event_id"))
+        if not had_event_id and not auto_id_fallback:
+            raise ValueError("event_id missing and auto_id_fallback=False")
+        # Inject required-field defaults so callers (hooks, transcripts) can pass minimal rows.
+        if not raw.get("ts"):
+            raw["ts"] = dt.datetime.now(dt.timezone.utc).isoformat()
+        if raw.get("actor") is None:
+            raw["actor"] = {
+                "kind": _SOURCE_TO_DEFAULT_ACTOR_KIND.get(source, "main_agent"),
+                "name": f"auto:{source}",
+            }
+        event = EventV4.from_dict(raw).to_dict()
+        # EventV4 schema doesn't yet carry `payload`; preserve from raw so
+        # _boundary_checks can scan it. (Proper schema extension is U5.5.1+ work.)
+        if "payload" in raw:
+            event["payload"] = raw["payload"]
     else:
         raise TypeError("write_event expects an EventV4 or mapping")
 
@@ -174,18 +199,20 @@ def _coerce_row(raw_or_dataclass: Any, source: EventSource, auto_id_fallback: bo
     if not event.get("ts"):
         event["ts"] = dt.datetime.now(dt.timezone.utc).isoformat()
 
-    if event.get("event_id"):
+    if had_event_id:
         event_id = str(event["event_id"])
     else:
-        if not auto_id_fallback:
-            raise ValueError("event_id missing and auto_id_fallback=False")
-        event_id = EventV4.deterministic_id(event)
+        # Auto-ID format per U5.5.0a docstring (random shorthash for non-deterministic sources).
+        import secrets as _secrets
+        event_id = f"evt_{int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)}_{_secrets.token_hex(4)}"
         event["event_id"] = event_id
 
+    # KTD-16: boundary checks on the raw event BEFORE scrubbing so secrets/paths
+    # surface as ValueError rather than getting silently masked.
+    _boundary_checks(event, source)
     scrubbed = _scrub_strings(event)
     bounded = _bound_text(scrubbed)
     bounded["event_id"] = event_id
-    _boundary_checks(scrubbed, source)
     return bounded
 
 
