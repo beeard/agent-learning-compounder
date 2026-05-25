@@ -128,6 +128,7 @@ GATE-CHECK BETWEEN WAVES (parent orchestrator runs in the integration worktree):
   cd agent-learning-compounder
   python3 -m unittest discover -s tests 2>&1 | tail -5
   python3 -m unittest discover -s fixtures/tests 2>&1 | tail -5
+  python3 bin/validate_artifacts --check-manifest-merge 2>&1 | tail -5
   python3 bin/validate_artifacts --check-contracts --state-dir .agent-learning 2>&1 | tail -5
 
 Default gate-check uses system python3 — Phase A baseline is 251 pass / 4 skip (the four dashboard tests skip when fastapi/jinja2 absent) / 0 fail.

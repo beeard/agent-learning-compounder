@@ -382,7 +382,7 @@ Per KTD-18, the unit dependency graph supports parallel subagent dispatch in wav
 - `bin/event_writer.py` from U5.5.0b → all event-emitting units (U5.5.1-5, U11, U12, U13) share write-path
 - `bin/event_schema.py` from U5.5.0a → all schema-consuming units (U5.5.2-5, U8) share dataclass
 
-**Gate-check between waves:** parent orchestrator runs `python3 -m unittest discover` + `bin/validate_artifacts --check-contracts` between waves. Failures block next wave dispatch.
+**Gate-check between waves:** parent orchestrator runs `python3 -m unittest discover` + `bin/validate_artifacts --check-manifest-merge` (pre-merge: cross-unit manifest consistency, C5) + `bin/validate_artifacts --check-contracts` (post-merge: artifact registration) between waves. Failures at either layer block next wave dispatch.
 
 ---
 

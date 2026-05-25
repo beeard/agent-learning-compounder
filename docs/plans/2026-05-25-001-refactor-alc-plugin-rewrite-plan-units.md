@@ -203,6 +203,7 @@ Two **foundation modules** sequential first, then five **parallel-safe** thin ad
 - **U5.5.0a (45 min) — `bin/event_schema.py` — single source of truth (arch-#2):**
  - `@dataclass EventV4` med alle felter (event_id, ts, event, schema_version, actor: ActorInfo, telemetry: Telemetry, correlation_chain: list[ChainLink], …)
  - Klasse-metoder: `EventV4.sqlite_ddl() -> str` (auto-generert CREATE TABLE + indices fra dataclass), `EventV4.jsonschema() -> dict` (auto-generert JSONSchema fra felter + type-hints), `EventV4.from_dict(raw) -> EventV4` (validator + bounded-field-clamping), `EventV4.to_dict() -> dict` (serializer for events.jsonl)
+ - **Deterministic event_id helper (C7, architecture-review):** `EventV4.deterministic_id(actor_kind: str, event_type: str, payload_key: str) -> str` returns `evt_{sha256(actor_kind|event_type|payload_key)[:12]}_{ts_bucket}`. Callers that need stable IDs across re-runs (transcript backfill: `payload_key = f"{transcript_path}:{offset}"`; apply CLI: `payload_key = f"{patch_id}:{apply_ts}"`; eval CLI: `payload_key = f"{patch_id}:{verdict_ts}"`) construct the ID themselves and pass it to `write_event`. Default auto-ID path (`evt_{ts}_{shorthash}` with random shorthash) is reserved for hook-emitted events where determinism is not needed. **Documented contract:** U11 alc_apply MUST use `deterministic_id` for patch_applied/patch_reverted events so revert can look up the original by reconstructing the key; U13 alc_eval MUST use it for eval_verdict events for the same reason.
  - Forward-compat hook: `EventV4.upgrade_from(v3_row: dict) -> EventV4` håndterer skjema_version=3 rows (missing fields = None)
  - `index_events.py` kaller `EventV4.sqlite_ddl()` — INGEN duplisert SQL i index-scriptet
  - `data-contracts.json` events-entry henviser til `bin/event_schema.py:EventV4` (string path), ikke flate skjemafelt
@@ -292,6 +293,8 @@ Backward compat (KTD-14): readers must treat v3 rows (existing) as v4 rows with 
  - `actor.kind` rejected if not in enum
  - `telemetry.*` fields silently dropped if not numeric (no crash)
  - Total event size ≤ existing MAX_HOOK_EVENT_BYTES (telemetry compression-friendly)
+ - **`EventV4.deterministic_id` (C7):** same `(actor_kind, event_type, payload_key)` triple → identical `event_id` across calls; different triples → different IDs; `payload_key=None` → ValueError (force callers to opt in)
+ - **`test_event_id_deterministic_for_apply_revert_pair` (C7):** simulate U11 apply emitting `patch_applied` with `payload_key=f"{patch_id}:{ts}"`; reconstruct the same key in revert path; assert `write_event` returns identical event_id and revert finds the original row in events.sqlite via that ID
 
 - **Transcript ingest (R23):**
  - Parse Claude JSONL with mix of user/assistant/tool_use/tool_result → emits normalized events with correct correlation_chain
@@ -370,6 +373,7 @@ Backward compat (KTD-14): readers must treat v3 rows (existing) as v4 rows with 
 - Each artifact entry: `id`, `path_template`, `producer`, `consumers[]`, `surface_in_dashboard`, `format`, lifecycle fields (`create`, `read`, `update`, `delete_or_retention`, `owner`, `states`, `max_age`, `max_count`, `cleanup_command`)
 - **`bin/artifact_writer.py`** is the helper module imported by all writers: `write_artifact(artifact_id, payload, state_handle)` enforces path-template + size + format pre-write. Reads merged registry at startup (concat base + manifests).
 - **`bin/validate_artifacts`** provides `--check-contracts --state-dir <dir>` mode for post-hoc orphan-detection; `--check-pending-writes <writer-module>` verifies writer registers properly; `--show-registry` prints the merged registry for debugging.
+- **`--check-manifest-merge` mode (C5, architecture-review):** runs PRE-merge in the orchestrator's gate-check (before integrating subagent worktrees). Asserts (a) no `artifact.id` is registered in 2+ manifests, (b) the producer→consumer graph across the merged manifest set is acyclic, (c) shared artifacts have compatible lifecycle fields (no manifest sets `max_age: 7d` while another sets `max_age: 30d` for the same id). The mode reads all `data-contracts/manifests/*.json` plus `data-contracts/base.json` and reports the first inconsistency; exit non-zero blocks the wave from merging. Without this, KTD-18's per-unit-manifest pattern catches file-level conflicts but not semantic-level cross-unit drift.
 - **Parallel safety:** subagents working on U8, U9, U10.5, U11, U12, U13 each create their own `manifests/<unit-id>.json` file → zero merge conflict on integration. Each manifest is owned exclusively by one unit.
 - Existing `bin/validate_outputs.py` is UNTOUCHED (R6)
 
@@ -384,6 +388,11 @@ Backward compat (KTD-14): readers must treat v3 rows (existing) as v4 rows with 
 - `bin/artifact_writer.py` rejects writes exceeding `max_size`
 - Existing `bin/validate_outputs.py` still works with its positional-arg interface (R6)
 - All `fixtures/tests/test_validate_outputs_*` still pass
+- **`--check-manifest-merge` (C5):**
+  - Duplicate-id: two manifests both declare `id="recommendations"` → fails with both manifest paths reported
+  - Cycle: manifest A's consumer is artifact in manifest B; B's consumer is artifact in A → cycle detected, fails
+  - Lifecycle-incompat: `max_age` mismatch for same `id` across manifests → fails with the conflicting values
+  - Clean merge (no overlaps, acyclic, lifecycle-consistent) → exit 0
 
 **Verification:** `python3 -m unittest tests.test_data_contracts tests.test_artifact_writer -v` passes; `python3 -m unittest discover -s fixtures/tests` still passes.
 
@@ -662,6 +671,8 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 
 **Interface-first contract (arch-pass-5 F4):** Step 1 of U11 publishes a contract module `bin/alc_apply_contracts.py` with: `validate_agent_frontmatter(content) -> list[str]`, `validate_skill_frontmatter(content) -> list[str]`, `DSL_TARGETS: dict[str, TargetSpec]`, `ApplyResult` + `RevertResult` dataclasses, `ApplyError` + `RevertError` exceptions, ABC `Executor` med abstract `apply(op)` + `revert(patch_id)`. Once `bin/alc_apply_contracts.py` is committed, U12 (`alc_invoke`) and U17 (MCP extensions) can be dispatched as parallel subagents — both designing against the contract. Final integration when all three (U11 implementation + U12 + U17) land.
 
+**GENERATORS ↔ DSL_TARGETS coverage gate (C4, architecture-review):** Step 1 of U11 also asserts that `DSL_TARGETS` covers every `target_type` produced by U9's `GENERATORS` registry. Concretely: `set(spec.output.target_type for spec in GENERATORS.values()) <= set(DSL_TARGETS.keys())`. This catches the case where U9 adds a generator emitting `target_type="command"` but U11's DSL_TARGETS only knows `{skill, agent, hook, mcp_tool}` — without the gate, U12 and U17 would design against an incomplete contract and discover the gap at Phase D integration. The check runs in `bin/alc_apply_contracts.py:__main__` as a self-validation on import, AND as a dedicated test (see scenarios below). W9a gate-check refuses to advance to W9b until this passes.
+
 **Requirements:** R3 (no arbitrary write), R4 (concurrency-safe), R10 (no copy_to_clipboard), R13 (CLI not dashboard), R14 (flock + safe JSONL), R17 (target_type dispatch), R18 (agent-validator), R21+R22 (apply ops become events for self-introspection)
 
 **Dependencies:** U5.5 (event_writer), U6, U7, U9
@@ -710,6 +721,9 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 **Patterns to follow:** S1 (Hermes _validate_frontmatter), S6 (scrub_secrets integration), S12 (flock pattern from alc_mcp/server.py:_append_jsonl_locked)
 
 **Test scenarios:**
+- **Contract coverage gate (C4):**
+ - `test_generators_targets_subset_of_dsl_targets`: import `bin.recommender_generators:GENERATORS` and `bin.alc_apply_contracts:DSL_TARGETS`; assert `{spec.output.target_type for spec in GENERATORS.values()} <= set(DSL_TARGETS.keys())`. Fails with explicit "U9 emits target_type=X not registered in DSL_TARGETS" message
+ - Self-validation on import: `python3 -c "from bin import alc_apply_contracts"` exits 0 only if coverage gate passes
 - **Concurrency (R4, R14, AD#4):**
  - Two concurrent `alc_apply` invocations on same patch_id → second fails with 409, first succeeds
  - Mid-write SIGKILL on apply → apply-log has no partial line (flock + atomic write)
