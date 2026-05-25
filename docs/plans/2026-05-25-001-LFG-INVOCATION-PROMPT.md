@@ -2,6 +2,30 @@
 
 Paste this prompt into a fresh Claude Code session (or `/lfg`) to delegate the full plan execution per the wave-orchestration strategy.
 
+## REPO LAYOUT
+
+```
+~/work/active/agent-learning-compounder/                    ← canonical dev repo (master, GitHub remote)
+└── agent-learning-compounder/                              ← inner skill source-tree
+
+~/work/active/agent-learning-compounder-v2/                 ← V2 WORKTREE (alc-plugin-v2 branch)
+└── agent-learning-compounder/                              ← inner skill source-tree (work here)
+
+~/.agents/skills/agent-learning-compounder/                 ← LIVE RUNTIME (frozen during V2)
+                                                              Re-installed via install.sh after Phase F merge.
+```
+
+**Working directory for LFG:** `/home/tth/work/active/agent-learning-compounder-v2/`
+- Tests + commands run from: `/home/tth/work/active/agent-learning-compounder-v2/agent-learning-compounder/`
+- Branch: `alc-plugin-v2` (pushed to `origin/alc-plugin-v2`)
+- GitHub: `https://github.com/beeard/agent-learning-compunder` (typo to fix manually: `gh repo rename agent-learning-compounder`)
+
+**Source-tree conventions** (from CLAUDE.md, observe these):
+- Dual-name files: `bin/<name>` (canonical) + `bin/<name>.py` (symlink); same for `reference-lib/` ↔ `references/.md`
+- Tests: `tests/` smoke + `fixtures/tests/` full suite + `scripts/run_pressure_tests.py` durable-write gate
+- Run from inner `agent-learning-compounder/` dir
+- Distribution: `./install.sh --codex --verify` (or `--claude`) copies inner source-tree to runtime roots
+
 ---
 
 ## Prompt to paste
@@ -10,6 +34,10 @@ Paste this prompt into a fresh Claude Code session (or `/lfg`) to delegate the f
 /lfg execute the implementation plan at:
 
   docs/plans/2026-05-25-001-refactor-alc-plugin-rewrite-plan.md
+
+Working directory: /home/tth/work/active/agent-learning-compounder-v2/
+All code work happens in subdir: agent-learning-compounder/ (per CLAUDE.md convention)
+Branch: alc-plugin-v2 (already pushed to origin/alc-plugin-v2)
 
 This plan supersedes docs/plans/2026-05-25-alc-plugin-refactor.md. Skip plan-creation phase; the plan is finalized through 5 review-passes (architecture review, ce-doc-review with 7 reviewers, agent-native audit, adversarial deep-review, plus 4 internal arch-passes with all findings baked in).
 

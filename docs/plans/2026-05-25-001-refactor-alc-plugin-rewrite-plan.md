@@ -378,20 +378,26 @@ Per KTD-18, the unit dependency graph supports parallel subagent dispatch in wav
 **Dependencies:** none
 
 **Files:**
-- Create: `../alc-plugin-v2/` (git worktree, not in main checkout)
+- Worktree ALREADY exists at `~/work/active/agent-learning-compounder-v2/` on branch `alc-plugin-v2` (pre-flight setup before LFG; pushed to `origin/alc-plugin-v2`)
 - Touch: none in main repo
 
 **Approach:**
-- Create worktree from current `main` on new branch `alc-plugin-v2`
-- Run all existing test suites and record pass count
-- Verify the existing `dashboard/` FastAPI app still works (so we don't accidentally regress during refactor)
-- Snapshot commit the consolidated review + this plan into worktree
+- LFG runs in worktree directory; all code work in subdir `agent-learning-compounder/` per CLAUDE.md dual-tree convention
+- Run all three existing test suites and record pass counts:
+  ```bash
+  cd /home/tth/work/active/agent-learning-compounder-v2/agent-learning-compounder
+  python3 -m unittest discover -s fixtures/tests 2>&1 | tail -3
+  python3 -m unittest discover -s tests 2>&1 | tail -3
+  python3 scripts/run_pressure_tests.py 2>&1 | tail -3
+  ```
+- Verify the existing `dashboard/` FastAPI app still imports
+- Initialize `scripts/spike/RESULTS.md` with baseline test counts + dry-run gate template
 
-**Patterns to follow:** standard git worktree pattern
+**Patterns to follow:** worktree already set up; just verify + record baseline
 
-**Test scenarios:** Test expectation: none -- workspace setup, not behavioral change.
+**Test scenarios:** Test expectation: none -- workspace verification, not behavioral change.
 
-**Verification:** worktree present at `../alc-plugin-v2`, on branch `alc-plugin-v2`; all existing tests pass; baseline pass count recorded in a commit message or scratch file.
+**Verification:** worktree at `~/work/active/agent-learning-compounder-v2/` on branch `alc-plugin-v2`; all three test suites green; baseline pass counts recorded in `scripts/spike/RESULTS.md`.
 
 ---
 
