@@ -60,6 +60,13 @@ branch=$(git branch --show-current 2>/dev/null || echo "")
 [ "$branch" = "alc-plugin-v2" ] || fail "expected branch alc-plugin-v2, got: $branch"
 say "✓ branch: $branch"
 
+# main repo's .git common dir — must be writable for codex `git worktree add`
+# in workspace-write sandbox, because worktree-add writes to .git/worktrees/.
+# `--git-common-dir` returns the shared .git path for any worktree.
+main_git_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
+[ -d "$main_git_dir" ] || fail "could not resolve git common dir; expected the main repo .git"
+say "✓ git common dir: $main_git_dir (will be added to codex writable scope)"
+
 # working tree clean for in-scope files (rough check — any uncommitted changes block)
 if ! git diff --quiet || ! git diff --cached --quiet; then
   fail "uncommitted changes present — commit or stash before LFG run (orchestrator expects clean start)"
@@ -106,7 +113,7 @@ say ""
 say "── dispatch ──────────────────────────────────"
 say "model:              gpt-5.3-codex-spark"
 say "reasoning effort:   $REASONING"
-say "sandbox:            workspace-write"
+say "sandbox:            workspace-write + --add-dir $main_git_dir"
 say "user config:        ignored (~12K tokens of prelude bloat stripped)"
 say "log:                $LOG_FILE"
 
@@ -129,6 +136,7 @@ mkdir -p "$LOG_DIR"
 codex exec \
   -m gpt-5.3-codex-spark \
   -s workspace-write \
+  --add-dir "$main_git_dir" \
   --ignore-user-config \
   -c "model_reasoning_effort=\"$REASONING\"" \
   - < "$PROMPT_OUT" 2>&1 | tee "$LOG_FILE"
