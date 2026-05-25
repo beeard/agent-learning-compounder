@@ -264,5 +264,62 @@ class McpServerHandlerHardening(unittest.TestCase):
         self.assertIn("init_learning_system", message)
 
 
+class MCPStdioEntryPoint(unittest.TestCase):
+    """Regression: `main()` must wire `stdio_server` (an async context manager
+    in mcp>=1.0) into a coroutine before passing it to `asyncio.run`. The
+    handler tests above never exercise the stdio loop, so a working build
+    can still ship a broken entry point — that's exactly what happened when
+    the mcp SDK reshaped `stdio_server` from coroutine to context manager."""
+
+    def setUp(self):
+        try:
+            import mcp  # noqa: F401
+        except ImportError:
+            self.skipTest("mcp SDK not installed")
+
+    def test_initialize_and_tools_list_over_stdio(self):
+        import subprocess
+
+        server_path = REPO_ROOT / "alc_mcp" / "server.py"
+        proc = subprocess.Popen(
+            [sys.executable, str(server_path)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        try:
+            messages = (
+                '{"jsonrpc":"2.0","id":1,"method":"initialize","params":'
+                '{"protocolVersion":"2024-11-05","capabilities":{},'
+                '"clientInfo":{"name":"test","version":"0"}}}\n'
+                '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}\n'
+                '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}\n'
+            )
+            stdout, stderr = proc.communicate(input=messages, timeout=15)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stdout, stderr = proc.communicate()
+            self.fail(f"server hung\nstdout: {stdout!r}\nstderr: {stderr!r}")
+
+        lines = [ln for ln in stdout.splitlines() if ln.strip()]
+        self.assertGreaterEqual(
+            len(lines), 2,
+            f"expected ≥2 JSON-RPC responses, got {lines}\nstderr:\n{stderr}",
+        )
+
+        init_resp = json.loads(lines[0])
+        self.assertEqual(init_resp.get("id"), 1)
+        self.assertIn("result", init_resp,
+                      f"initialize failed: {init_resp}\nstderr:\n{stderr}")
+        self.assertIn("serverInfo", init_resp["result"])
+
+        list_resp = json.loads(lines[1])
+        self.assertEqual(list_resp.get("id"), 2)
+        tool_names = {t["name"] for t in list_resp["result"]["tools"]}
+        self.assertEqual(
+            tool_names,
+            {"get_gates", "report_outcome", "propose_gate", "get_skill_context"},
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

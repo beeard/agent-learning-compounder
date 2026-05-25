@@ -287,7 +287,12 @@ def main():
     """Entry point for stdio MCP server. Requires mcp SDK."""
     from mcp.server.stdio import stdio_server
     server = build_server()
-    asyncio.run(stdio_server(server))
+
+    async def _run():
+        async with stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

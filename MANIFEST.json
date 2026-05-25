@@ -1,8 +1,8 @@
 {
   "name": "agent-learning-compounder",
-  "version": "2026.05.24+review7-plus1",
+  "version": "2026.05.25+review7-plus1.1",
   "schema_version": 1,
-  "created_date": "2026-05-24",
+  "created_date": "2026-05-25",
   "description": "Portable Codex/Claude skill for durable, evidence-backed agent learning and skill-health feedback.",
   "requirements": {
     "python": ">=3.10",

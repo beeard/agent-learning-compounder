@@ -1,5 +1,26 @@
 # Changes
 
+## 2026.05.25+review7-plus1.1
+
+Patch release. Fixes a real bug in the MCP stdio entry point discovered
+when registering `alc_mcp/server.py` against `mcp>=1.0`.
+
+- `alc_mcp/server.py:main()` now wires `stdio_server()` as an async
+  context manager and runs the server inside it. The prior form
+  `asyncio.run(stdio_server(server))` assumed `stdio_server` was a
+  coroutine; in `mcp>=1.0` it is a context manager that yields
+  `(read_stream, write_stream)`, so the entry point raised
+  `TypeError: An asyncio.Future, a coroutine or an awaitable is required`
+  immediately on launch. Tool handlers were unaffected — only the stdio
+  loop was broken.
+- `alc_mcp/tests/test_server.py` gains `MCPStdioEntryPoint`, a
+  subprocess-based regression that spawns the server, completes the MCP
+  initialize handshake, calls `tools/list`, and asserts all four tool
+  names (`get_gates`, `report_outcome`, `propose_gate`,
+  `get_skill_context`) are exposed. Prior coverage exercised handlers
+  in-process but never drove the stdio loop, which is how the bug
+  reached a tagged release.
+
 ## 2026.05.24+review7-plus1
 
 Eight-upgrade extension on top of `2026.05.24+review7-production`. All
