@@ -1,0 +1,124 @@
+{
+  "artifacts": [
+    {
+      "id": "corpus",
+      "path_template": "corpus.json",
+      "producer": "init_learning_system",
+      "consumers": ["analyst", "synthesize_samples", "synthesize"],
+      "surface_in_dashboard": false,
+      "format": "json",
+      "lifecycle": {
+        "create": "init_learning_system|synthesize_samples",
+        "read": "all",
+        "update": "synthesize_samples",
+        "delete_or_retention": "init_learning_system|retention_policy",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "forever",
+        "max_count": 1,
+        "cleanup_command": ""
+      },
+      "max_size": 10485760
+    },
+    {
+      "id": "baseline",
+      "path_template": "baseline.json",
+      "producer": "init_learning_system",
+      "consumers": ["distill_learning", "dashboard", "refresh_learning_state"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "init_learning_system",
+        "read": "all",
+        "update": "init_learning_system",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "forever",
+        "max_count": 1,
+        "cleanup_command": ""
+      },
+      "max_size": 10485760
+    },
+    {
+      "id": "gates",
+      "path_template": "reports/latest-approved-gates.md",
+      "producer": "init_learning_system",
+      "consumers": ["dashboard", "mcp", "distill_learning"],
+      "surface_in_dashboard": true,
+      "format": "markdown",
+      "lifecycle": {
+        "create": "init_learning_system",
+        "read": "all",
+        "update": "export_gates",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "forever",
+        "max_count": 1,
+        "cleanup_command": ""
+      },
+      "max_size": 10485760
+    },
+    {
+      "id": "insights",
+      "path_template": "reports/latest-skill-context.md",
+      "producer": "refresh_learning_state",
+      "consumers": ["dashboard", "mcp", "refresh_learning_state"],
+      "surface_in_dashboard": true,
+      "format": "markdown",
+      "lifecycle": {
+        "create": "refresh_learning_state",
+        "read": "all",
+        "update": "refresh_learning_state",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "forever",
+        "max_count": 1,
+        "cleanup_command": ""
+      },
+      "max_size": 10485760
+    },
+    {
+      "id": "events.jsonl",
+      "path_template": "events.jsonl",
+      "producer": "collect_hook_event",
+      "consumers": ["event_writer", "event_schema", "analyst_queries", "index_events"],
+      "surface_in_dashboard": true,
+      "format": "jsonl",
+      "lifecycle": {
+        "create": "collect_hook_event|event_emit",
+        "read": "analyst_queries|dashboard",
+        "update": "append_only",
+        "delete_or_retention": "prune_events",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "365d",
+        "max_count": 1,
+        "cleanup_command": "collect_hook_event --rotate"
+      },
+      "max_size": 104857600
+    },
+    {
+      "id": "events.sqlite",
+      "path_template": "events.sqlite",
+      "producer": "index_events",
+      "consumers": ["analyst_queries", "dashboard", "alc_query"],
+      "surface_in_dashboard": true,
+      "format": "sqlite",
+      "lifecycle": {
+        "create": "index_events",
+        "read": "analyst_queries|alc_query",
+        "update": "index_events",
+        "delete_or_retention": "retention_policy",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "365d",
+        "max_count": 1,
+        "cleanup_command": "index_events --prune"
+      },
+      "max_size": 104857600
+    }
+  ]
+}
