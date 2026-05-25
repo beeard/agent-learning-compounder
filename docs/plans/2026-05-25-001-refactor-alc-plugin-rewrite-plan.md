@@ -69,6 +69,7 @@ Every requirement maps back to a ROOT in the consolidated review. ROOTs with con
 | R23 | Transcripts (Claude `~/.claude/projects/*.jsonl`, Codex `~/.codex/sessions/*`) parse to same normalized events; backfill on demand | NEW | user-directed |
 | R24 | Events.jsonl indexed to events.sqlite for query-layer; analyst joins on actor/correlation, not only session aggregates | NEW | user-directed |
 | R25 | Background agents (cron, ScheduleWakeup-fired, MCP-spawned long-runners) call `bin/event_emit` to be visible in the stream | NEW | user-directed |
+| R26 | Exec-sandbox primitive (`bin/exec_sandbox`) lets judge agents, recommender, dev-explorer, and arkiv-agents run bounded test scenarios in fresh git worktrees to confirm/refute recommendations with evidence (not only LLM-judgment) | NEW | user-directed (this session) |
 
 Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements R8-R25 may be dropped entirely.
 
@@ -121,6 +122,7 @@ Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements 
 | KTD-16 | Context-boundary enforcement flyttet fra per-artifact-tester til write-path-invariant i event_writer.py + artifact_writer.py | Én write-path = ett sted å håndheve boundary. Fail-fast ved skrivning, ikke post-hoc-scan. Nye event-emittere arvelig safe. U19's boundary-test forenkles fra N artifact-scans til 1 writer-enforcement-test. |
 | KTD-17 | **Graceful degradation for reads, fail-fast for writes.** Read-paths fall back hvis preferred source mangler (events.sqlite → samples.json; .agent-learning.json → env var → default chain) and log degradation tier reached. Write-paths fail-fast on preflight invariant violation (allowed-roots, hash-match, boundary). | Consistent semantics across all units. Reads = "best effort with visible degradation"; writes = "all-or-nothing with safe-by-construction invariants". Implementer doesn't have to invent error-policy per unit. |
 | KTD-18 | **Interface-first publication for parallel subagent dispatch.** Units whose downstream consumers want parallel design publish contract modules early (e.g., `bin/alc_apply_contracts.py` before U11 implementation), validator-shapes early, and per-unit data-contracts manifests. Hot files (`data-contracts.json`) are split per-unit to eliminate merge conflicts. | Wall-clock time drops ~30-40% when subagent-dispatcher can fan out wider per wave. Pre-published contracts let U12+U17 design against U11 in parallel; per-unit data-contracts manifests let U8+U9+U10.5+U11+U12+U13 each register artifacts without fighting over one file. |
+| KTD-19 | **Tiered exec-sandbox: read / worktree / eval.** Each tier has explicit security profile (allowlist commands, writable scope, network policy, timeout caps). All exec calls emit `exec_sandbox_run` events via event_writer (KTD-13). Read = no write/network, command allowlist; worktree = fresh git worktree, command-unrestricted, no network; eval = worktree + alc_invoke spawn-allowed. | Recommender + judge agents need evidence-based validation, not only LLM-judgment. But ALC's identity is "tracker + recommender, not direct mutator" (R3, AN#3). Tiered sandbox squares the circle: mutation IS allowed, but ALWAYS in throwaway worktree with bounded scope + full observability via events. The "read" tier preserves zero-risk default for casual exploration. |
 
 ---
 
@@ -266,6 +268,7 @@ One consolidated map of phases × units × files × gates. Replaces previously-s
 | U11   | Hermes-DSL executor CLI + event emission | `bin/{alc_apply, alc_apply_dispatch.py}` |
 | U12   | Agent archive dispatcher | `bin/alc_invoke` |
 | U13   | Eval-loop (closes ROOT 6); verdicts as events | `bin/alc_eval` + seeded `<state>/alc-agents/evals/rec-quality-judge.md` |
+| U13.5 | Exec-sandbox primitive (tiered: read/worktree/eval) — KTD-19 | `bin/{exec_sandbox, exec_sandbox_profiles.py}` + 4 test files + `skills/alc-core/references/sandbox-tiers.md` |
 
 **Gate to Phase E1+E2:** apply roundtrip works; revert restores bytes; eval-loop writes verdicts as events; ALC's own runtime activity visible in events.sqlite.
 
@@ -346,11 +349,11 @@ Per KTD-18, the unit dependency graph supports parallel subagent dispatch in wav
 | **W4** | U4 + U6 + U14 + U18 (**4 parallel**) | U3 done | ~1 h |
 | **W5** | U7 + U5.5.0a + U5.5.0b | U6 done (+ U5 if not parallel from W3) | ~1 h |
 | **W6** | U5.5.1 + U5.5.2 + U5.5.3 + U5.5.4 + U5.5.5 (**5 parallel**) | U5.5.0b done | ~45 min |
-| **W7** | U8 + U10.5 (parallel) | U5.5 + U6 + U7 done | ~1 h |
+| **W7** | U8 + U10.5 + U13.5 (**3 parallel**) | U5.5 + U6 + U7 done | ~1 h |
 | **W8** | U9 (sequential) | U8 done | ~30 min |
 | **W9a** | U11 contract publication only (`bin/alc_apply_contracts.py`) | U9 done | ~15 min |
 | **W9b** | U10 + U11 implementation + U12 + U17 (**4 parallel** — all design against U11 contract) | W9a done | ~1.5 h |
-| **W10** | U15 + U16 + U13 (**3 parallel**) | U10 done (U15+U16); U12 done (U13) | ~1 h |
+| **W10** | U15 + U16 + U13 (**3 parallel**) | U10 done (U15+U16); U12 + U13.5 done (U13) | ~1 h |
 | **W11** | U19 (integration validation — sequential) | all done | ~1 h |
 
 **Critical-path units (cannot parallelize past their wave):** U1, U2, U3, U6, U7, U5.5.0a/0b, U8, U9, U11-contract, U19.
@@ -860,11 +863,11 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 
 ### U9. Recommender (`bin/recommender_generators.py` + `bin/recommender_render`)
 
-**Goal:** Single `generators.py` with dispatch-dict literal emits Hermes-DSL ops for all 4 target_types. `recommender_render` orchestrator reads recommendations.json → writes patch bundles.
+**Goal:** Single `generators.py` with dispatch-dict literal emits Hermes-DSL ops for all 4 target_types. `recommender_render` orchestrator reads recommendations.json → writes patch bundles. Optional `--pre-validate` flag invokes `bin/exec_sandbox --scope worktree` (U13.5) to sandbox-validate each patch before writing — patches that fail their declared validation command are dropped from the bundle with logged reason.
 
-**Requirements:** R9 (1 generators.py not 4 propose_*), R10 (no copy_to_clipboard in pipeline), R17 (Hermes-DSL), R18 (agent quality bar baked into agent-target generator)
+**Requirements:** R9 (1 generators.py not 4 propose_*), R10 (no copy_to_clipboard in pipeline), R17 (Hermes-DSL), R18 (agent quality bar baked into agent-target generator), R26 (optional sandbox pre-validation)
 
-**Dependencies:** U6, U7, U8
+**Dependencies:** U6, U7, U8, U13.5 (exec_sandbox — optional, only when `--pre-validate` flag set)
 
 **Files:**
 - Create: `bin/recommender_generators.py`
@@ -1119,11 +1122,11 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 
 ### U13. `bin/alc_eval` — Eval-loop scaffold (closes ROOT 6); verdicts as events
 
-**Goal:** Periodic eval driver. Spawns `evals/rec-quality-judge` agent against last N recommendations. **Emits `eval_verdict` events via event_writer** — eval-loop is itself observable in the unified stream.
+**Goal:** Periodic eval driver. Spawns `evals/rec-quality-judge` agent against last N recommendations. **Emits `eval_verdict` events via event_writer** — eval-loop is itself observable in the unified stream. Judge agents call `bin/exec_sandbox --scope eval` (U13.5) to actually apply patch in worktree + run relevant tests, so verdicts are evidence-based (not only LLM-opinion).
 
-**Requirements:** R8 (feedback loop in code), R20 (eval-loop closes compounder), R21+R22 (verdikter blir events)
+**Requirements:** R8 (feedback loop in code), R20 (eval-loop closes compounder), R21+R22 (verdikter blir events), R26 (judge uses exec_sandbox for evidence)
 
-**Dependencies:** U5.5 (event_writer), U7, U9, U12
+**Dependencies:** U5.5 (event_writer), U7, U9, U12, U13.5 (exec_sandbox)
 
 **Files:**
 - Create: `bin/alc_eval`, `bin/alc_eval.py`
@@ -1159,6 +1162,113 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 - Judge agent returning malformed JSON → counted as `modify` verdict with warning, doesn't crash loop
 
 **Verification:** `python3 -m unittest tests.test_alc_eval -v` passes; smoke: run analyst → recommend → eval → re-analyst, observe score change for repeated kinds.
+
+---
+
+### U13.5. `bin/exec_sandbox` — tiered exec primitive for evidence-based validation
+
+**Goal:** A single CLI + Python module that runs commands in bounded sandboxes (3 tiers: read / worktree / eval), emits events for full observability, and powers the eval-loop's evidence collection + recommender's pre-validation + arkiv-agent toolkit + operator dev-exploration.
+
+**Requirements:** R26 (exec sandbox primitive), KTD-19 (tiered scopes), KTD-13 (every exec emits event)
+
+**Dependencies:** U5.5 (event_writer for exec-event emission), U7 (StateHandle for worktree path resolution)
+
+**Files:**
+- Create: `bin/exec_sandbox`, `bin/exec_sandbox.py`
+- Create: `bin/exec_sandbox_profiles.py` (declarative SCOPES dict — single source of truth for tier definitions)
+- Create: `tests/test_exec_sandbox_read.py` (tier 1 enforcement)
+- Create: `tests/test_exec_sandbox_worktree.py` (tier 2: spawn worktree + apply + run + cleanup)
+- Create: `tests/test_exec_sandbox_eval.py` (tier 3: spawn worktree + alc_invoke subagent)
+- Create: `tests/test_exec_sandbox_security.py` (boundary enforcement: no network, no write outside scope, secrets scrubbed in events)
+- Create: `skills/alc-core/references/sandbox-tiers.md` (operator + agent reference for scope choice)
+
+**Approach:**
+
+**Tier 1 — `read` scope** (zero-mutation default):
+- Allowlist commands: `git log`, `git show`, `git diff`, `git blame`, `ls`, `find`, `cat`, `head`, `tail`, `wc`, `grep`, `stat`, `python -m unittest`, `python3 -m unittest`, `pytest`, `diff`
+- No write (chdir to repo root, but `umask 0444` applied to spawned dir)
+- No network (env strip: `unset HTTP_PROXY HTTPS_PROXY; setenv NO_NETWORK=1` + best-effort iptables-rule when running as root, otherwise documented limitation)
+- Default timeout 30s, max 120s
+
+**Tier 2 — `worktree` scope** (mutation in throwaway worktree):
+- Spawn fresh `git worktree add <tmp> <base-ref>` in `<state>/sandbox-worktrees/<exec-id>/`
+- Command runs `cd <worktree> && <cmd>` — mutation contained
+- After exec (success or timeout): `git worktree remove --force <tmp>`
+- No allowlist (any command allowed in worktree — it's throwaway)
+- No network (same env strip as tier 1)
+- Default timeout 60s, max 300s
+
+**Tier 3 — `eval` scope** (worktree + spawn-permitted):
+- Same as worktree, PLUS allowed to invoke `bin/alc_invoke` for sub-spawn
+- Used by `rec-quality-judge` arkiv-agent for full evidence collection
+- Default timeout 300s, max 900s
+
+**Event emission (KTD-13) — every exec writes:**
+```
+event: exec_sandbox_run
+actor: {kind: operator|judge|recommender|arkiv_agent, name: <caller>}
+payload: {scope, command (scrubbed), exit_code, duration_ms, worktree_dir? (if tier 2/3)}
+telemetry: {stdout_bytes, stderr_bytes, max_rss_kb?}
+correlation_chain: [..., {role: triggered_by, id: <parent-event-id>}]
+```
+
+stdout/stderr capped at 100KB per exec, scrubbed for secrets before event emission. Full output written to `<state>/sandbox-runs/<exec-id>/{stdout,stderr,exit_code}` for the caller to read (lifecycle: 7-day retention per data-contracts).
+
+**CLI usage:**
+```bash
+bin/exec_sandbox --scope read --cmd "python3 -m unittest fixtures.tests.test_distill_learning" --repo $PWD --timeout 60
+bin/exec_sandbox --scope worktree --base-ref alc-plugin-v2 --cmd "patch -p1 <patches/p-001.diff && python3 -m unittest" --repo $PWD --timeout 120
+bin/exec_sandbox --scope eval --base-ref alc-plugin-v2 --cmd "bin/alc_invoke --agent evals/rec-quality-judge --task patches/p-001.json" --repo $PWD
+```
+
+**Python API:**
+```python
+from exec_sandbox import run, ExecResult, ExecScope
+
+result: ExecResult = run(
+    scope=ExecScope.WORKTREE,
+    command="...",
+    repo=repo,
+    base_ref="alc-plugin-v2",
+    timeout_s=120,
+    actor={"kind": "judge", "name": "rec-quality-judge"},
+)
+# result.exit_code, result.stdout_path, result.stderr_path, result.duration_ms, result.event_id
+```
+
+**Patterns to follow:** S12 (fcntl.flock for exec-id allocation), S15 (non-blocking subprocess pattern from auto_distill_session), Hermes-DSL revert pattern for cleanup-on-failure
+
+**Test scenarios:**
+
+*Tier 1 (read):*
+- Allowed command `ls -la` → exits 0, stdout captured, event emitted
+- Non-allowlisted command `rm -rf .` → exits with code 3 (forbidden), no execution
+- Command exceeding timeout → killed, exit code 124, event marks `timeout: true`
+- Write attempt (`touch /tmp/x`) → blocked by umask + chdir constraints
+- Network call (`curl example.com`) → blocked by env strip (best-effort)
+
+*Tier 2 (worktree):*
+- `--scope worktree --cmd 'touch x.tmp && ls x.tmp'` → writes to worktree, success, worktree cleaned up
+- Worktree path is under `<state>/sandbox-worktrees/<exec-id>/` (not in repo)
+- After exec: `git worktree list` shows worktree removed
+- SIGKILL mid-exec → worktree still cleaned up via `try/finally` + signal handler
+- Two concurrent execs → both get fresh worktrees, no collision
+
+*Tier 3 (eval):*
+- `--scope eval --cmd 'bin/alc_invoke --agent evals/judge ...'` → subagent dispatched, event chain links exec_sandbox_run → subagent_invoke_start (parent_event_id)
+- Tier 3 command CANNOT spawn another tier 3 (recursion guard via env var `ALC_SANDBOX_DEPTH`)
+
+*Event emission:*
+- Every exec call appends one `exec_sandbox_run` event to events.jsonl
+- Event payload's `command` field is secret-scrubbed (test: command with `--token sk-ant-XXXX` → event shows `--token <REDACTED>`)
+- stdout >100KB → truncated in event payload, full file at `<state>/sandbox-runs/<exec-id>/stdout`
+
+*Security boundaries:*
+- Tier 1 command with path traversal `cat ../../etc/passwd` → blocked (chdir resolves; canonical path check rejects parent escapes)
+- Tier 2 exec attempting write to `~/` outside worktree → command runs but write fails (umask + chdir)
+- Recursion limit: tier 3 → tier 3 via alc_invoke chain → rejected at depth 2
+
+**Verification:** `python3 -m unittest tests.test_exec_sandbox_* -v` passes; manual: run all three tiers with sample commands, inspect events.jsonl for exec_sandbox_run rows + sandbox-runs/<id>/ for captured stdout.
 
 ---
 
@@ -1278,19 +1388,20 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 - Create: `skills/alc-core/references/mcp-catalog.md` (human-readable M1-M9 reference)
 - Modify: `alc_mcp/README.md` (link to catalog ref)
 
-**MCP capability catalog (M1-M9) — published in `alc_mcp/catalog.py`:**
+**MCP capability catalog (M1-M10) — published in `alc_mcp/catalog.py`:**
 
-| M-ID | Tool name | Kind | Backing impl | Read/Propose |
-|------|-----------|------|--------------|-------------|
-| M1 | `get_gates` | read | `alc_query.get_gates(repo, scope?)` | read |
-| M2 | `get_skill_context` | read | `alc_query.get_skill_context(repo)` | read |
-| M3 | `get_recommendations` | read | `alc_query.get_recommendations(repo)` | read |
-| M4 | `list_pending_patches` | read | `alc_query.get_pending_patches(repo)` | read |
-| M5 | `get_dashboard_url` | read | `state_handle.dashboard_url(repo)` | read |
-| M6 | `propose_apply` | propose | returns CLI command for `bin/alc_apply --patch <id> --write` + one-shot token | propose (no mutation) |
-| M7 | `propose_gate` | propose | appends to `improvement-queue.jsonl` (existing behavior) | propose (queued, not mutating skill state) |
-| M8 | `report_outcome` | observe | event_writer.write_event(event='outcome_reported', actor.kind=mcp_caller) | observe (event emit) |
-| M9 | `report_agent_event` | observe | event_writer.write_event(event='agent_dispatch_*', actor.kind=mcp_caller) | observe (event emit) |
+| M-ID | Tool name | Kind | Backing impl | Mutation? |
+|------|-----------|------|--------------|-----------|
+| M1 | `get_gates` | read | `alc_query.get_gates(repo, scope?)` | none |
+| M2 | `get_skill_context` | read | `alc_query.get_skill_context(repo)` | none |
+| M3 | `get_recommendations` | read | `alc_query.get_recommendations(repo)` | none |
+| M4 | `list_pending_patches` | read | `alc_query.get_pending_patches(repo)` | none |
+| M5 | `get_dashboard_url` | read | `state_handle.dashboard_url(repo)` | none |
+| M6 | `propose_apply` | propose | returns CLI command for `bin/alc_apply --patch <id> --write` + one-shot token | none (caller decides) |
+| M7 | `propose_gate` | propose | appends to `improvement-queue.jsonl` (existing behavior) | queue-only |
+| M8 | `report_outcome` | observe | event_writer.write_event(event='outcome_reported', actor.kind=mcp_caller) | events.jsonl only |
+| M9 | `report_agent_event` | observe | event_writer.write_event(event='agent_dispatch_*', actor.kind=mcp_caller) | events.jsonl only |
+| M10 | `exec_sandbox` | exec | `bin/exec_sandbox` (U13.5) — tiered: read/worktree/eval | bounded (worktree-only for tier 2/3) |
 
 **Catalog schema (each MCP_TOOLS entry):**
 ```python
