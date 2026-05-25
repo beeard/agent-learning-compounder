@@ -1,0 +1,20 @@
+[
+  {"runtime": "claude", "name": "SessionStart", "normalized": "session_start"},
+  {"runtime": "claude", "name": "UserPromptSubmit", "normalized": "user_prompt_submit"},
+  {"runtime": "claude", "name": "PreToolUse", "normalized": "pre_tool_use"},
+  {"runtime": "claude", "name": "PostToolUse", "normalized": "post_tool_use"},
+  {"runtime": "claude", "name": "Stop", "normalized": "stop"},
+  {"runtime": "claude", "name": "SubagentStop", "normalized": "subagent_stop"},
+  {"runtime": "claude", "name": "SessionEnd", "normalized": "session_end"},
+  {"runtime": "claude", "name": "Notification", "normalized": "notification"},
+  {"runtime": "claude", "name": "PreCompact", "normalized": "pre_compact"},
+  {"runtime": "codex", "name": "SessionStart", "normalized": "session_start"},
+  {"runtime": "codex", "name": "UserPromptSubmit", "normalized": "user_prompt_submit"},
+  {"runtime": "codex", "name": "before_tool", "normalized": "pre_tool_use"},
+  {"runtime": "codex", "name": "after_tool", "normalized": "post_tool_use"},
+  {"runtime": "codex", "name": "Stop", "normalized": "stop"},
+  {"runtime": "codex", "name": "SubagentStop", "normalized": "subagent_stop"},
+  {"runtime": "codex", "name": "SessionEnd", "normalized": "session_end"},
+  {"runtime": "codex", "name": "Notification", "normalized": "notification"},
+  {"runtime": "codex", "name": "PreCompact", "normalized": "pre_compact"}
+]

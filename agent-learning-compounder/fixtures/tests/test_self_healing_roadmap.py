@@ -448,8 +448,8 @@ class SelfHealingRoadmapTests(unittest.TestCase):
             self.assertIn("--event SessionStart", codex_commands)
             self.assertIn("--runtime claude", claude_commands)
             self.assertIn("--event Stop", claude_commands)
-            self.assertEqual(codex_commands.count("install_runtime_hooks"), 5)
-            self.assertEqual(claude_commands.count("install_runtime_hooks"), 5)
+            self.assertEqual(codex_commands.count("install_runtime_hooks"), 9)
+            self.assertEqual(claude_commands.count("install_runtime_hooks"), 9)
 
     def test_install_runtime_hooks_auto_gitignores_repo_scope_configs(self):
         """Repo-scope --apply should add the hook config paths to .gitignore.

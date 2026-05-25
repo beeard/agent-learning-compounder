@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import re
 import stat
 import pathlib
 import shutil
@@ -18,8 +19,150 @@ from typing import Any
 from state_paths import repo_state_dir
 
 
-DEFAULT_EVENTS = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop"]
+DEFAULT_EVENTS = [
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "Stop",
+    "SubagentStop",
+    "SessionEnd",
+    "Notification",
+    "PreCompact",
+]
 RUNTIMES = {"codex", "claude"}
+
+EVENT_SOURCES_PATH = pathlib.Path(__file__).resolve().parent.parent / "skills" / "alc-core" / "references" / "event-sources.json"
+EVENT_SOURCES_SCHEMA_PATH = (
+    pathlib.Path(__file__).resolve().parent.parent
+    / "skills"
+    / "alc-core"
+    / "references"
+    / "event-sources.schema.json"
+)
+
+
+def load_json_payload(path: pathlib.Path) -> Any:
+    if not path.exists():
+        raise ValueError(f"{path} is missing")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{path} is not valid JSON: {error}") from error
+    return payload
+
+
+def _normalize_event(value: str) -> str:
+    normalized = re.sub(r"(?<!^)(?=[A-Z])", "_", value).replace("-", "_")
+    return normalized.lower()
+
+
+def _event_sources_path() -> pathlib.Path:
+    override = os.environ.get("ALC_EVENT_SOURCES_PATH")
+    return pathlib.Path(override).expanduser() if override else EVENT_SOURCES_PATH
+
+
+def _event_sources_schema_path() -> pathlib.Path:
+    override = os.environ.get("ALC_EVENT_SOURCES_SCHEMA_PATH")
+    return pathlib.Path(override).expanduser() if override else EVENT_SOURCES_SCHEMA_PATH
+
+
+def _load_schema(path: pathlib.Path) -> dict[str, Any]:
+    payload = load_json_payload(path)
+    if not isinstance(payload, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return payload
+
+
+def _validate_event_sources(rows: list[Any], schema: dict[str, Any]) -> list[dict[str, str]]:
+    if not isinstance(rows, list):
+        raise ValueError(f"{_event_sources_path()} must contain a JSON array")
+
+    item_schema = schema.get("items")
+    if not isinstance(item_schema, dict):
+        raise ValueError(f"{_event_sources_schema_path()} has invalid 'items' schema")
+    properties = item_schema.get("properties")
+    if not isinstance(properties, dict):
+        raise ValueError(f"{_event_sources_schema_path()} has invalid 'properties' schema")
+    required_fields = set(item_schema.get("required", []))
+    allowed_fields = set(properties.keys())
+    additional_forbidden = item_schema.get("additionalProperties") is False
+
+    runtime_schema = properties.get("runtime", {})
+    runtime_enum = set(runtime_schema.get("enum", []))
+    name_schema = properties.get("name", {})
+    name_type = name_schema.get("type")
+    normalized_schema = properties.get("normalized", {})
+    normalized_type = normalized_schema.get("type")
+    normalized_pattern = re.compile(normalized_schema.get("pattern", "^[a-z_]+$"))
+
+    validated: list[dict[str, str]] = []
+    for idx, row in enumerate(rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"{_event_sources_path()} row {idx} is not an object")
+
+        row_fields = set(row.keys())
+        missing_fields = required_fields - row_fields
+        if missing_fields:
+            fields = ", ".join(sorted(missing_fields))
+            raise ValueError(f"{_event_sources_path()} row {idx} missing required field(s): {fields}")
+
+        if additional_forbidden:
+            extra_fields = row_fields - allowed_fields
+            if extra_fields:
+                fields = ", ".join(sorted(extra_fields))
+                raise ValueError(f"{_event_sources_path()} row {idx} has additional properties: {fields}")
+
+        runtime = row.get("runtime")
+        if not isinstance(runtime, str) or runtime not in runtime_enum:
+            raise ValueError(f"{_event_sources_path()} row {idx} runtime must be one of {sorted(runtime_enum)}")
+        if name_type != "string" or not isinstance(row.get("name"), str) or not row.get("name"):
+            raise ValueError(f"{_event_sources_path()} row {idx} name must be a non-empty string")
+        if normalized_type != "string" or not isinstance(row.get("normalized"), str):
+            raise ValueError(f"{_event_sources_path()} row {idx} normalized must be a string")
+        normalized = row["normalized"]
+        if not normalized_pattern.fullmatch(normalized):
+            raise ValueError(f"{_event_sources_path()} row {idx} normalized must match pattern [a-z_]+")
+
+        validated.append({"runtime": runtime, "name": row["name"], "normalized": normalized})
+
+    return validated
+
+
+def _load_event_sources() -> list[dict[str, str]]:
+    event_sources = load_json_payload(_event_sources_path())
+    schema = _load_schema(_event_sources_schema_path())
+    return _validate_event_sources(event_sources, schema)
+
+
+def _runtime_normalized_events(event_sources: list[dict[str, str]], runtime: str) -> dict[str, str]:
+    mapping: dict[str, str] = {}
+    for row in event_sources:
+        if row["runtime"] == runtime:
+            normalized = row["normalized"]
+            if normalized not in mapping:
+                mapping[normalized] = row["name"]
+    return mapping
+
+
+def events_for_runtime(
+    runtime: str,
+    event_sources: list[dict[str, str]],
+    overrides: list[str] | None = None,
+) -> list[str]:
+    if not overrides:
+        mapping = _runtime_normalized_events(event_sources, runtime)
+        events = []
+        for event in DEFAULT_EVENTS:
+            normalized = _normalize_event(event)
+            if normalized not in mapping:
+                raise ValueError(
+                    f"event-sources.json is missing mapping for runtime={runtime} event={event}"
+                )
+            events.append(mapping[normalized])
+        return events
+
+    return list(overrides)
 
 
 def load_json(path: pathlib.Path) -> dict[str, Any]:
@@ -409,16 +552,16 @@ def main(argv: list[str] | None = None) -> int:
 
     repo = pathlib.Path(args.repo).expanduser().resolve()
     runtimes = args.runtime or sorted(RUNTIMES)
-    events = args.event or DEFAULT_EVENTS
+    event_sources = _load_event_sources()
 
     try:
         if args.adapter:
             return run_adapter(args)
         agent_config(repo)
-        reports = [
-            merge_runtime_hooks(repo, runtime, args.scope, events, args.apply)
-            for runtime in runtimes
-        ]
+        reports = []
+        for runtime in runtimes:
+            runtime_events = events_for_runtime(runtime, event_sources, args.event)
+            reports.append(merge_runtime_hooks(repo, runtime, args.scope, runtime_events, args.apply))
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1
