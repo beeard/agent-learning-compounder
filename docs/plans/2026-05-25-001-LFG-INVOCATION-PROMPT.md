@@ -40,7 +40,12 @@ From the worktree root:
 
 ```bash
 cd /home/tth/work/active/agent-learning-compounder-v2/
-codex exec -m gpt-5.3-codex-spark -s workspace-write - <<'EOF'
+codex exec \
+  -m gpt-5.3-codex-spark \
+  -s workspace-write \
+  --ignore-user-config \
+  -c 'model_reasoning_effort="medium"' \
+  - <<'EOF'
 [paste "Prompt to paste" block below]
 EOF
 ```
@@ -50,11 +55,22 @@ Flags rationale:
 - `-s workspace-write` — orchestrator needs to commit, create worktrees, and read repo
   state. Keep `danger-full-access` off; per-unit subagents inherit the same scope
   inside their worktree.
+- `--ignore-user-config` — strips the operator's `~/.codex/config.toml` (MCP servers,
+  pre-activated skills, memories, hooks). Measured prelude drop: 19,357 → 6,904 input
+  tokens (~64% reduction) on a smoke turn. Across 28+ subagent dispatches over a full
+  LFG run, this saves ~340K input tokens. Orchestrator gets all its context from the
+  pasted prompt + worktree files; nothing from the user config is needed.
+- `-c 'model_reasoning_effort="medium"'` — explicit override since `--ignore-user-config`
+  discards the config's default. `high` is overkill for pure orchestration; `medium`
+  balances dispatch-quality vs cost. Per-unit subagents can opt for higher effort in
+  their own `codex exec` calls if a unit needs deeper reasoning.
 
 Stream-of-output goes to stdout. Capture with `tee` if you want a transcript:
 
 ```bash
-codex exec -m gpt-5.3-codex-spark -s workspace-write 2>&1 | tee logs/lfg-$(date +%Y%m%dT%H%M%S).log
+codex exec -m gpt-5.3-codex-spark -s workspace-write --ignore-user-config \
+  -c 'model_reasoning_effort="medium"' \
+  2>&1 | tee logs/lfg-$(date +%Y%m%dT%H%M%S).log
 ```
 
 ---
@@ -77,15 +93,19 @@ Plan-fil-splitting (post pass-7): subagents per unit should load BOTH files firs
 
 EXECUTION STRATEGY: wave-based parallel subagent dispatch per the plan's "Parallel Execution Plan" section. Critical path = ~12 wall-clock steps vs 21 units → ~40% reduction over serial execution.
 
-ORCHESTRATION PRIMITIVE: you are the orchestrator. Dispatch each unit as a child `codex exec` invocation inside its own git worktree:
+ORCHESTRATION PRIMITIVE: you are the orchestrator. Dispatch each unit as a child `codex exec` invocation inside its own git worktree. Each child uses the same lean flags as the orchestrator — strip user config to minimize prelude bloat:
 
   WORKTREE=../alc-plugin-v2-exp-<wave>-<unit>          # sibling to the orchestrator worktree
   git worktree add "$WORKTREE" alc-plugin-v2           # branch off the integration branch
-  cd "$WORKTREE"
-  codex exec -m gpt-5.3-codex-spark \
-    -c sandbox_mode='"workspace-write"' \
-    --skip-git-repo-check \
+  codex exec \
+    -m gpt-5.3-codex-spark \
+    -s workspace-write \
+    --ignore-user-config \
+    -c 'model_reasoning_effort="medium"' \
+    --cd "$WORKTREE" \
     "<unit-specific-prompt>"
+
+(`--ignore-user-config` strips the operator's ~/.codex/config.toml — MCP servers, pre-activated skills, memories, hooks. Saves ~12K input tokens of prelude per child. Across 28+ dispatches: ~340K tokens. `--cd` sets the child's working directory to the worktree so it reads the right files. If a specific unit needs higher reasoning, that unit's prompt can request `-c 'model_reasoning_effort="high"'` — default is medium.)
 
 For parallel waves, background each child (`&`) and `wait` for the batch before running the gate-check. Each child commits on its own branch (`alc-plugin-v2-exp-<wave>-<unit>`); after the batch, orchestrator merges children into `alc-plugin-v2` in dependency order, then removes worktrees + branches.
 
@@ -180,7 +200,7 @@ Start with W1. After W1 commits, stop and surface to operator: "W1 complete. W2 
 ## Notes for operator
 
 - **Total wall-clock estimate:** ~9-12 hours if Phase A green-lit; ~5-6 hours if scope collapses to synthesizer-only. Codex-Spark fast tier should land near the low end.
-- **Subagent budget:** max fan-out is 5 (W6). gpt-5.3-codex-spark token costs are lower than gpt-5.5; rough estimate $3-10 for full execution including reviews.
+- **Subagent budget:** max fan-out is 5 (W6). gpt-5.3-codex-spark token costs are lower than gpt-5.5; with `--ignore-user-config` stripping prelude bloat (~12K tokens/dispatch × 28 dispatches = ~340K input tokens saved), rough estimate $3-8 for full execution including reviews. Without the strip, expect $5-10.
 - **Operator gates:** W2 is the one mandatory operator gate. All other waves are auto-dispatched if gate-check passes.
 - **Resume:** if interrupted, restart `codex exec` with the same prompt — it inspects existing merged commits on `alc-plugin-v2` and skips completed waves. Each wave commits to the integration branch independently.
 - **Scope-collapse path:** Phase A's G0.5.1 returning RED is a planned outcome, not a failure. Document in RESULTS.md and execute the collapsed scope (synthesizer + nudges).
