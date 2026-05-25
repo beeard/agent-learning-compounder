@@ -92,7 +92,7 @@ RESUME CONTEXT — execute these checks FIRST before any wave dispatch:
 
 The "Start with W1" instruction at the end of this prompt only applies when RESULTS.md is absent or Phase A is not yet green-lit. Otherwise use the resume point from (4).
 
----
+═══════════════════════════════════════════════════════════════
 
 Execute the implementation plan at:
 
