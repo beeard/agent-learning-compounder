@@ -332,6 +332,12 @@ def install_repo_integration(
     return config
 
 
+def persist_state_dir_hint(repo: pathlib.Path, state_root: pathlib.Path) -> pathlib.Path:
+    config = _read_json_or_none(repo / ".agent-learning.json") or {}
+    merged = {**config, "state_dir": str(state_root)}
+    return write_json(repo / ".agent-learning.json", merged)
+
+
 def run_self_test(repo_state: pathlib.Path, repo: pathlib.Path | None = None) -> list[str]:
     required = [
         repo_state / "baseline.json",
@@ -409,6 +415,8 @@ def main(argv: list[str] | None = None) -> int:
     repo = pathlib.Path(args.repo).expanduser().resolve()
     runtime = resolve_runtime(args.runtime, repo)
     state_root = resolve_state_dir(args.state_dir, args.personal, repo)
+    if not args.install_repo_integration:
+        persist_state_dir_hint(repo, state_root)
     state_root.mkdir(parents=True, exist_ok=True)
     repo_state = repo_state_dir(repo, state_root)
     reports = repo_state / "reports"
