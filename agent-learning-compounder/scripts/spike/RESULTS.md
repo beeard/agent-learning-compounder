@@ -6,8 +6,10 @@ Working tree: /home/tth/work/active/agent-learning-compounder-v2/
 
 ## W1 — Baseline test snapshot (U1)
 
+- Re-verified on 2026-05-26: fixtures=251, tests=1, pressure=4.
+
 - `python3 -m unittest discover -s fixtures/tests`
-  - Ran `251` tests in `25.882s`
+  - Ran `251` tests in `25.962s`
   - `OK (skipped=4)`
 - `python3 -m unittest discover -s tests`
   - Ran `1` test in `0.000s`
