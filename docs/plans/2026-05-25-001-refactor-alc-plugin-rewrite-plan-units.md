@@ -210,9 +210,10 @@ Two **foundation modules** sequential first, then five **parallel-safe** thin ad
  - Effort: 45 min for dataclass + auto-gen helpers. Saves N timer i schema-drift-bugs senere.
 
 - **U5.5.0b (45 min, +15 min for boundary-enforcement) — `bin/event_writer.py` — delt write-path (arch-#1) + boundary-invariant (arch-#3):**
- - `write_event(raw_or_dataclass, source: Literal["hook","transcript","correlation","background","apply","eval"]) -> str` (returnerer event_id)
- - `write_events_batch(rows, source) -> list[str]` (én flock-acquire for hele batch — perf for backfill)
+ - `write_event(raw_or_dataclass, source: Literal["hook","transcript","correlation","background","apply","eval"], auto_id_fallback: bool = True) -> str` (returnerer event_id)
+ - `write_events_batch(rows, source, auto_id_fallback: bool = True) -> list[str]` (én flock-acquire for hele batch — perf for backfill)
  - Eier internt: `EventV4.from_dict(raw)` validering, `scrub_secrets()` på free-text felter, `bounded()` på alle string-felter, **`_enforce_boundary(event)` som hever ValueError på brudd**, `fcntl.flock` på `<state>/.events.lock`, atomic append-with-rotate til `<state>/events.jsonl`, ny `event_id` hvis ikke i raw
+ - **`auto_id_fallback` semantikk (N1, architecture-review round 2):** when True (default, used by hooks/transcripts/correlation), `write_event` generates `evt_{ts}_{shorthash}` if `event_id` absent in raw. When **False**, `write_event` raises `ValueError("event_id required; deterministic_id must be pre-computed for this source")` if `event_id` is absent — locks the contract structurally. **U11 alc_apply, U13 alc_eval, U20 alc_sync_cloudflare MUST pass `auto_id_fallback=False` + pre-computed `EventV4.deterministic_id(...)`** so revert / verdict-lookup / D1-mirror can reconstruct the same ID later. Hook and transcript adapters keep `auto_id_fallback=True` (default).
  - `_enforce_boundary(event)` regelsett:
  - Ingen secret-patterns (regex: `sk-`, `bearer `, `aws_access_key_`, `ghp_`, `gho_`, etc.) i serialisert event
  - Ingen absolute host paths (`/home/`, `/Users/`, `C:\Users\`)
@@ -221,10 +222,11 @@ Two **foundation modules** sequential first, then five **parallel-safe** thin ad
  - Ingen raw transcript chunk (regex: assistant/user-tag fra Claude/Codex format)
  - Source-felt tagged inn i event for audit-debug (telemetry, ikke kanonisk schema). NB: `source` indirekte autoriserer hvilke event-typer som er valid (apply → kun `patch_*`-events, eval → kun `eval_*`-events) — defense-in-depth.
  - Same `_enforce_boundary`-funksjon er importert av `bin/artifact_writer.py` (U6) for konsistent enforcement på ikke-events-artifacts (patches/, alc-agents/)
+ - **Read-path trust policy (N2, architecture-review round 2):** read-paths (`bin/alc_query.py`, dashboard, MCP tools) **trust the write-invariant** — they do NOT re-scrub on output. This is per KTD-17 ("graceful degradation for reads, fail-fast for writes") and keeps read-cost flat. The **only** read-side scrubbing happens in `EventV4.upgrade_from(v3_row)` which MUST re-apply the **current** `_enforce_boundary` rules before returning the upgraded EventV4 — any v3 row that fails current rules becomes ValueError (caller's choice to filter/log/drop). This makes the trust model explicit: writes enforce, reads trust, upgrades re-enforce. Documented here so future maintainers don't add ad-hoc re-scrubbing in alc_query.
 
 Five sub-deliverables — **all five are parallel-dispatchable** once 0a + 0b foundation lands. Each is a thin adapter (~25-40 linjer) over event_writer with its own test file and zero shared mutable state. Wave-3 dispatcher spawns 5 subagents in parallel:
 
-- **U5.5.1 (30 min) — Expand `DEFAULT_EVENTS` taxonomy + Codex mapping:**
+- **U5.5.1 (30 min, +15 min for schema + idempotence tests per N3) — Expand `DEFAULT_EVENTS` taxonomy + Codex mapping:**
  - Add to `bin/install_runtime_hooks:21`: `SubagentStop`, `SessionEnd`, `Notification`, `PreCompact` (Claude)
  - Codex mapping moves OUT of Python into `skills/alc-core/references/event-sources.json` arch-#5 partial — deklarativ data ikke hardkodet dict):
  ```json
@@ -236,6 +238,9 @@ Five sub-deliverables — **all five are parallel-dispatchable** once 0a + 0b fo
  ```
  - install_runtime_hooks reads this file; future runtime (OpenCode, Gemini) = new data-rows, ingen kode-endring
  - Re-run `install_runtime_hooks --apply` after upgrade adds entries for new events without removing existing ones
+ - **JSON schema published alongside (N3, architecture-review round 2):** create `skills/alc-core/references/event-sources.schema.json` (JSON Schema Draft 7) that defines the row shape — required fields `runtime` (enum: `claude|codex|opencode|gemini`), `name` (str), `normalized` (str matching `[a-z_]+`); additionalProperties forbidden. `install_runtime_hooks --apply` validates the JSON against this schema before writing any runtime hook config; schema-violations cause exit 1 with the offending row reported. Same drift-prevention rationale as KTD-20 (catalogs auto-rendered from code).
+ - **Idempotence test (N3):** `test_install_runtime_hooks_idempotent` — run `--apply` twice with the same `event-sources.json` → second run produces empty diff against runtime hook configs; running `--apply` after adding one new row only appends that row, never reorders or duplicates existing rows.
+ - **Malformed-JSON test (N3):** `test_install_runtime_hooks_rejects_malformed_event_sources` — give the script an event-sources.json with a missing required field / wrong-typed value / additional property → exit non-zero with clear error pointing to the row; **no partial state written** (no half-updated `.codex/hooks.json` or `.claude/settings.local.json`).
 
 - **U5.5.2 (45 min, redusert fra 1h) — Splitt til to thin adapters:**
  - `bin/backfill_transcripts`: engang-bruk via `--since <duration>`, leser ALLE transcripts i vinduet, kaller `event_writer.write_events_batch(...)`. Egen idempotency (event_id derived deterministisk fra path+offset så re-run gir samme ids).
@@ -295,6 +300,9 @@ Backward compat (KTD-14): readers must treat v3 rows (existing) as v4 rows with 
  - Total event size ≤ existing MAX_HOOK_EVENT_BYTES (telemetry compression-friendly)
  - **`EventV4.deterministic_id` (C7):** same `(actor_kind, event_type, payload_key)` triple → identical `event_id` across calls; different triples → different IDs; `payload_key=None` → ValueError (force callers to opt in)
  - **`test_event_id_deterministic_for_apply_revert_pair` (C7):** simulate U11 apply emitting `patch_applied` with `payload_key=f"{patch_id}:{ts}"`; reconstruct the same key in revert path; assert `write_event` returns identical event_id and revert finds the original row in events.sqlite via that ID
+ - **`test_v3_upgrade_re_enforces_boundary` (N2):** build a v3-shape row that violates current `_enforce_boundary` rules (e.g., string field > MAX_LINE_LEN, or contains `/home/tth/secrets.txt`); call `EventV4.upgrade_from(v3_row)` → ValueError raised; row never materialized as EventV4. Confirms the read-path trust policy: writes enforced, reads trust, upgrades re-enforce.
+ - **`test_write_event_rejects_missing_id_when_fallback_disabled` (N1):** `write_event(raw_without_id, source="apply", auto_id_fallback=False)` → ValueError. `write_event(raw_without_id, source="apply", auto_id_fallback=True)` → succeeds with auto-ID. Locks the contract structurally so future U11 refactor that drops `deterministic_id` pre-computation fails immediately, not silently with cryptic revert lookups.
+ - **`test_apply_revert_round_trip_via_event_id` (N1):** end-to-end: U11 emits `patch_applied` with deterministic ID + `auto_id_fallback=False`; U11 revert path independently reconstructs `EventV4.deterministic_id(...)` from `(patch_id, apply_ts)`; query events.sqlite via that ID → row found. If U11 implementation ever bypasses `deterministic_id`, this test fails before revert breaks in production.
 
 - **Transcript ingest (R23):**
  - Parse Claude JSONL with mix of user/assistant/tool_use/tool_result → emits normalized events with correct correlation_chain
