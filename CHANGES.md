@@ -1,5 +1,29 @@
 # Changes
 
+## 2026.05.25+review7-plus1.2
+
+Hygiene release. Ships the source-tree git history that backs `plus1.1` and
+adds gitignore patterns useful for downstream installers; no functional
+behavior change vs `plus1.1`.
+
+- `.gitignore` gains patterns for the auto-generated hook config files
+  `install_runtime_hooks.py` writes alongside the skill — `/.codex/hooks.json`,
+  `/.claude/settings.local.json`, and their `.agent-learning-bak-*` siblings.
+  These files carry absolute `$HOME` paths and should not be committed by
+  downstream consumers; the upstream ignore patterns prevent that accidentally.
+- Git history now includes `fix/mcp-stdio-1.0` merged to `master` so the MCP
+  stdio fix shipped in `plus1.1` is also visible in the source tree
+  (`master @ 42188b8`). The `plus1.1` tarball already contained the fixed
+  code — `plus1.2` rebuilds with the committed-to-master state plus the
+  `.gitignore` changes so the SHA-256 reflects the canonical source state.
+- Adds `CLAUDE.md` at the repo root (contributor guide for the skill
+  package's source tree). Outer-repo file; does not ship in the tarball
+  staging dir.
+
+No code or behavior changes in `agent-learning-compounder/` (the inner skill
+dir). Consumers on `plus1.1` do not need to upgrade for functional reasons;
+upgrade only if you want the improved `.gitignore`.
+
 ## 2026.05.25+review7-plus1.1
 
 Patch release. Fixes a real bug in the MCP stdio entry point discovered
