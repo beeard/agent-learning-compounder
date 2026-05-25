@@ -1,0 +1,84 @@
+{
+  "artifacts": [
+    {
+      "id": "patterns",
+      "path_template": "patterns.json",
+      "producer": "analyst_patterns",
+      "consumers": ["dashboard", "analytics"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "analyst_patterns",
+        "read": "all",
+        "update": "analyst_patterns",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 5,
+        "cleanup_command": ""
+      },
+      "max_size": 1048576
+    },
+    {
+      "id": "anomalies",
+      "path_template": "anomalies.json",
+      "producer": "analyst_anomalies",
+      "consumers": ["dashboard", "analytics"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "analyst_anomalies",
+        "read": "all",
+        "update": "analyst_anomalies",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 5,
+        "cleanup_command": ""
+      },
+      "max_size": 1048576
+    },
+    {
+      "id": "correlations",
+      "path_template": "correlations.json",
+      "producer": "analyst_correlations",
+      "consumers": ["dashboard", "analytics"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "analyst_correlations",
+        "read": "all",
+        "update": "analyst_correlations",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 5,
+        "cleanup_command": ""
+      },
+      "max_size": 1048576
+    },
+    {
+      "id": "recommendations",
+      "path_template": "recommendations.json",
+      "producer": "analyst_score",
+      "consumers": ["dashboard", "recommender_render"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "analyst_score",
+        "read": "all",
+        "update": "analyst_score",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 3,
+        "cleanup_command": ""
+      },
+      "max_size": 1048576
+    }
+  ]
+}
