@@ -35,7 +35,13 @@ def validate_host(host: str, insecure_public: bool) -> str | None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--repo", required=True, type=Path)
+    p.add_argument(
+        "--personal",
+        type=Path,
+        default=None,
+        help="Personal archive root (default: ~/.agent-learning or AGENT_LEARNING_PERSONAL).",
+    )
+    p.add_argument("--repo", type=Path, default=None, help="Optional repo root (back-compat).")
     p.add_argument(
         "--host",
         default="127.0.0.1",
@@ -74,7 +80,15 @@ def main():
         return 2
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from dashboard import build_app
-    app = build_app(repo=args.repo.resolve())
+    app = build_app(
+        personal=args.personal.resolve() if args.personal else None,
+        repo=args.repo.resolve() if args.repo else None,
+    )
+    print(
+        f"[serve_dashboard] dashboard on http://{args.host}:{args.port}/  "
+        f"personal={args.personal or '(auto)'}",
+        file=sys.stderr,
+    )
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
 
 

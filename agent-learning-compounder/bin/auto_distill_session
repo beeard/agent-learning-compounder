@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Distill recent agent-learning evidence after a session ends.
+#
+# Designed to be invoked from a Claude Code (or Codex) Stop hook.
+# Forks the work into the background and returns immediately so the hook
+# never blocks the session. Logs to "$AGENT_LEARNING_PERSONAL/logs/".
+#
+# Environment:
+#   AGENT_LEARNING_PERSONAL   personal archive root (default: ~/.agent-learning)
+#   AGENT_LEARNING_SKILL_DIR  override skill location (default: auto-detected)
+
+set -u
+
+PERSONAL="${AGENT_LEARNING_PERSONAL:-$HOME/.agent-learning}"
+
+# Resolve the skill directory. Prefer an explicit override, otherwise use the
+# directory of this script's parent (works both for .claude/skills and .agents/skills).
+if [[ -n "${AGENT_LEARNING_SKILL_DIR:-}" ]]; then
+  SKILL_DIR="$AGENT_LEARNING_SKILL_DIR"
+else
+  SELF_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+  SKILL_DIR="$(cd "$SELF_DIR/.." && pwd -P)"
+fi
+
+DISTILL="$SKILL_DIR/scripts/distill_learning.py"
+EXTRACT="$SKILL_DIR/scripts/extract_sessions.py"
+
+if [[ ! -x /usr/bin/python3 ]] && ! command -v python3 >/dev/null 2>&1; then
+  exit 0
+fi
+if [[ ! -f "$DISTILL" || ! -f "$EXTRACT" ]]; then
+  exit 0
+fi
+
+# Personal archive seeds — distill --write requires both files to exist.
+mkdir -p "$PERSONAL" "$PERSONAL/logs"
+[[ -f "$PERSONAL/insights.md" ]] || : > "$PERSONAL/insights.md"
+[[ -f "$PERSONAL/learning.md" ]] || : > "$PERSONAL/learning.md"
+
+# Pre-compute a stable log path for this run so the parent and child agree.
+ts="$(date +%Y%m%d-%H%M%S)"
+log="$PERSONAL/logs/auto-distill-${ts}.log"
+
+# Window: last day, 20 sessions max — small enough to run quickly.
+days="${AGENT_LEARNING_AUTO_DAYS:-1}"
+max_sessions="${AGENT_LEARNING_AUTO_MAX_SESSIONS:-20}"
+
+# Fork-and-detach. Use setsid where available so the child fully detaches from
+# the parent process group; otherwise nohup keeps the child alive.
+run_in_background() {
+  if command -v setsid >/dev/null 2>&1; then
+    setsid -f bash -c "$1" >/dev/null 2>&1
+  else
+    nohup bash -c "$1" >/dev/null 2>&1 &
+  fi
+}
+
+read -r -d '' child <<EOF || true
+  set -u
+  exec >>"$log" 2>&1
+  echo "[auto-distill] start \$(date -Is)"
+  echo "[auto-distill] skill=$SKILL_DIR personal=$PERSONAL"
+
+  run_dir="\$(mktemp -d)"
+  trap 'rm -rf "\$run_dir"' EXIT
+
+  python3 "$EXTRACT" \\
+    --path "$HOME/.codex/sessions" \\
+    --path "$HOME/.claude/projects" \\
+    --days $days \\
+    --max-sessions $max_sessions \\
+    --output "\$run_dir/corpus.txt" \\
+    || { echo "[auto-distill] extract failed (no sessions?)"; exit 0; }
+
+  printf '%s\n' '{"repo": null, "note": "auto-distill", "source_files": []}' \\
+    > "\$run_dir/baseline.json"
+
+  python3 "$DISTILL" \\
+    --corpus "\$run_dir/corpus.txt" \\
+    --baseline "\$run_dir/baseline.json" \\
+    --output "\$run_dir/report.md" \\
+    --mode all \\
+    --write \\
+    --personal "$PERSONAL"
+
+  echo "[auto-distill] done \$(date -Is)"
+EOF
+
+run_in_background "$child"
+
+# Always succeed; do not block the hook.
+exit 0

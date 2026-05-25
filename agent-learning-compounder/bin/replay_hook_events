@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Replay hook event JSONL, upgrading v1 rows to v2.
+"""Replay hook event JSONL, upgrading old rows to the latest schema.
 
 Reads --input JSONL, normalizes each row through the collector's allowlist,
-stamps schema_version=2, writes to --output. Idempotent: v2 rows pass through.
+stamps the current collector schema_version, and writes to --output.
 Preserves the original ``ts`` so downstream time-series consumers (Phase 2B
 effectiveness, 3B causal probe, Phase 4 federation) keep their ordering.
 """

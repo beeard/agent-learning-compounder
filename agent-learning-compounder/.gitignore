@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / dashboard
+dashboard/web/node_modules/
+dashboard/web/dist/
+node_modules/
+
+# Logs and runtime state
+*.log
+*.tmp
+.tmp-*
+
+# Personal archive (user data — never commit)
+.agent-learning/
+.agent-learning.json
+reports/agent-learning/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Backups
+*.bak
+*.bak-*

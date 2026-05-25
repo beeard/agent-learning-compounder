@@ -16,6 +16,51 @@ The durable agent-facing outputs are:
 - `domain-rules.active.json`: local domain classifier rules selected at init.
 - `improvement-queue.jsonl`: review queue, not automatically applied memory.
 
+## LLM Runtime Contract
+
+At session start, an LLM should treat ALC as a compact context system:
+
+1. Read `.agent-learning.json` for the repo-local pointers.
+2. Load only `latest-approved-gates.md` and `latest-skill-context.md`.
+3. Apply those gates as session guidance, then continue with the repo's own
+   AGENTS/CLAUDE instructions and task-specific files.
+
+Do not load `hook-events.jsonl`, archived reports, transcripts, or raw corpora
+into context during normal work. Those are data sources for ALC scripts, not
+session-start instructions.
+
+## ALC MCP Usage
+
+When user-level MCP server `alc` is configured, LLMs can use the same state
+without parsing files by hand:
+
+- `get_gates(repo, scope?)`: read approved gates for current repo/scope.
+- `get_skill_context(repo)`: read current skill-health and routing context.
+- `report_agent_event(repo, ...)`: record bounded subagent/background-worker
+  lifecycle events such as start, complete, blocked, or validation outcome.
+- `report_outcome(repo, gate_id, outcome, correlation_id?)`: record whether a
+  loaded gate was helpful, unhelpful, or skipped.
+- `propose_gate(repo, domain, category, gate, evidence?)`: queue a new candidate
+  gate for review; this does not approve or install the gate.
+
+Use MCP calls for structured state, not for transcript storage. Payloads must
+stay bounded and scrubbed: no prompts, tool outputs, raw diffs, transcript
+chunks, secrets, tokens, or broad environment dumps.
+
+## Subagent Dispatch Telemetry
+
+For subagents/background workers, record only lifecycle metadata that helps
+future main agents choose execution shape:
+
+- role/backend/id/dispatch id,
+- model/effort/sandbox when repo telemetry flags allow it,
+- repo-relative write scope, worktree, and branch when scope capture is enabled,
+- outcome and short non-secret labels.
+
+The parent/main thread owns the policy. Repo-local `.agent-learning.json`
+`telemetry` flags can disable model fields, scope fields, or all dispatch detail
+without disabling the event row itself.
+
 ## One-Command Repo Bootstrap
 
 From the installed skill directory:
@@ -68,6 +113,9 @@ python3 scripts/extract_sessions.py --path ~/.codex/sessions --path ~/.claude/pr
 python3 scripts/distill_learning.py --corpus "$RUN_DIR/corpus.txt" --baseline "$RUN_DIR/baseline.json" --output "$RUN_DIR/report.md" --mode all
 python3 scripts/validate_outputs.py "$RUN_DIR/report.md"
 python3 scripts/export_gates.py --report "$RUN_DIR/report.md" --output "$RUN_DIR/approved-gates.md"
+# distill also emits a self-contained graphical HTML report at "$RUN_DIR/report.html"
+# (override path with --html-output, suppress with --no-html). The HTML embeds the
+# structured payload as JSON inside <script id="report-payload"> for downstream tools.
 ```
 
 If the repo was initialized, `distill_learning.py` auto-reads `.agent-learning.json`

@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Light — shadcn "neutral" base, warmed slightly */
+    --background: 40 12% 98%;
+    --foreground: 20 14% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 20 14% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 20 14% 10%;
+    --primary: 20 14% 12%;
+    --primary-foreground: 40 12% 98%;
+    --secondary: 30 8% 95%;
+    --secondary-foreground: 20 14% 12%;
+    --muted: 30 8% 95%;
+    --muted-foreground: 20 6% 45%;
+    --accent: 22 80% 42%;
+    --accent-foreground: 40 12% 98%;
+    --destructive: 0 84% 45%;
+    --destructive-foreground: 40 12% 98%;
+    --border: 30 8% 90%;
+    --input: 30 8% 88%;
+    --ring: 22 80% 42%;
+    --radius: 0.625rem;
+
+    --chart-1: 22 80% 42%;
+    --chart-2: 200 70% 40%;
+    --chart-3: 260 55% 50%;
+    --chart-4: 120 40% 38%;
+    --chart-5: 38 75% 50%;
+
+    --lv-3: 22 80% 42%;
+    --lv-2: 45 80% 35%;
+    --lv-1: 0 0% 60%;
+  }
+
+  .dark {
+    --background: 20 10% 6%;
+    --foreground: 40 12% 92%;
+    --card: 20 10% 8%;
+    --card-foreground: 40 12% 92%;
+    --popover: 20 10% 8%;
+    --popover-foreground: 40 12% 92%;
+    --primary: 40 12% 92%;
+    --primary-foreground: 20 10% 8%;
+    --secondary: 20 8% 14%;
+    --secondary-foreground: 40 12% 92%;
+    --muted: 20 8% 14%;
+    --muted-foreground: 20 6% 60%;
+    --accent: 22 90% 58%;
+    --accent-foreground: 20 10% 8%;
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 40 12% 92%;
+    --border: 20 8% 18%;
+    --input: 20 8% 18%;
+    --ring: 22 90% 58%;
+
+    --chart-1: 22 90% 58%;
+    --chart-2: 200 80% 55%;
+    --chart-3: 270 70% 65%;
+    --chart-4: 140 50% 50%;
+    --chart-5: 45 90% 60%;
+
+    --lv-3: 22 90% 58%;
+    --lv-2: 45 90% 55%;
+    --lv-1: 20 4% 38%;
+  }
+
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body { font-feature-settings: "rlig" 1, "calt" 1, "cv11" 1, "ss01" 1; }
+}
+
+/* Custom recharts theming — keep grid lines subtle */
+.recharts-cartesian-grid line {
+  stroke: hsl(var(--border));
+  stroke-dasharray: 2 4;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: hsl(var(--muted-foreground));
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Code blocks */
+code, kbd, samp {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  background: hsl(var(--muted));
+  padding: 0.05em 0.4em;
+  border-radius: 0.25rem;
+}

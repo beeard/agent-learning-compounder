@@ -83,8 +83,31 @@ skill installed in the active runtime root.
   generated reports with `scripts/validate_outputs.py`.
 - Persist only bounded structured telemetry; never persist raw prompts, tool output,
   transcript chunks, or secret markers.
+- Agent/subagent/background-worker telemetry must stay bounded: record role,
+  backend, dispatch id, model/effort/sandbox, write scope, worktree/branch, and
+  outcome only when repo `telemetry` flags allow those details.
 - No durable automation without explicit operator action; manifest-only refresh
   applies to local scheduler only after explicit registration.
+
+## LLM Usage Contract
+
+When an LLM/main agent starts work in an initialized repo, read
+`.agent-learning.json`, then load only `latest-approved-gates.md` and
+`latest-skill-context.md`. Treat them as compact routing/context, not as raw
+memory.
+
+When the `alc` MCP server is available, use it for structured operations:
+
+- `get_gates`: fetch approved gates for the current repo/scope.
+- `get_skill_context`: fetch current skill-routing context.
+- `report_agent_event`: record bounded subagent/background-worker lifecycle.
+- `report_outcome`: record whether a loaded gate helped.
+- `propose_gate`: queue a candidate gate for review; it does not approve memory.
+
+Never send prompts, tool output, transcript chunks, diffs, secrets, or broad
+environment dumps to ALC MCP/hook telemetry. Record only bounded identifiers,
+roles, outcomes, and repo-relative scope fields permitted by repo telemetry
+flags.
 
 ## Commands
 
@@ -94,6 +117,10 @@ For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
 - Baseline: `python3 scripts/build_repo_baseline.py --repo "$PWD" --output "$RUN_DIR/baseline.json"`
 - Corpus: `python3 scripts/extract_sessions.py --path ~/.codex/sessions --path ~/.claude/projects --cwd "$PWD" --days 7 --max-sessions 50 --output "$RUN_DIR/corpus.txt"`
 - Report: `python3 scripts/distill_learning.py --corpus "$RUN_DIR/corpus.txt" --baseline "$RUN_DIR/baseline.json" --output "$RUN_DIR/report.md" --mode all`
+  - Emits a self-contained graphical HTML report alongside the markdown (`report.html` next to `report.md`). Override path with `--html-output`, or pass `--no-html` to skip.
+  - With `--write`, also archives `YYYY-MM-DD.html` and `latest-report.html` under `personal/reports/agent-learning/`.
+- Standalone HTML: `python3 scripts/render_html_report.py --corpus ... --baseline ... --output report.html [--payload-json payload.json]` (same inputs as distill, HTML only).
+- Auto-distill on session end: `bin/auto_distill_session` is a non-blocking wrapper that forks the full pipeline and writes to `$AGENT_LEARNING_PERSONAL` (default `~/.agent-learning`). Wire it into a Claude Code `Stop` hook (or Codex equivalent). With `--write`, `learning.md` gets one dated line per gate at level ≥ 2 in addition to the summary entry in `insights.md`.
 - Custom domains: add `--domain-rules <json>` or `--domain-preset tm-norge`; initialized repos auto-read `.agent-learning.json`.
 - Gates/context: `export_gates.py`, `map_active_skills.py`, `extract_skill_usage.py`, `evaluate_skill_impact.py`, `export_skill_context.py`.
 - Refresh/hooks: `refresh_learning_state.py`, `collect_hook_event.py`, `install_runtime_hooks.py --dry-run` then `--apply`.

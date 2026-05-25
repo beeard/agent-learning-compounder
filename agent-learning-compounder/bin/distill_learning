@@ -514,6 +514,10 @@ def render_report(
     ]
     map_rows = classify_events(baseline, user_messages, domain_rules)
     if personal:
+        # Drop rows for domains the operator has muted via the dashboard.
+        muted = _load_muted_domains(personal)
+        if muted:
+            map_rows = [row for row in map_rows if row.get("domain") not in muted]
         prior_report, level_changes = prior_report_context(personal, map_rows)
         proposed_evergreen = evergreen_proposals(personal, baseline, u_lines)
     else:
@@ -666,6 +670,94 @@ def archive_report(personal: pathlib.Path, report: str, today: str) -> pathlib.P
     return target
 
 
+def archive_html_report(personal: pathlib.Path, html_text: str, today: str) -> pathlib.Path:
+    target_dir = personal / "reports" / "agent-learning"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{today}.html"
+    if target.exists() and target.read_text(encoding="utf-8") != html_text:
+        stamp = dt.datetime.now(dt.timezone.utc).strftime("%H%M%S")
+        target = target_dir / f"{today}-{stamp}.html"
+    target.write_text(html_text, encoding="utf-8")
+    latest = target_dir / "latest-report.html"
+    latest.write_text(html_text, encoding="utf-8")
+    return target
+
+
+def _load_muted_domains(personal: pathlib.Path) -> set[str]:
+    """Read the dashboard's muted-domains.json. Safe on missing/invalid file."""
+    path = personal / "actions" / "muted-domains.json"
+    if not path.is_file():
+        return set()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return set()
+    if not isinstance(data, list):
+        return set()
+    return {
+        (item.get("domain") or "").strip()
+        for item in data
+        if isinstance(item, dict) and (item.get("domain") or "").strip()
+    }
+
+
+def derive_html_output(markdown_output: pathlib.Path, override: str | None) -> pathlib.Path:
+    if override:
+        return pathlib.Path(override)
+    if markdown_output.suffix.lower() == ".md":
+        return markdown_output.with_suffix(".html")
+    return markdown_output.with_name(markdown_output.name + ".html")
+
+
+def append_metrics_row(personal: pathlib.Path, payload: dict) -> pathlib.Path:
+    """Append a single JSON record per --write run to metrics.jsonl.
+
+    Schema (stable; new keys may be added, existing keys retain meaning):
+      ts             ISO-8601 UTC instant of the run
+      date           local YYYY-MM-DD
+      mode           distill mode (typically "all")
+      repo           baseline.repo value, or null
+      totals         payload["totals"] verbatim
+      by_level       {"3": N, "2": N, "1-2": N}
+      by_domain      [{domain, level, count, sessions}, ...]
+      domain_rules   {count, source}
+      prior_report   path string or null
+    """
+    target_dir = personal / "reports" / "agent-learning"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    metrics_path = target_dir / "metrics.jsonl"
+
+    rows = payload.get("agent_compensation", {}).get("rows", []) or []
+    by_level: dict[str, int] = {}
+    for row in rows:
+        level = row.get("level", "1-2")
+        by_level[level] = by_level.get(level, 0) + 1
+    by_domain = [
+        {
+            "domain": row["domain"],
+            "level": row.get("level", "1-2"),
+            "count": row.get("count", 0),
+            "sessions": len(row.get("session_refs", []) or []),
+            "gate_category": row.get("gate_category", ""),
+        }
+        for row in rows
+    ]
+    record = {
+        "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "date": payload.get("date"),
+        "mode": payload.get("mode"),
+        "repo": payload.get("repo"),
+        "totals": payload.get("totals", {}),
+        "by_level": by_level,
+        "by_domain": by_domain,
+        "domain_rules": payload.get("domain_rules", {}),
+        "prior_report": payload.get("prior_report_path"),
+    }
+    with metrics_path.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return metrics_path
+
+
 def write_personal_updates(personal: pathlib.Path, report: str, today: str) -> list[pathlib.Path]:
     errors = validate(report)
     if errors:
@@ -683,15 +775,30 @@ def write_personal_updates(personal: pathlib.Path, report: str, today: str) -> l
         f'[{today}] Agent-learning run found reusable session steering that future agents should '
         f'turn into concrete gates. Top gate: {gate} (source: "{source_quote}")'
     )
-    learning_entry = (
-        f'[{today}] Agent procedural-memory compounding: compile repo baseline, session evidence, '
-        f'verification status, and future-agent compensation before durable personalization. '
-        f'(source: "{source_quote}")'
-    )
     if insert_dated_entry(insights, insight_entry):
         touched.append(insights)
-    if insert_dated_entry(learning, learning_entry):
+
+    # One durable line per gate at level >= 2. Idempotent — re-runs on the
+    # same day with the same gate text are skipped by insert_dated_entry.
+    # The older "summary blurb" line was dropped — it duplicated across runs
+    # when the top quote varied without adding signal beyond `insights.md`.
+    learning_appended = False
+    for parsed in parse_gates(report):
+        level = (parsed.level or "").strip()
+        if level not in {"2", "3"}:
+            continue
+        evidence_bit = ""
+        if parsed.evidence_count and parsed.evidence_unit:
+            evidence_bit = f" ({parsed.evidence_count} {parsed.evidence_unit})"
+        gate_entry = (
+            f"[{today}] [{parsed.domain}] level {level} · {parsed.gate_category}: "
+            f"{parsed.gate}{evidence_bit}"
+        )
+        if insert_dated_entry(learning, gate_entry):
+            learning_appended = True
+    if learning_appended:
         touched.append(learning)
+
     return touched
 
 
@@ -738,6 +845,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Optional latest-skill-context.md output path. With --write, defaults to personal/reports/agent-learning/latest-skill-context.md.",
     )
     parser.add_argument("--max-gate-domains", type=int, default=9)
+    parser.add_argument(
+        "--html-output",
+        help="Optional explicit HTML report path. Defaults to <output> with .html extension.",
+    )
+    parser.add_argument(
+        "--no-html",
+        action="store_true",
+        help="Skip HTML report generation. Markdown remains the canonical output.",
+    )
     args = parser.parse_args(argv)
     if args.max_gate_domains < 1:
         parser.error("--max-gate-domains must be at least 1")
@@ -769,6 +885,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     output_path = pathlib.Path(args.output)
     output_path.write_text(report, encoding="utf-8")
+
+    payload = None
+    html_text: str | None = None
+    html_path: pathlib.Path | None = None
+    if not args.no_html or args.write:
+        from render_html_report import build_report_payload, render_html_report
+
+        payload = build_report_payload(
+            corpus,
+            baseline,
+            args.mode,
+            personal,
+            skill_map,
+            skill_usage,
+            skill_impact,
+            domain_rules,
+            domain_rules_source,
+        )
+        if not args.no_html:
+            html_text = render_html_report(payload)
+            html_path = derive_html_output(output_path, args.html_output)
+            html_path.parent.mkdir(parents=True, exist_ok=True)
+            html_path.write_text(html_text, encoding="utf-8")
+
     if args.write:
         today = dt.date.today().isoformat()
         touched = write_personal_updates(personal, report, today)
@@ -780,6 +920,20 @@ def main(argv: list[str] | None = None) -> int:
             personal / "reports" / "agent-learning" / "latest-skill-context.md"
         )
         touched.append(write_context(context_output, skill_map, skill_usage, skill_impact))
+        if html_text is not None:
+            touched.append(archive_html_report(personal, html_text, today))
+        if payload is not None:
+            touched.append(append_metrics_row(personal, payload))
+            # Best-effort dashboard render. The dashboard bundle is built once
+            # via `pnpm build` under dashboard/web; if it's missing we just log
+            # and continue — markdown + HTML report are still authoritative.
+            try:
+                from render_dashboard import DEFAULT_BUNDLE, render as render_dashboard
+
+                if DEFAULT_BUNDLE.is_file():
+                    touched.append(render_dashboard(personal, DEFAULT_BUNDLE, history_limit=180))
+            except Exception as error:  # noqa: BLE001
+                print(f"distill: dashboard render skipped ({error})", file=sys.stderr)
         print("append-only updates: written " + ", ".join(str(path) for path in touched))
     else:
         refused = False
@@ -811,7 +965,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
         if refused:
             return 1
-        print("append-only updates: dry-run")
+        suffix = f"; html: {html_path}" if html_path else ""
+        print(f"append-only updates: dry-run{suffix}")
     return 0
 
 

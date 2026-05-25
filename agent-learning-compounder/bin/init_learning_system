@@ -84,6 +84,9 @@ HOOK_EVENTS = [
     "PreToolUse",
     "PostToolUse",
     "PostToolUseFailure",
+    "AgentDispatchStart",
+    "AgentDispatchComplete",
+    "AgentDispatchBlocked",
     "SubagentStart",
     "SubagentStop",
     "Stop",
@@ -93,6 +96,12 @@ HOOK_EVENTS = [
     "ValidationFailure",
     "UserCorrection",
 ]
+
+DEFAULT_TELEMETRY_CONFIG = {
+    "agent_dispatch": True,
+    "agent_dispatch_model": True,
+    "agent_dispatch_scope": True,
+}
 
 
 def install_hooks(repo: pathlib.Path, state_root: pathlib.Path, repo_state: pathlib.Path) -> dict[str, pathlib.Path]:
@@ -133,6 +142,7 @@ def install_hooks(repo: pathlib.Path, state_root: pathlib.Path, repo_state: path
             "hook_event_log": str(hook_log),
             "hook_input": "stdin-json",
             "recommended_events": HOOK_EVENTS,
+            "telemetry": DEFAULT_TELEMETRY_CONFIG,
             "persistence": "bounded-structured-jsonl",
             "forbidden_payloads": ["raw prompts", "raw tool outputs", "transcript chunks", "secret values"],
         },
@@ -280,6 +290,9 @@ def install_repo_integration(
         "improvement_queue": str(refresh_paths.get("improvement_queue", repo_state / "improvement-queue.jsonl")),
         "refresh_manifest": str(refresh_paths.get("refresh_manifest", repo_state / "automation" / "agent-learning-refresh.manifest.json")),
     }
+    existing = _read_json_or_none(repo / ".agent-learning.json") or {}
+    existing_telemetry = existing.get("telemetry") if isinstance(existing.get("telemetry"), dict) else {}
+    payload["telemetry"] = {**DEFAULT_TELEMETRY_CONFIG, **existing_telemetry}
     refresh_script = pathlib.Path(__file__).resolve().parent / "refresh_learning_state.py"
     payload["refresh_command"] = [
         sys.executable,
@@ -304,7 +317,6 @@ def install_repo_integration(
     # not silently drop hook_command/hook_manifest/hook_event_log (or any other
     # keys the current run did not explicitly populate). Current-run keys win
     # on collision.
-    existing = _read_json_or_none(config) or {}
     merged = {**existing, **payload}
     if not hook_paths and not any(k in merged for k in ("hook_command", "hook_manifest", "hook_event_log")):
         print(
@@ -415,6 +427,7 @@ def main(argv: list[str] | None = None) -> int:
     existing_config = _read_json_or_none(config_path) or {}
     # Preserve created_at from the first run; only set it when not present.
     created_at = existing_config.get("created_at") or now_iso
+    existing_state_telemetry = existing_config.get("telemetry") if isinstance(existing_config.get("telemetry"), dict) else {}
     config = {
         "state_version": 1,
         "created_at": created_at,
@@ -424,6 +437,7 @@ def main(argv: list[str] | None = None) -> int:
         "state_dir": str(state_root),
         "personal": str(pathlib.Path(args.personal).expanduser().resolve()) if args.personal else None,
         "retention": {"hook_event_days": 30, "max_hook_event_bytes": 5_000_000},
+        "telemetry": {**DEFAULT_TELEMETRY_CONFIG, **existing_state_telemetry},
     }
     # Merge so any operator-added or future keys are preserved.
     merge_write_json(config_path, config)

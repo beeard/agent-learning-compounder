@@ -30,20 +30,21 @@ class ReplayHookEvents(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return [json.loads(line) for line in self.output_path.read_text().splitlines() if line]
 
-    def test_v1_row_upgrades_to_v2(self):
+    def test_v1_row_upgrades_to_latest_schema(self):
         self._write([{"ts": "2026-01-01T00:00:00Z", "event": "PreToolUse", "tool": "Bash"}])
         rows = self._run()
-        self.assertEqual(rows[0]["schema_version"], 2)
-        # normalize_event snake-cases event names (matches v2 collector convention).
+        self.assertEqual(rows[0]["schema_version"], 3)
+        # normalize_event snake-cases event names (matches collector convention).
         self.assertEqual(rows[0]["event"], "pre_tool_use")
 
-    def test_v2_row_passes_through(self):
+    def test_v2_row_upgrades_and_keeps_supported_fields(self):
         self._write([{
             "ts": "2026-01-01T00:00:00Z", "event": "PreToolUse",
             "tool": "Bash", "schema_version": 2, "correlation_id": "c1",
         }])
         rows = self._run()
         self.assertEqual(rows[0]["correlation_id"], "c1")
+        self.assertEqual(rows[0]["schema_version"], 3)
         self.assertEqual(len(rows), 1)
 
     def test_malformed_row_skipped_not_crashed(self):
@@ -65,7 +66,7 @@ class ReplayHookEvents(unittest.TestCase):
         self.assertFalse(self.output_path.exists())
         self.assertIn("would_write_rows=1", proc.stdout)
 
-    def test_v2_row_preserves_original_ts(self):
+    def test_old_schema_row_preserves_original_ts(self):
         self._write([{
             "ts": "2020-01-01T00:00:00Z",
             "event": "PreToolUse",

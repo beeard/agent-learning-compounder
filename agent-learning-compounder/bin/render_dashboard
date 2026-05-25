@@ -1,0 +1,167 @@
+#!/usr/bin/env python3
+"""Render the agent-learning dashboard to a self-contained HTML file.
+
+Reads the pre-built Vite/React bundle at
+`dashboard/web/dist/index.html`, injects live data (latest report payload +
+metrics.jsonl history) into the `<script id="alc-payload">` placeholder,
+and writes the resulting single-file dashboard to:
+
+    <personal>/reports/agent-learning/latest-dashboard.html
+    <personal>/reports/agent-learning/<date>-dashboard.html
+
+If the bundle is missing, instructs the operator to build it first:
+
+    cd dashboard/web && pnpm install && pnpm build
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import pathlib
+import re
+import sys
+
+
+HERE = pathlib.Path(__file__).resolve().parent
+SKILL_ROOT = HERE.parent
+DEFAULT_BUNDLE = SKILL_ROOT / "dashboard" / "web" / "dist" / "index.html"
+PLACEHOLDER_RE = re.compile(
+    r'(<script[^>]*id="alc-payload"[^>]*>)([^<]*)(</script>)',
+    re.IGNORECASE,
+)
+
+
+class DashboardError(RuntimeError):
+    pass
+
+
+def find_latest_payload(personal: pathlib.Path) -> dict | None:
+    """Read the most recent report's embedded payload."""
+    target_dir = personal / "reports" / "agent-learning"
+    if not target_dir.is_dir():
+        return None
+    candidates = sorted(
+        (
+            p
+            for p in target_dir.glob("*.html")
+            if p.name not in {"latest-report.html", "latest-dashboard.html"}
+        ),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    latest_report = target_dir / "latest-report.html"
+    if latest_report.is_file():
+        candidates.insert(0, latest_report)
+    for path in candidates:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        match = re.search(
+            r'<script[^>]*id="report-payload"[^>]*>(.*?)</script>',
+            text,
+            re.DOTALL,
+        )
+        if not match:
+            continue
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def read_history(personal: pathlib.Path, limit: int) -> list[dict]:
+    metrics = personal / "reports" / "agent-learning" / "metrics.jsonl"
+    if not metrics.is_file():
+        return []
+    rows: list[dict] = []
+    for line in metrics.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows[-limit:] if limit else rows
+
+
+def build_dashboard_data(personal: pathlib.Path, history_limit: int) -> dict:
+    latest = find_latest_payload(personal)
+    history = read_history(personal, history_limit)
+    return {
+        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "personal_root": str(personal),
+        "latest": latest,
+        "history": history,
+    }
+
+
+def inject(bundle_text: str, data: dict) -> str:
+    payload = json.dumps(data, ensure_ascii=False)
+    # Escape </script so the closing tag isn't broken if it appears in any string.
+    payload = payload.replace("</", "<\\/")
+
+    def _replace(match: re.Match[str]) -> str:
+        return f"{match.group(1)}{payload}{match.group(3)}"
+
+    new_text, n = PLACEHOLDER_RE.subn(_replace, bundle_text, count=1)
+    if n == 0:
+        raise DashboardError(
+            'no <script id="alc-payload"> placeholder in bundle; '
+            "did you rebuild the dashboard? (cd dashboard/web && pnpm build)"
+        )
+    return new_text
+
+
+def render(personal: pathlib.Path, bundle: pathlib.Path, history_limit: int) -> pathlib.Path:
+    if not bundle.is_file():
+        raise DashboardError(
+            f"dashboard bundle missing: {bundle}\n"
+            "  build it first: cd dashboard/web && pnpm install && pnpm build"
+        )
+    data = build_dashboard_data(personal, history_limit)
+    bundle_text = bundle.read_text(encoding="utf-8")
+    rendered = inject(bundle_text, data)
+    target_dir = personal / "reports" / "agent-learning"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    today = dt.date.today().isoformat()
+    dated = target_dir / f"{today}-dashboard.html"
+    latest = target_dir / "latest-dashboard.html"
+    dated.write_text(rendered, encoding="utf-8")
+    latest.write_text(rendered, encoding="utf-8")
+    return latest
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--personal", required=True, help="Personal archive root.")
+    parser.add_argument(
+        "--bundle",
+        default=str(DEFAULT_BUNDLE),
+        help="Path to the built dashboard bundle (default: skill's dashboard/web/dist/index.html).",
+    )
+    parser.add_argument(
+        "--history-limit",
+        type=int,
+        default=180,
+        help="Max history rows to embed (default 180).",
+    )
+    args = parser.parse_args(argv)
+
+    personal = pathlib.Path(args.personal).expanduser().resolve()
+    bundle = pathlib.Path(args.bundle).expanduser().resolve()
+    try:
+        out = render(personal, bundle, args.history_limit)
+    except DashboardError as error:
+        print(f"render_dashboard: {error}", file=sys.stderr)
+        return 2
+    print(f"dashboard written: {out}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

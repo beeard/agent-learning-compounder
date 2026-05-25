@@ -7,7 +7,6 @@ import argparse
 import contextlib
 import datetime as dt
 import fcntl
-import hashlib
 import json
 import os
 import pathlib
@@ -16,6 +15,13 @@ import stat
 import sys
 from typing import Any
 
+from agent_dispatch import (
+    DEFAULT_TELEMETRY_CONFIG,
+    bounded,
+    normalize_agent_dispatch,
+    normalize_path,
+    telemetry_config_from_payload,
+)
 from scrub_secrets import scrub
 from state_paths import repo_state_dir, resolve_state_dir
 
@@ -23,10 +29,10 @@ from state_paths import repo_state_dir, resolve_state_dir
 DEFAULT_MAX_HOOK_EVENT_BYTES = 5_000_000
 MAX_HOOK_EVENT_BACKUPS = 3
 
-# Bumped to 2 when correlation_id and gate_loaded_ids fields were added.
-# Phase 2B (gate effectiveness) and Phase 3B (causal probe) depend on the
-# discriminator; downstream consumers branch on schema_version.
-SCHEMA_VERSION = 2
+# Bumped when bounded optional fields are added. Phase 2B (gate effectiveness)
+# and Phase 3B (causal probe) depend on the discriminator; downstream consumers
+# branch on schema_version.
+SCHEMA_VERSION = 3
 
 # Caps for the list-valued passthrough fields. Tight bounds keep telemetry
 # bounded even under accidental fan-out. Per-member cap drops (not truncates)
@@ -41,7 +47,6 @@ MAX_CORRELATION_ID_LEN = 128
 # Decision values are a closed set; out-of-set values drop the entry.
 MAX_PROBE_DECISIONS = 64
 _VALID_PROBE_DECISIONS = {"load", "skip"}
-
 
 # normalize_event uses an allowlist (constructs a fresh dict with only
 # vetted keys), so raw-payload keys like prompt/tool_output/transcript are
@@ -60,44 +65,11 @@ def slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "unknown"
 
 
-def bounded(value: Any, limit: int = 160) -> str | None:
-    if value is None:
-        return None
-    text = scrub(str(value).replace("\n", " "))
-    if "[REDACTED" in text:
-        return None
-    text = " ".join(text.split())
-    return text[:limit] if text else None
-
-
 def safe_session(value: Any) -> str:
     text = str(value or "session")
     if UUID_RE.search(text):
         return "session"
     return slug(text)[:80]
-
-
-def _stable_path_token(path: pathlib.Path) -> str:
-    token = hashlib.sha256(str(path).encode("utf-8")).hexdigest()[:12]
-    return f"<outside_repo:{token}>"
-
-
-def normalize_path(path_value: Any, repo: pathlib.Path | None) -> str | None:
-    if not path_value:
-        return None
-    path = pathlib.Path(str(path_value)).expanduser()
-    try:
-        resolved = path.resolve()
-    except OSError:
-        resolved = path
-    if repo:
-        try:
-            return str(resolved.relative_to(repo.resolve()))
-        except ValueError:
-            return _stable_path_token(resolved)
-    if path.is_absolute():
-        return _stable_path_token(resolved)
-    return str(path)
 
 
 def parse_json_or_label(raw: str, source: str) -> dict[str, Any]:
@@ -139,8 +111,13 @@ def skill_from_path(path_value: str | None) -> str | None:
     return None
 
 
-def normalize_event(raw: dict[str, Any], repo_arg: pathlib.Path | None = None) -> dict[str, Any]:
+def normalize_event(
+    raw: dict[str, Any],
+    repo_arg: pathlib.Path | None = None,
+    telemetry_config: dict[str, bool] | None = None,
+) -> dict[str, Any]:
     repo = repo_arg or pathlib.Path(str(raw.get("repo") or raw.get("cwd") or ".")).expanduser()
+    telemetry = telemetry_config or DEFAULT_TELEMETRY_CONFIG
     path = normalize_path(raw.get("path") or raw.get("file") or raw.get("skill_path"), repo)
     event = {
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
@@ -170,7 +147,9 @@ def normalize_event(raw: dict[str, Any], repo_arg: pathlib.Path | None = None) -
     if command:
         event["command_class"] = command.split()[0]
 
-    # v2 passthrough fields. Validation drops malformed values silently
+    event.update(normalize_agent_dispatch(raw, repo, telemetry))
+
+    # v2/v3 passthrough fields. Validation drops malformed values silently
     # rather than crashing, so a misshapen payload still emits a row.
     raw_correlation = raw.get("correlation_id")
     if isinstance(raw_correlation, str) and 0 < len(raw_correlation) <= MAX_CORRELATION_ID_LEN:
@@ -286,6 +265,43 @@ def load_max_hook_event_bytes(repo: pathlib.Path, state_dir: str | None = None, 
     return DEFAULT_MAX_HOOK_EVENT_BYTES
 
 
+def load_telemetry_config(
+    repo: pathlib.Path,
+    state_dir: str | None = None,
+    personal: str | None = None,
+) -> dict[str, bool]:
+    """Read bounded telemetry feature flags from repo/state config.
+
+    Repo-local `.agent-learning.json` wins over generated state config because
+    the main thread in each repo owns what its hooks may capture.
+    """
+    candidates: list[pathlib.Path] = []
+    integration_config = repo / ".agent-learning.json"
+    integration_payload = _load_json_config(integration_config)
+    if integration_payload is not None:
+        configured_state_dir = integration_payload.get("state_dir")
+        if isinstance(configured_state_dir, str) and configured_state_dir:
+            candidates.append(pathlib.Path(configured_state_dir).expanduser() / "config.json")
+    candidates.append(resolve_state_dir(state_dir, personal, repo) / "config.json")
+
+    config = dict(DEFAULT_TELEMETRY_CONFIG)
+    seen: set[pathlib.Path] = set()
+    for candidate in reversed(candidates):
+        try:
+            resolved = candidate.expanduser().resolve()
+        except OSError:
+            continue
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        payload = _load_json_config(resolved)
+        if payload is not None:
+            config.update(telemetry_config_from_payload(payload))
+    if integration_payload is not None:
+        config.update(telemetry_config_from_payload(integration_payload))
+    return config
+
+
 def _chmod_quiet(path: pathlib.Path, mode: int) -> None:
     try:
         os.chmod(path, mode)
@@ -392,7 +408,7 @@ def main(argv: list[str] | None = None) -> int:
     output = pathlib.Path(args.output) if args.output else default_output(repo, args.state_dir, args.personal)
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
-        event = normalize_event(load_input(args), repo)
+        event = normalize_event(load_input(args), repo, load_telemetry_config(repo, args.state_dir, args.personal))
         assert_regular_file_destination(output, label="Hook event output")
     except ValueError as error:
         print(str(error), file=sys.stderr)

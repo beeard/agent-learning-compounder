@@ -353,6 +353,7 @@ def enriched_event(raw: dict[str, Any], repo: pathlib.Path, runtime: str, event:
     command = raw.get("command") or tool_input.get("command") or tool_input.get("cmd")
     if command and not payload.get("command"):
         payload["command"] = command
+
     return payload
 
 
@@ -388,7 +389,7 @@ def run_adapter(args: argparse.Namespace) -> int:
         stderr=subprocess.PIPE,
         check=False,
     )
-    if result.stdout:
+    if result.returncode != 0 and result.stdout:
         sys.stdout.write(result.stdout)
     if result.stderr:
         sys.stderr.write(result.stderr)

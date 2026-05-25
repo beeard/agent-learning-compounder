@@ -48,6 +48,8 @@ contracts for runtime hooks, cron integration, and state.
 - **Hook layer**
   - `scripts/collect_hook_event.py` appends normalized hook events.
   - `scripts/install_runtime_hooks.py` writes runtime adapters after explicit `--apply`.
+  - `bin/agent_dispatch.py` owns the shared dispatch field policy used by
+    collector, runtime adapters, and MCP reporting.
 - **Refresh layer**
   - `scripts/refresh_learning_state.py` is the intended periodic task, represented
     in a manifest.
@@ -119,6 +121,7 @@ The runtime adapter contract requires:
 - event normalization + repo association,
 - bounded field set (`ts`, `event`, `runtime`, `repo`, `skill`, `tool`, `outcome`,
   `path`, `command_class`, plus short tags),
+- agent-dispatch aliases normalized only through the shared dispatch policy,
 - no raw transcript persistence,
 - explicit command validation before runtime execution.
 
@@ -144,9 +147,9 @@ choice.
   - `state_version` (currently 1)
   - canonical pointers to reports and integration state.
 - `<state-root>/repos/<repo-id>/config.json`:
-  - `state_version` (currently 1), retention, and state root metadata.
+  - `state_version` (currently 1), retention, telemetry flags, and state root metadata.
 - `agent-learning-hooks.manifest.json`:
-  - `schema_version` (currently 1), hook command, manifest event allowlist.
+  - `schema_version` (currently 1), hook command, manifest event allowlist, telemetry defaults.
 - `agent-learning-refresh.manifest.json`:
   - `schema_version` (currently 1), command tuple, outputs, install note.
 

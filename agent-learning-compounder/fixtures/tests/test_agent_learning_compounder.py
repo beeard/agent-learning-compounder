@@ -1021,8 +1021,19 @@ class AgentLearningCompounderTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("append-only updates: written", result.stdout)
             self.assertIn("ikke spekuler, verifiser", (personal / "insights.md").read_text())
-            self.assertIn("procedural-memory", (personal / "learning.md").read_text())
+            # learning.md is now per-gate (>= L2) rather than a generic blurb.
+            # The corpus here only has one matching line so no L2+ gate emerges;
+            # only the pre-existing line should remain.
+            learning_text = (personal / "learning.md").read_text()
+            self.assertIn("[2026-05-01] Existing learning.", learning_text)
             self.assertTrue((personal / "reports" / "agent-learning").exists())
+            metrics_path = personal / "reports" / "agent-learning" / "metrics.jsonl"
+            self.assertTrue(metrics_path.is_file(), "metrics.jsonl should be written on --write")
+            metrics_line = metrics_path.read_text().strip().splitlines()[-1]
+            metrics = json.loads(metrics_line)
+            self.assertIn("totals", metrics)
+            self.assertIn("by_level", metrics)
+            self.assertEqual(metrics["repo"], "/tmp/repo")
 
     def test_distill_learning_write_exports_approved_gates_registry(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1153,6 +1164,99 @@ class AgentLearningCompounderTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("pressure checks passed", result.stdout)
+
+    def test_distill_learning_emits_html_report_alongside_markdown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            corpus = tmp_path / "corpus.txt"
+            baseline = tmp_path / "baseline.json"
+            out = tmp_path / "report.md"
+            corpus.write_text(
+                "\n".join(
+                    [
+                        "user: whats next [session_ref=s1]",
+                        "user: ikke spekuler, verifiser live foerst [session_ref=s1]",
+                        "user: sjekk faktisk Cloudflare runtime foer du sier deploy er frisk [session_ref=s2]",
+                        "user: scope drift, ikke bygg UI i denne pakken [session_ref=s2]",
+                        "user: hold deg til do-not-build listen [session_ref=s3]",
+                        "user: commit og push naar validering passerer [session_ref=s3]",
+                    ]
+                )
+            )
+            baseline.write_text(
+                json.dumps(
+                    {
+                        "repo": "/tmp/repo",
+                        "source_files": ["AGENTS.md", "docs/plans/BACKLOG.md"],
+                        "validation_commands": ["pnpm test"],
+                        "skills": [".agents/skills/session-start/SKILL.md"],
+                    }
+                )
+            )
+
+            result = run_script(
+                "distill_learning.py",
+                "--corpus", corpus,
+                "--baseline", baseline,
+                "--output", out,
+                "--mode", "all",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            html_path = out.with_suffix(".html")
+            self.assertTrue(html_path.exists(), "html report should be written next to .md")
+            html = html_path.read_text(encoding="utf-8")
+            self.assertIn("<!DOCTYPE html>", html)
+            self.assertIn("Agent Learning Report", html)
+            self.assertIn("Approved gates", html)
+            self.assertIn("Self-healing loop", html)
+            self.assertIn("Memory derived", html)
+            self.assertIn("Skill health", html)
+            self.assertIn("Confirmed current", html)
+            self.assertIn("Next agent brief", html)
+            self.assertIn('id="report-payload"', html)
+            self.assertIn("<svg", html)
+            self.assertIn("html:", result.stdout)
+
+    def test_distill_learning_no_html_flag_skips_html(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            corpus = tmp_path / "corpus.txt"
+            baseline = tmp_path / "baseline.json"
+            out = tmp_path / "report.md"
+            corpus.write_text("user: whats next\n")
+            baseline.write_text(json.dumps({"repo": "/tmp/repo"}))
+            result = run_script(
+                "distill_learning.py",
+                "--corpus", corpus,
+                "--baseline", baseline,
+                "--output", out,
+                "--no-html",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(out.with_suffix(".html").exists())
+
+    def test_render_html_report_standalone_cli(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            corpus = tmp_path / "corpus.txt"
+            baseline = tmp_path / "baseline.json"
+            html_out = tmp_path / "report.html"
+            payload_out = tmp_path / "payload.json"
+            corpus.write_text("user: whats next\nuser: verifiser live foerst\n")
+            baseline.write_text(json.dumps({"repo": "/tmp/repo"}))
+            result = run_script(
+                "render_html_report.py",
+                "--corpus", corpus,
+                "--baseline", baseline,
+                "--output", html_out,
+                "--payload-json", payload_out,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(html_out.exists())
+            payload = json.loads(payload_out.read_text(encoding="utf-8"))
+            self.assertIn("totals", payload)
+            self.assertIn("agent_compensation", payload)
+            self.assertEqual(payload["repo"], "/tmp/repo")
 
 
 if __name__ == "__main__":

@@ -44,12 +44,57 @@ Persist bounded fields only:
 - `outcome`
 - `path` (repo-relative)
 - short `scope`, `label`, or `command_class`
+- bounded agent-dispatch fields when enabled:
+  - `agent_role`, `agent_backend`, `agent_id`, `dispatch_id`, `agent_mode`
+  - `agent_model`, `agent_effort`, `agent_sandbox`
+  - `agent_write_scope`, `agent_worktree`, `agent_branch`
+  - `parent_correlation_id`
 
 Never persist raw prompts, raw tool outputs, transcript chunks, unbounded
 payloads, or secret redaction markers.
 
 Unknown hook events are allowed. Normalize their names and keep only safe structured
 fields.
+
+## Agent Dispatch Telemetry
+
+`bin/agent_dispatch.py` is the canonical dispatch normalizer. Runtime adapters,
+MCP tools, and future harness integrations should pass raw bounded payloads into
+the collector instead of remapping dispatch aliases in their own layer.
+
+Use dispatch events when a main thread starts, completes, or blocks on a
+subagent/background worker:
+
+```bash
+python3 scripts/collect_hook_event.py --repo "$PWD" --event '{
+  "event":"AgentDispatchStart",
+  "agent_role":"builder",
+  "agent_backend":"codex-exec",
+  "agent_model":"gpt-5.3-codex-spark",
+  "agent_effort":"low",
+  "agent_sandbox":"workspace-write",
+  "dispatch_id":"task-123",
+  "agent_write_scope":["packages/foo/src"],
+  "parent_correlation_id":"session-abc"
+}'
+```
+
+Repo-local `.agent-learning.json` may tune what the main thread permits:
+
+```json
+{
+  "telemetry": {
+    "agent_dispatch": true,
+    "agent_dispatch_model": true,
+    "agent_dispatch_scope": true
+  }
+}
+```
+
+Set `agent_dispatch_model` or `agent_dispatch_scope` to `false` when a repo wants
+the baseline events without model/sandbox/worktree/write-scope details. Setting
+`agent_dispatch` to `false` drops all agent-dispatch detail fields while still
+allowing the event row itself to be recorded.
 
 ## Import Command
 

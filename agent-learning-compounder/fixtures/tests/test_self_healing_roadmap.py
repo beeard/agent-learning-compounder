@@ -352,6 +352,8 @@ class SelfHealingRoadmapTests(unittest.TestCase):
             self.assertEqual(config["hook_input"], "stdin-json")
             manifest = json.loads(hook_manifest.read_text(encoding="utf-8"))
             self.assertIn("InstructionsLoaded", manifest["recommended_events"])
+            self.assertIn("AgentDispatchStart", manifest["recommended_events"])
+            self.assertEqual(manifest["telemetry"]["agent_dispatch"], True)
             hook_run = subprocess.run(
                 [str(hook_command)],
                 input=json.dumps({"event": "InstructionsLoaded", "skill": "session-start", "cwd": str(repo)}),
@@ -594,6 +596,20 @@ class SelfHealingRoadmapTests(unittest.TestCase):
             raw = {
                 "tool_name": "Bash",
                 "tool_input": {"command": "pnpm test", "path": str(repo / "package.json")},
+                "agent": {
+                    "id": "agent-1",
+                    "role": "builder",
+                    "backend": "codex-exec",
+                    "model": "gpt-5.3-codex-spark",
+                    "effort": "low",
+                    "sandbox": "workspace-write",
+                },
+                "task": {
+                    "id": "dispatch-1",
+                    "write_scope": ["src/app.ts"],
+                    "worktree": str(repo / ".worktrees" / "dispatch-1"),
+                    "branch": "wt/dispatch-1",
+                },
                 "prompt": "raw prompt must not persist",
                 "tool_output": "raw output must not persist",
                 "session_id": "runtime-adapter",
@@ -620,6 +636,12 @@ class SelfHealingRoadmapTests(unittest.TestCase):
             self.assertEqual(rows[0]["runtime"], "codex")
             self.assertEqual(rows[0]["tool"], "Bash")
             self.assertEqual(rows[0]["command_class"], "pnpm")
+            self.assertEqual(rows[0]["agent_role"], "builder")
+            self.assertEqual(rows[0]["agent_backend"], "codex-exec")
+            self.assertEqual(rows[0]["agent_model"], "gpt-5.3-codex-spark")
+            self.assertEqual(rows[0]["dispatch_id"], "dispatch-1")
+            self.assertEqual(rows[0]["agent_write_scope"], ["src/app.ts"])
+            self.assertEqual(rows[0]["agent_worktree"], ".worktrees/dispatch-1")
             rendered = json.dumps(rows[0], sort_keys=True)
             self.assertNotIn("raw prompt", rendered)
             self.assertNotIn("raw output", rendered)
@@ -783,6 +805,40 @@ class SelfHealingRoadmapTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1, result.stdout)
             self.assertIn("Configured hook_command", result.stderr)
+
+    def test_install_runtime_hooks_adapter_is_quiet_on_success(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo = tmp_path / "repo"
+            state = tmp_path / "state"
+            repo.mkdir()
+            write_skill(repo / ".agents" / "skills", "session-start")
+
+            init = run_script(
+                "init_learning_system.py",
+                "--repo",
+                repo,
+                "--state-dir",
+                state,
+                "--install-repo-integration",
+                "--install-hooks",
+                "--self-test",
+            )
+            self.assertEqual(init.returncode, 0, init.stderr)
+
+            result = run_script(
+                "install_runtime_hooks.py",
+                "--adapter",
+                "--repo",
+                repo,
+                "--runtime",
+                "codex",
+                "--event",
+                "SessionStart",
+                input_text="{}",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, "")
 
     def test_refresh_learning_state_updates_context_and_improvement_queue(self):
         with tempfile.TemporaryDirectory() as tmp:
