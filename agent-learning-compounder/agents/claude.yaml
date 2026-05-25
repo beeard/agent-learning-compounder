@@ -5,3 +5,7 @@ interface:
 
 policy:
   allow_implicit_invocation: true
+agents:
+  - name: alc-reviewer
+    persona: ./agents/alc-reviewer.md
+    model: inherit
