@@ -4,3 +4,11 @@ __pycache__/
 .agent-learning/
 .agent-learning.json
 dist/
+
+# agent-learning-compounder: hook config contains absolute $HOME paths
+/.codex/hooks.json
+/.codex/hooks.json.agent-learning-bak-*
+
+# agent-learning-compounder: hook config contains absolute $HOME paths
+/.claude/settings.local.json
+/.claude/settings.local.json.agent-learning-bak-*
