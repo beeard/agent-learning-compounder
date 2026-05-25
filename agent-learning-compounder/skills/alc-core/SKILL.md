@@ -1,6 +1,6 @@
 ---
-name: agent-learning-compounder
-description: Use when mining agent sessions, repo baselines, workflow drift, or AI-dependence gaps for durable, evidence-backed agent learning.
+name: alc-core
+description: Core skill for compiling repo sessions, telemetry, and durable agent-learning recommendations.
 ---
 
 # Agent Learning Compounder
@@ -13,7 +13,7 @@ memory. Prefer bundled scripts over ad hoc parsing.
 Initialize once per durable repo:
 
 ```bash
-python3 scripts/init_learning_system.py \
+python3 ../../bin/init_learning_system.py \
   --repo "$PWD" \
   --runtime "${AGENT_LEARNING_RUNTIME:-codex}" \
   --state-dir "$PWD/.agent-learning" \
@@ -35,8 +35,8 @@ python3 scripts/init_learning_system.py \
 - Runtime hooks must be reviewed before apply:
 
 ```bash
-python3 scripts/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --dry-run
-python3 scripts/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --apply
+python3 ../../bin/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --dry-run
+python3 ../../bin/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --apply
 ```
 
 ## One-Command Bootstrap
@@ -44,7 +44,7 @@ python3 scripts/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime
 From a repo checkout:
 
 ```bash
-python3 "$HOME/.agents/skills/agent-learning-compounder/scripts/init_learning_system.py" \
+python3 ../../bin/init_learning_system.py \
   --repo "$PWD" \
   --runtime "${AGENT_LEARNING_RUNTIME:-codex}" \
   --state-dir "$PWD/.agent-learning" \
@@ -79,8 +79,8 @@ skill installed in the active runtime root.
   `self_healing_loop` entries.
 - Never edit evergreen personal files (`soul.md`, `system.md`, `preferences.md`); propose
   changes in the report.
-- Scrub transcript fragments with `scripts/scrub_secrets.py`, then validate
-  generated reports with `scripts/validate_outputs.py`.
+- Scrub transcript fragments with `../../bin/scrub_secrets.py`, then validate
+  generated reports with `../../bin/validate_outputs.py`.
 - Persist only bounded structured telemetry; never persist raw prompts, tool output,
   transcript chunks, or secret markers.
 - Agent/subagent/background-worker telemetry must stay bounded: record role,
@@ -114,18 +114,18 @@ flags.
 `scripts/*.py` are stable compatibility paths backed by lean runtime files in `bin/`.
 For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
 
-- Baseline: `python3 scripts/build_repo_baseline.py --repo "$PWD" --output "$RUN_DIR/baseline.json"`
-- Corpus: `python3 scripts/extract_sessions.py --path ~/.codex/sessions --path ~/.claude/projects --cwd "$PWD" --days 7 --max-sessions 50 --output "$RUN_DIR/corpus.txt"`
-- Report: `python3 scripts/distill_learning.py --corpus "$RUN_DIR/corpus.txt" --baseline "$RUN_DIR/baseline.json" --output "$RUN_DIR/report.md" --mode all`
+- Baseline: `python3 ../../bin/build_repo_baseline.py --repo "$PWD" --output "$RUN_DIR/baseline.json"`
+- Corpus: `python3 ../../bin/extract_sessions.py --path ~/.codex/sessions --path ~/.claude/projects --cwd "$PWD" --days 7 --max-sessions 50 --output "$RUN_DIR/corpus.txt"`
+- Report: `python3 ../../bin/distill_learning.py --corpus "$RUN_DIR/corpus.txt" --baseline "$RUN_DIR/baseline.json" --output "$RUN_DIR/report.md" --mode all`
   - Emits a self-contained graphical HTML report alongside the markdown (`report.html` next to `report.md`). Override path with `--html-output`, or pass `--no-html` to skip.
   - With `--write`, also archives `YYYY-MM-DD.html` and `latest-report.html` under `personal/reports/agent-learning/`.
-- Standalone HTML: `python3 scripts/render_html_report.py --corpus ... --baseline ... --output report.html [--payload-json payload.json]` (same inputs as distill, HTML only).
+- Standalone HTML: `python3 ../../bin/render_html_report.py --corpus ... --baseline ... --output report.html [--payload-json payload.json]` (same inputs as distill, HTML only).
 - Auto-distill on session end: `bin/auto_distill_session` is a non-blocking wrapper that forks the full pipeline and writes to `$AGENT_LEARNING_PERSONAL` (default `~/.agent-learning`). Wire it into a Claude Code `Stop` hook (or Codex equivalent). With `--write`, `learning.md` gets one dated line per gate at level ≥ 2 in addition to the summary entry in `insights.md`.
 - Custom domains: add `--domain-rules <json>` or `--domain-preset tm-norge`; initialized repos auto-read `.agent-learning.json`.
 - Gates/context: `export_gates.py`, `map_active_skills.py`, `extract_skill_usage.py`, `evaluate_skill_impact.py`, `export_skill_context.py`.
 - Refresh/hooks: `refresh_learning_state.py`, `collect_hook_event.py`, `install_runtime_hooks.py --dry-run` then `--apply`.
 - Write archive: rerun `distill_learning.py` with `--write --personal <personal-root>` or `AGENT_LEARNING_PERSONAL`.
-- Verify: `python3 -m unittest discover -s fixtures/tests`, `python3 -m unittest discover -s tests`, `python3 scripts/run_pressure_tests.py`.
+- Verify: `python3 -m unittest discover -s fixtures/tests`, `python3 -m unittest discover -s tests`, `python3 ../../bin/run_pressure_tests.py`.
 
 ## Health Contract
 

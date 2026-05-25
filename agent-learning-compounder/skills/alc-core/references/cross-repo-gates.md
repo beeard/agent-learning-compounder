@@ -1,1 +1,104 @@
-../reference-lib/cross-repo-gates
+# Cross-Repo Gate Federation
+
+Gates promoted from one repo enter a shared registry. Other repos inherit
+them with full provenance. Underperforming inherited gates are auto-queued
+for demote review (not auto-removed).
+
+## Shared registry
+
+Default root: `~/.local/state/agent-learning/shared/`
+Override via `AGENT_LEARNING_SHARED_ROOT` (env) or `--shared-root` (flag).
+
+Layout:
+
+```
+shared/
+  gates/
+    <gate-id>.json
+```
+
+Each JSON record: `{domain, gate_id, gate_category, gate, origin_repo, promoted_at, note}`.
+
+## Promote
+
+```bash
+python3 ../../bin/gates_promote.py \
+  --gates "<state>/repos/<repo-id>/reports/latest-approved-gates.md" \
+  --gate-id <gate-id> \
+  --origin-repo <repo-id> \
+  --shared-root "<shared-root>" \
+  --note "optional human note about why this gate is worth promoting"
+```
+
+Exit codes: `0` success, `2` gates file missing, `3` gate_id not found, `4` malformed block.
+
+## Inherit
+
+```bash
+python3 ../../bin/gates_inherit.py \
+  --shared-root "<shared-root>" \
+  --target-gates "<state>/repos/<other-repo-id>/reports/latest-approved-gates.md" \
+  --gate-id <gate-id>
+```
+
+Inheritance is idempotent — re-running on a target that already has the gate
+is a no-op. The appended block matches the standard `export_gates` field
+layout plus a `derived_from: <origin-repo>:<gate-id>:<promoted-at>` provenance
+line that marks the gate as inherited.
+
+## Auto-demote
+
+`refresh_learning_state` (after Phase 2B) classifies each gate's effectiveness.
+When an inherited gate (block has a `derived_from:` line) hits
+`label` in `{"correlated_with_failure", "no_signal"}` AND `n_loaded >= 20`,
+the refresh queues an `inherited_gate_demote_candidate` row in
+`improvement-queue.jsonl` carrying the `gate_id`, `derived_from` value, and
+evidence stats. (The `no_signal` trigger surfaces gates that are merely
+ineffective in this repo, not just actively harmful — they are still
+candidates for demotion.)
+
+Non-inherited gates that meet the same conditions queue as the original
+`gate_retirement_candidate`. A gate is queued as exactly one of the two — never
+both.
+
+The operator reviews the queue and removes the gate from the target's
+`latest-approved-gates.md` manually if they agree. Demote does NOT
+automatically delete the upstream shared record — promoting and demoting are
+per-repo decisions about what to load.
+
+## Queue row shapes
+
+`inherited_gate_demote_candidate`:
+```json
+{
+  "id": "demote-<gate-id>-<unix-ts>-<index>",
+  "kind": "inherited_gate_demote_candidate",
+  "text": "Demote inherited gate <gate-id> (origin=<derived-from>): delta=<value> after n_loaded=<N>, label=correlated_with_failure.",
+  "gate_id": "<gate-id>",
+  "derived_from": "<origin-repo>:<gate-id>:<promoted-at>",
+  "evidence": {"n_loaded": ..., "n_absent": ..., "delta": ..., "label": "..."},
+  "ts": "<ISO-8601 UTC>"
+}
+```
+
+`gate_retirement_candidate`:
+```json
+{
+  "id": "retire-<gate-id>-<unix-ts>-<index>",
+  "kind": "gate_retirement_candidate",
+  "text": "Retire low-impact gate <gate-id>: delta=<value> after n_loaded=<N>, label=<...>.",
+  "gate_id": "<gate-id>",
+  "evidence": {"n_loaded": ..., "n_absent": ..., "delta": ..., "label": "..."},
+  "ts": "<ISO-8601 UTC>"
+}
+```
+
+## Safety properties
+
+- Promote requires explicit operator invocation; no automatic promotion.
+- Inherit is idempotent; running it repeatedly produces no duplicates.
+- Demote is queued for review, never auto-applied; the gate continues to load
+  until the operator removes it.
+- Shared records carry `origin_repo` and `promoted_at`; the `derived_from`
+  provenance line in target gates files lets multi-repo dashboards trace
+  inherited content back to its origin.

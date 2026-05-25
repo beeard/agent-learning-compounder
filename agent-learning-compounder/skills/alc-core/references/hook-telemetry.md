@@ -1,1 +1,152 @@
-../reference-lib/hook-telemetry
+# Hook Telemetry
+
+Hook telemetry is structured evidence for skill health. It is not transcript storage.
+
+## Security Guarantees
+
+- No absolute out-of-repo telemetry paths.
+  - Prefer repo-relative `path` fields.
+  - Unknown absolute paths should be normalized to a bounded repo-relative form or
+    dropped before persistence.
+- No arbitrary absolute `@include` in instruction collection paths.
+- Hook command integrity and non-symlink execution before runtime forwarding.
+- Symlink-safe append writes for `hook-events.jsonl` and queue/manifest outputs.
+- Automation runs are manifest-only; scheduler activation is an explicit operator
+  step outside this package.
+
+## Storage
+
+Default path:
+
+```text
+<state-dir>/repos/<repo-id>/hook-events.jsonl
+```
+
+State root resolution:
+
+1. `--state-dir`
+2. `AGENT_LEARNING_STATE_DIR`
+3. `--personal/reports/agent-learning`
+4. `$XDG_STATE_HOME/agent-learning`
+5. `~/.local/state/agent-learning`
+
+## Event Shape
+
+Persist bounded fields only:
+
+- `ts`
+- `event`
+- `runtime`
+- `repo`
+- `session_id` after UUID-shaped values are collapsed
+- `skill`
+- `tool`
+- `outcome`
+- `path` (repo-relative)
+- short `scope`, `label`, or `command_class`
+- bounded agent-dispatch fields when enabled:
+  - `agent_role`, `agent_backend`, `agent_id`, `dispatch_id`, `agent_mode`
+  - `agent_model`, `agent_effort`, `agent_sandbox`
+  - `agent_write_scope`, `agent_worktree`, `agent_branch`
+  - `parent_correlation_id`
+
+Never persist raw prompts, raw tool outputs, transcript chunks, unbounded
+payloads, or secret redaction markers.
+
+Unknown hook events are allowed. Normalize their names and keep only safe structured
+fields.
+
+## Agent Dispatch Telemetry
+
+`bin/agent_dispatch.py` is the canonical dispatch normalizer. Runtime adapters,
+MCP tools, and future harness integrations should pass raw bounded payloads into
+the collector instead of remapping dispatch aliases in their own layer.
+
+Use dispatch events when a main thread starts, completes, or blocks on a
+subagent/background worker:
+
+```bash
+python3 ../../bin/collect_hook_event.py --repo "$PWD" --event '{
+  "event":"AgentDispatchStart",
+  "agent_role":"builder",
+  "agent_backend":"codex-exec",
+  "agent_model":"gpt-5.3-codex-spark",
+  "agent_effort":"low",
+  "agent_sandbox":"workspace-write",
+  "dispatch_id":"task-123",
+  "agent_write_scope":["packages/foo/src"],
+  "parent_correlation_id":"session-abc"
+}'
+```
+
+Repo-local `.agent-learning.json` may tune what the main thread permits:
+
+```json
+{
+  "telemetry": {
+    "agent_dispatch": true,
+    "agent_dispatch_model": true,
+    "agent_dispatch_scope": true
+  }
+}
+```
+
+Set `agent_dispatch_model` or `agent_dispatch_scope` to `false` when a repo wants
+the baseline events without model/sandbox/worktree/write-scope details. Setting
+`agent_dispatch` to `false` drops all agent-dispatch detail fields while still
+allowing the event row itself to be recorded.
+
+## Import Command
+
+```bash
+python3 ../../bin/collect_hook_event.py --repo "$PWD" --event '{"event":"InstructionsLoaded","skill":"session-start"}'
+```
+
+For runtime integrations, prefer appending one event at a time. Keep rotated or
+aggregated event stores outside session-start loading surfaces; only
+`latest-skill-context.md` should be loaded automatically.
+
+`init_learning_system.py --install-repo-integration` writes `.agent-learning.json`
+with direct paths to `latest-approved-gates.md` and `latest-skill-context.md`.
+Session-start integrations should read those direct paths first.
+
+Add `--install-hooks` to create:
+
+```text
+<state-dir>/repos/<repo-id>/hooks/collect-agent-learning-event.sh
+<state-dir>/repos/<repo-id>/hooks/agent-learning-hooks.manifest.json
+<state-dir>/repos/<repo-id>/hook-events.jsonl
+```
+
+The wrapper accepts one hook event as stdin JSON and appends through
+`collect_hook_event.py`. Runtime-specific hook systems should call the wrapper;
+init does not silently edit global runtime configs.
+
+## Runtime Hook Installer
+
+Use explicit installer commands when Codex or Claude hooks are missing:
+
+```bash
+python3 ../../bin/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --dry-run
+python3 ../../bin/install_runtime_hooks.py --repo "$PWD" --runtime codex --runtime claude --apply
+```
+
+The installer reads `.agent-learning.json`, preserves existing hooks, and adds
+repo-local entries that call `install_runtime_hooks.py --adapter`. The adapter
+enriches runtime-native input with `event`, `runtime`, `repo`, and safe common
+fields before forwarding.
+
+### Default Repo Targets
+
+- Codex: `.codex/hooks.json`
+- Claude: `.claude/settings.local.json`
+
+Use `--scope user` only when the user explicitly wants global runtime hooks.
+
+## Scheduler Semantics
+
+Manifest files prepare automation and do not register a scheduler.
+
+- Hook manifests govern wrapper/adapter contract only.
+- Refresh manifests define command and outputs only.
+- External scheduler registration remains explicit and operator-driven.
