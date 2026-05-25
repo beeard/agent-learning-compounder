@@ -115,7 +115,8 @@ def _event_to_row(event: EventV4, session_id: str | None) -> tuple[Any, ...]:
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> bool:
-    conn.execute(EventV4.sqlite_ddl())
+    # sqlite_ddl returns CREATE TABLE + CREATE INDEX (multi-statement) — use executescript.
+    conn.executescript(EventV4.sqlite_ddl())
     conn.execute(
         f"CREATE TABLE IF NOT EXISTS {META_TABLE}(key TEXT PRIMARY KEY, value TEXT NOT NULL)"
     )
