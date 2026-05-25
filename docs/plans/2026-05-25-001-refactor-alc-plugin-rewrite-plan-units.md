@@ -191,6 +191,8 @@
 - Create: `tests/test_correlate_events.py`
 - Create: `tests/test_event_emit.py`
 - Create: `tests/test_index_events.py`
+- Create: `tests/test_event_system_e2e.py` (C2 — interleaved fixture covering all 5 emitters; verifies correlation_chain closure + analyst Q1 query runs clean)
+- Create: `fixtures/eval-fixtures/event-system-e2e/` (small 50-event fixture: 1 Claude session with hooks + 1 background spawn + 1 transcript backfill + 1 manual event_emit + derived correlation events)
 - Create: `skills/alc-core/references/event-taxonomy.md` (henviser til `bin/event_schema.py` som source-of-truth; ingen schema-tabell duplisert)
 - Modify: existing `bin/auto_distill_session`, `bin/refresh_learning_state` (wrap with `event_emit()` at start/end so background activity becomes visible in stream)
 
@@ -322,7 +324,15 @@ Backward compat (KTD-14): readers must treat v3 rows (existing) as v4 rows with 
  - Trigger Task tool use (subagent dispatch) → start+end events both indexed; correlation_chain links them
  - MCP tool call (`mcp__github__get_pull_request`) → event has `tool_server='mcp:github'`, `actor.kind='mcp_server'`
 
-**Verification:** `python3 -m unittest tests.test_event_schema_v4 tests.test_ingest_transcripts tests.test_correlate_events tests.test_event_emit tests.test_index_events -v` passes; manual: `bin/ingest_transcripts --backfill --since 7d` on real `~/.claude/projects`, query `events.sqlite` for actor-kind distribution, verify all 5 kinds present.
+- **E2E integration test (C2, architecture-review) — `tests/test_event_system_e2e.py`:** small 50-event fixture exercising all 5 emitter classes interleaved (Claude hook, Codex hook, transcript ingest, background event_emit, derived correlation). Asserts:
+ - All 50 events round-trip through `event_writer.write_event` without ValueError
+ - `bin/index_events` produces a valid events.sqlite (schema matches `EventV4.sqlite_ddl()`)
+ - **Correlation-chain closure:** for every event with `parent_event_id != None`, the parent exists in the same DB; no dangling refs
+ - **Schema consistency across emitters:** every emitter populates the same required-field set; the test fails if e.g. hook events omit `parent_event_id` while transcript events set it
+ - Analyst query Q1 (frequency by `(skill, actor_kind)`) runs clean on the fixture and returns ≥1 row per actor_kind present
+ - **Locks the seam between U5.5.0b foundation and U5.5.1-5 adapters** — drift between adapters surfaces here, not in Phase D
+
+**Verification:** `python3 -m unittest tests.test_event_schema_v4 tests.test_ingest_transcripts tests.test_correlate_events tests.test_event_emit tests.test_index_events tests.test_event_system_e2e -v` passes; manual: `bin/ingest_transcripts --backfill --since 7d` on real `~/.claude/projects`, query `events.sqlite` for actor-kind distribution, verify all 5 kinds present.
 
 ---
 
@@ -1161,14 +1171,20 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 **Files:**
 - Create: `tests/test_context_boundary.py`
 - Create: `tests/test_capability_map.py`
+- Create: `tests/test_capability_parity.py` (C1 — capability-parity matrix + import-allowlist seam)
 - Create: `tests/test_e2e_pipeline_real_data.py`
 - Create: `skills/alc-core/references/capability-map.md`
+- Create: `skills/alc-core/references/capability-parity.md` (auto-rendered per KTD-20)
 - Modify: `data-contracts.json` (audit for completeness)
 - Decision document: `<state>/dashboard-migration-decision.md` (commits the ROOT 3 / FE#1 migration decision)
 
 **Approach:**
 - **Context-boundary tests (R15) — forenklet pga:** boundary håndheves nå pre-write i `bin/event_writer.py:_enforce_boundary` + samme funksjon kalt fra `bin/artifact_writer.py`. U19's test reduseres til ÉN test: `test_boundary_enforcement.py` som asserter at `_enforce_boundary` riktig avviser hver kategori (secret, abs-path, oversized-string, oversized-blob unntak for patch_*, raw-transcript). Plus ÉN regresjons-test: bygg et bevisst boundary-bryt-event, pass til write_event, asserter ValueError + ingenting skrevet til disk. Per-artifact post-hoc-scans droppet — enforcement-invariant gjør dem overflødige.
 - **Capability-map tests (R16):** parse `skills/alc-core/references/capability-map.md` (a matrix: user-action × command × MCP tool × CLI). Assert: every dashboard-rendered action has at least 2 of (command, MCP tool, CLI). Every MCP tool has at least 1 of (command, CLI). Cross-reference with `alc_mcp/catalog.py:MCP_TOOLS` (U17): every M-ID in MCP catalog appears at least once in capability-map; every dashboard surface has at least one M-ID partner.
+- **Capability-parity matrix + import-allowlist seam (C1, architecture-review):** Per KTD-15/KTD-21 the named catalogs are only real seams if consumers cannot bypass them. New test surfaces:
+  1. `test_capability_parity.py` asserts a parity matrix derived from `alc_mcp/catalog.py:MCP_TOOLS` × `alc_query.py:READ_CATALOG` × `alc_propose.py:WRITE_CATALOG` × `bin/generators.py:GENERATORS` × `bin/analyst_queries.py:QUERIES`: every M-ID resolves to ≥1 Q/G entry (no orphans); every Q/G entry referenced by ≥0 M-IDs (orphans logged, not failed). Auto-rendered to `skills/alc-core/references/capability-parity.md` per KTD-20.
+  2. **Import-allowlist test** (AST-walk over the source tree): asserts U10 dashboard (`skills/alc-dashboard/`) imports **only** from `bin.alc_query` (read-side seam); U17 MCP (`alc_mcp/`) imports only from `bin.alc_query` + `bin.alc_propose`. Direct imports of `event_writer`, `state_paths`, raw `sqlite3` connections, or `events.sqlite` paths in these two consumers cause test failure. Locks the seam structurally, not behaviorally.
+  3. **Deletion test for the catalogs:** add a brief documented procedure (run locally, not CI) — replace one Q-entry's catalog registration with an inline call from M-tool; full test suite should regress in ≥3 places. Documents that the catalog earns its leverage; if it doesn't, the catalog is shallow naming and should be removed.
 - **E2E pipeline test (R2):** runs the FULL pipeline on real data (not seeded). Asserts: `recommendations.json` is non-empty when corpus contains skill-mentions; anomalies are flagged when samples contain z>3 outlier; patches/ contains at least 1 bundle.
 - **Dashboard migration decision (ROOT 3):** commit a decision document that records: which path (keep both / port-and-delete / coexist) was chosen, why, and how the existing `dashboard/`'s `muted-domains.json` behavior is preserved. This is a written decision, not code — but it's a mandatory phase exit criterion.
 
@@ -1180,6 +1196,9 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 - Context boundary: write a file with `sk-ant-api03-...` → test fails (regex catch)
 - Capability map: parse map file, assert all dashboard actions have ≥2 invocation paths
 - Capability map: missing entry → test fails with clear message
+- Capability-parity matrix: every M-ID in MCP_TOOLS resolves to ≥1 Q/G entry; no orphan M-IDs
+- Import-allowlist: AST-walk asserts U10 dashboard imports only `bin.alc_query`; importing `event_writer` or `sqlite3` directly fails the test
+- Import-allowlist: AST-walk asserts U17 MCP imports only `bin.alc_query` + `bin.alc_propose`; direct `events.sqlite` path → fail
 - E2E: run full pipeline against fixture corpus with known properties → assert recommendation count, anomaly count, patch count match expectations
 - Dashboard migration decision document exists and contains: (a) decision (keep both / port / coexist), (b) muted-domains.json preservation plan, (c) timeline
 
@@ -1205,8 +1224,9 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 - Create: `cloudflare/wrangler.jsonc` + `cloudflare/src/index.ts` (Worker som tar imot batches, embedder via Workers AI, skriver til D1 + Vectorize)
 - Create: `cloudflare/migrations/0001_events_schema.sql` (D1-mirror av `EventV4.sqlite_ddl()`)
 - Create: `tests/test_alc_sync_cloudflare.py` (mocked CF endpoints; ingen ekte nettverk)
-- Modify: `.agent-learning.json` schema — legg til valgfri `cloudflare_sync: {enabled: bool, worker_url: str, api_token_env: str, vectorize_index: str, d1_database: str}`
-- Modify: `bin/state_handle.py` — eksponer `cloudflare_sync_config` (None hvis ikke konfigurert)
+- Create: `<state>/cloudflare-sync.json` (separat config-fil, ikke i StateHandle). Schema: `{enabled: bool, worker_url: str, api_token_env: str, vectorize_index: str, d1_database: str}`. Eksisterer kun når operatør opt-in'er.
+
+**Lokality-invariant (C3, architecture-review):** U20 modifiserer **IKKE** `bin/state_handle.py`. U7 StateHandle skal forbli sync-agnostisk — ingen Phase B-F unit skal kjenne til U20's config-schema. `bin/alc_sync_cloudflare` leser sin egen config-fil direkte og feiler graceful (no-op) hvis filen mangler. Deletion-test: fjern U20-katalogen → ingen Phase B-F-test bryter; StateHandle og alle MVP-unit-tester urørte.
 
 **Approach:**
 
@@ -1222,7 +1242,7 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
    - Embed kun: `event.summary` (bounded, scrubbed), `actor.name`, `tool_server`, `error_class`.
    - **IKKE** embed: payload-bodies, tool-inputs, tool-outputs — selv om scrubbed.
 5. **Token-håndtering:**
-   - CF API-token leses fra env-var navngitt i config (default `CLOUDFLARE_API_TOKEN`). Aldri persistert i `.agent-learning.json`.
+   - CF API-token leses fra env-var navngitt i config (default `CLOUDFLARE_API_TOKEN`). Aldri persistert i `<state>/cloudflare-sync.json`.
    - Token-struktur: scoped til *kun* Workers AI + Vectorize + D1 for prosjekt-account. Ingen account-wide tokens.
 6. **Cross-repo memory som førsteklasses use-case:**
    - Hver event tagged med `repo_id` (eksisterer allerede i `state_paths`).
@@ -1234,7 +1254,8 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 
 **Test scenarios:**
 
-- **Disabled-default:** alle eksisterende tester passerer uendret med `cloudflare_sync.enabled=false`
+- **Disabled-default:** alle eksisterende tester passerer uendret når `<state>/cloudflare-sync.json` mangler (default)
+- **Deletion-test (C3 invariant):** fjern hele `skills/alc-cloudflare-sync/` + `bin/alc_sync_cloudflare*` + `bin/cloudflare_client.py` + tests + cloudflare-config-fil → kjør full MVP-test-suite → ingen feil; StateHandle uendret
 - **Push happy path:** 100 events i sqlite → push → Worker mottar batch med riktig schema (mocked endpoint)
 - **Trust-boundary:** forsøk å pushe event med raw `payload.tool_output` → klient avviser før HTTP-call
 - **Failover:** Worker returnerer 503 → cursor uendret, neste push prøver samme batch på nytt; ingen events mistet
