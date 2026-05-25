@@ -87,13 +87,17 @@ prompt_lines=$(wc -l < "$PROMPT_OUT" | tr -d ' ')
 [ "$prompt_lines" -gt 20 ] || fail "extracted prompt looks empty/truncated ($prompt_lines lines) — check '## Prompt to paste' block delimiters in $PROMPT_MD"
 say "✓ extracted prompt: $PROMPT_OUT ($prompt_lines lines)"
 
-# verify first line is the expected start ("Execute the implementation plan...")
+# verify prompt content shape — accept either the original start or a RESUME CONTEXT preamble
 first_line=$(head -1 "$PROMPT_OUT")
 case "$first_line" in
-  "Execute the implementation plan"*) ;;
-  *) fail "extracted prompt does not start with 'Execute the implementation plan' — got: $first_line" ;;
+  "Execute the implementation plan"*) say "✓ prompt starts with 'Execute the implementation plan...'" ;;
+  "RESUME CONTEXT"*)
+    grep -q "^Execute the implementation plan" "$PROMPT_OUT" \
+      || fail "extracted prompt starts with RESUME CONTEXT but is missing 'Execute the implementation plan' body"
+    say "✓ prompt starts with RESUME CONTEXT; dispatch body present"
+    ;;
+  *) fail "extracted prompt has unexpected first line — got: $first_line" ;;
 esac
-say "✓ prompt starts with 'Execute the implementation plan...'"
 
 # hermes reference patterns
 [ -d "$HOME/.hermes" ] || say "⚠ ~/.hermes not found — S1 reference patterns dep may break U-units that reference Hermes"
