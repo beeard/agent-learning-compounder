@@ -117,7 +117,7 @@ Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements 
 | KTD-12 | Apply-log uses `fcntl.flock` + try/except on JSONL parse + bounded-size compaction policy | Solves ROOT 2 AD#4 (concurrency bug). Apply-log won't corrupt dashboard. |
 | KTD-13 | **Unified observability:** all event emitters (hooks, MCP tools, subagents, background agents, transcripts, AND apply/eval CLIs) write to ONE stream (events.jsonl) via event_writer; SQLite-indexed mirror for query; no separate apply-log.jsonl or outcomes.json — those are SQL views over events.sqlite. | Without this, analyst sees only external-session activity, not ALC's own runtime cost/behavior. Three parallel log systems (events/apply-log/outcomes) were designed before event_writer existed; consolidation makes apply and eval first-class event types so ALC kompounderer faktisk læring om seg selv. |
 | KTD-14 | Schema_version bumps from 3 → 4 with backward-compat: old hook-events.jsonl rows still parseable; new fields (correlation_chain, actor, telemetry) optional on read | Doesn't break existing tooling; new analyst queries skip rows where required fields absent. |
-| KTD-15 | "Named catalog with explicit ownership" mønster brukes på 4 steder: analyst_queries (Q1-Q10), recommender generators (G1-G5), apply executor strategies (DSL_TARGETS), alc_query read API (catalog) | Hver ALC-pipeline-stage blir selv-dokumenterende: en leser kan lese katalogen og vite hva pipelinen kan svare på / produsere / utføre. |
+| KTD-15 | "Named catalog with explicit ownership" mønster brukes på 5 steder: analyst_queries (Q1-Q10), recommender generators (G1-G5), apply executor strategies (DSL_TARGETS), alc_query read API (catalog), MCP tools (M1-M9) | Hver ALC-pipeline-stage blir selv-dokumenterende: en leser kan lese katalogen og vite hva pipelinen kan svare på / produsere / utføre / eksponerer agent-side. MCP-katalogen er også capability-discovery-surface (R16): en agent som kobler seg på alc_mcp kan liste M1-M9 + vite hva hver tool gjør uten å lese server.py-kildekode. |
 | KTD-16 | Context-boundary enforcement flyttet fra per-artifact-tester til write-path-invariant i event_writer.py + artifact_writer.py | Én write-path = ett sted å håndheve boundary. Fail-fast ved skrivning, ikke post-hoc-scan. Nye event-emittere arvelig safe. U19's boundary-test forenkles fra N artifact-scans til 1 writer-enforcement-test. |
 | KTD-17 | **Graceful degradation for reads, fail-fast for writes.** Read-paths fall back hvis preferred source mangler (events.sqlite → samples.json; .agent-learning.json → env var → default chain) and log degradation tier reached. Write-paths fail-fast on preflight invariant violation (allowed-roots, hash-match, boundary). | Consistent semantics across all units. Reads = "best effort with visible degradation"; writes = "all-or-nothing with safe-by-construction invariants". Implementer doesn't have to invent error-policy per unit. |
 | KTD-18 | **Interface-first publication for parallel subagent dispatch.** Units whose downstream consumers want parallel design publish contract modules early (e.g., `bin/alc_apply_contracts.py` before U11 implementation), validator-shapes early, and per-unit data-contracts manifests. Hot files (`data-contracts.json`) are split per-unit to eliminate merge conflicts. | Wall-clock time drops ~30-40% when subagent-dispatcher can fan out wider per wave. Pre-published contracts let U12+U17 design against U11 in parallel; per-unit data-contracts manifests let U8+U9+U10.5+U11+U12+U13 each register artifacts without fighting over one file. |
@@ -282,7 +282,7 @@ One consolidated map of phases × units × files × gates. Replaces previously-s
 |------|------|----|
 | U15 | Single slash command with flags | `commands/alc-report.md` |
 | U16 | Hooks (expanded DEFAULT_EVENTS, dashboard refresh) | `hooks/{hooks.json, session-start, refresh_dashboard.py}` |
-| U17 | MCP extensions (use alc_query) | modifies `alc_mcp/server.py` + `alc_mcp/tests/test_recommender_tools.py` |
+| U17 | MCP extensions + capability catalog (M1-M9, KTD-15) | modifies `alc_mcp/server.py` + creates `alc_mcp/catalog.py` + `alc_mcp/tests/{test_mcp_catalog,test_recommender_tools}.py` + `skills/alc-core/references/mcp-catalog.md` |
 
 **Gate to Phase F:** all surfaces operational; legacy `dashboard/` migration decision committed.
 
@@ -1262,39 +1262,82 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 
 ---
 
-### U17. MCP extensions (alc_mcp/server.py)
+### U17. MCP extensions + capability catalog (alc_mcp/server.py)
 
-**Goal:** Add 3 new MCP tools. Drop direct `apply_patch` — MCP queues the call to `bin/alc_apply`, never executes mutation in-process.
+**Goal:** Add 4 new MCP tools, drop direct mutation, refactor handlers to thin wrappers over alc_query (U10.5). Publish an explicit MCP capability catalog (M1-M9) parallel to Q1-Q10/G1-G5/DSL_TARGETS — agents can discover what alc_mcp exposes without reading server.py.
 
-**Requirements:** R3 (no MCP mutation), R16 (parity: every dashboard surface has MCP equivalent)
+**Requirements:** R3 (no MCP mutation), R16 (parity: every dashboard surface has MCP equivalent), KTD-15 (named-catalog mønster utvidet til MCP)
 
-**Dependencies:** U7, U11
+**Dependencies:** U7 (StateHandle), U10.5 (alc_query), U11 (alc_apply_contracts for `propose_apply` shape)
 
 **Files:**
-- Modify: `alc_mcp/server.py`
-- Create: `alc_mcp/tests/test_recommender_tools.py`
+- Modify: `alc_mcp/server.py` (refactor handlers + register new tools + auto-emit MCP_TOOLS catalog)
+- Create: `alc_mcp/catalog.py` (canonical MCP_TOOLS dict — single source of truth for tools)
+- Create: `alc_mcp/tests/test_mcp_catalog.py` (test that registered tools match catalog exactly)
+- Create: `alc_mcp/tests/test_recommender_tools.py` (new tools' handlers)
+- Create: `skills/alc-core/references/mcp-catalog.md` (human-readable M1-M9 reference)
+- Modify: `alc_mcp/README.md` (link to catalog ref)
 
-**Approach:**
-- New tools:
- - `get_recommendations(repo) -> list[dict]` — reads `<state>/recommendations.json`
- - `list_pending_patches(repo) -> list[dict]` — reads `<state>/patches/*.json`, filters by status, returns summary list
- - `propose_apply(repo, patch_id) -> dict` — does NOT apply; returns the exact CLI command the user would run (`bin/alc_apply --patch <id> --write`) + a one-shot token. Apply still requires terminal execution.
- - `get_dashboard_url(repo) -> str` — reads StateHandle, returns http URL if server running, else file:// fallback
-- Existing tools unchanged (`get_gates`, `get_skill_context`, `propose_gate`, `report_outcome`, `report_agent_event`)
-- Importantly: NO `apply_patch` tool that mutates files in-process (V1 plan had this; agent-native audit AN#3 rejected it)
-- `report_outcome` is now connected to the eval-loop (U13 reads/writes outcomes.json, MCP can also write to it for human verdicts)
+**MCP capability catalog (M1-M9) — published in `alc_mcp/catalog.py`:**
 
-**Patterns to follow:** S13 (alc_mcp tool registrations), StateHandle (U7); tools-as-primitives per agent-native-audit
+| M-ID | Tool name | Kind | Backing impl | Read/Propose |
+|------|-----------|------|--------------|-------------|
+| M1 | `get_gates` | read | `alc_query.get_gates(repo, scope?)` | read |
+| M2 | `get_skill_context` | read | `alc_query.get_skill_context(repo)` | read |
+| M3 | `get_recommendations` | read | `alc_query.get_recommendations(repo)` | read |
+| M4 | `list_pending_patches` | read | `alc_query.get_pending_patches(repo)` | read |
+| M5 | `get_dashboard_url` | read | `state_handle.dashboard_url(repo)` | read |
+| M6 | `propose_apply` | propose | returns CLI command for `bin/alc_apply --patch <id> --write` + one-shot token | propose (no mutation) |
+| M7 | `propose_gate` | propose | appends to `improvement-queue.jsonl` (existing behavior) | propose (queued, not mutating skill state) |
+| M8 | `report_outcome` | observe | event_writer.write_event(event='outcome_reported', actor.kind=mcp_caller) | observe (event emit) |
+| M9 | `report_agent_event` | observe | event_writer.write_event(event='agent_dispatch_*', actor.kind=mcp_caller) | observe (event emit) |
+
+**Catalog schema (each MCP_TOOLS entry):**
+```python
+MCP_TOOLS: dict[str, MCPToolSpec] = {
+    "get_gates": MCPToolSpec(
+        id="M1",
+        kind="read",
+        summary="Return approved gates loaded for repo. Bounded list, no raw memory.",
+        backing="alc_query.get_gates",
+        parameters_schema={...},
+        returns_schema={...},
+        examples=[...],
+    ),
+    # ... M2-M9
+}
+```
+
+**Capability-discovery surface:**
+- New built-in MCP tool `list_capabilities(repo) -> list[dict]` returns the M1-M9 catalog entries (without the handler functions, just metadata). Agents call this first to discover what alc_mcp can do.
+- `alc_mcp/__init__.py` exports `MCP_TOOLS` so external code can import the catalog directly.
+- Test `test_mcp_catalog.py` asserts: every registered tool in server.py has matching MCP_TOOLS entry; every catalog entry has registered tool; M-IDs are unique and sequential.
+
+**Approach (per KTD-13 + KTD-15):**
+- Read-tools (M1-M5) → thin wrappers over `alc_query.<func>`. No SQL or file I/O directly in server.py.
+- Propose-tools (M6-M7) → do NOT mutate target file. M6 returns CLI command; M7 queues for review (existing behavior preserved).
+- Observe-tools (M8-M9) → emit via `event_writer.write_event` per KTD-13. Existing tools' behavior preserved semantically; internal implementation refactored.
+- Importantly: NO `apply_patch` tool that mutates files in-process (V1 plan had this; agent-native audit AN#3 rejected it).
+- All tool handlers ≤ 5 lines: parse args → call backing function → return result.
+
+**Patterns to follow:** S13 (alc_mcp tool registrations), StateHandle (U7); tools-as-primitives per agent-native-audit; KTD-15 named-catalog (Q1-Q10 for analyst is reference precedent)
 
 **Test scenarios:**
-- `handle_get_recommendations(repo)` returns list (empty if no recommendations.json)
-- `handle_list_pending_patches(repo)` filters out applied/rejected patches
-- `handle_propose_apply(repo, patch_id)` returns CLI command string, does NOT modify any file
-- `handle_get_dashboard_url(repo)` returns http://... when server running, file://... otherwise
+- `test_mcp_catalog`: every M1-M9 entry has matching server.py registration; no orphan tools either way
+- `test_mcp_catalog`: catalog M-IDs are unique, sequential, and metadata fields complete (id, kind, summary, backing, parameters_schema, returns_schema, examples non-empty)
+- `handle_list_capabilities(repo)` returns 9 entries with correct shape
+- `handle_get_recommendations(repo)` returns list (empty if no recommendations.json); SQL/IO is in alc_query, not handler
+- `handle_list_pending_patches(repo)` filters out applied/rejected patches via alc_query
+- `handle_propose_apply(repo, patch_id)` returns CLI command string, does NOT modify any file, does NOT spawn subprocess
+- `handle_get_dashboard_url(repo)` returns http:// when server running, file:// fallback otherwise
+- `handle_report_outcome(repo, ...)` emits `event_writer.write_event(event='outcome_reported')` — verified via in-memory writer mock
 - No `handle_apply_patch` function exists (R3 enforcement at code-grep level)
-- Existing handler tests (`get_gates`, `report_outcome`) still pass
+- All existing handler tests (`get_gates`, `report_outcome`, etc.) still pass — semantic preservation
+- MCP catalog is importable as `from alc_mcp import MCP_TOOLS` from external code
 
-**Verification:** `python3 -m unittest discover -s alc_mcp/tests -v` passes; manual: invoke each new tool from a Claude session via MCP, verify outputs.
+**Verification:** `python3 -m unittest discover -s alc_mcp/tests -v` passes; manual: invoke `list_capabilities` from a Claude session via MCP, verify response matches M1-M9 catalog; invoke each tool, verify outputs.
+
+**capability-map.md cross-reference (U19):** the M-IDs from this catalog are referenced in `skills/alc-core/references/capability-map.md` (R16) so every dashboard-rendered action is mappable to its MCP-tool-equivalent. Capability-map-test asserts every dashboard surface has at least one MCP M-tool partner.
 
 ---
 
@@ -1345,7 +1388,7 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 
 **Approach:**
 - **Context-boundary tests (R15) — forenklet pga:** boundary håndheves nå pre-write i `bin/event_writer.py:_enforce_boundary` + samme funksjon kalt fra `bin/artifact_writer.py`. U19's test reduseres til ÉN test: `test_boundary_enforcement.py` som asserter at `_enforce_boundary` riktig avviser hver kategori (secret, abs-path, oversized-string, oversized-blob unntak for patch_*, raw-transcript). Plus ÉN regresjons-test: bygg et bevisst boundary-bryt-event, pass til write_event, asserter ValueError + ingenting skrevet til disk. Per-artifact post-hoc-scans droppet — enforcement-invariant gjør dem overflødige.
-- **Capability-map tests (R16):** parse `skills/alc-core/references/capability-map.md` (a matrix: user-action × command × MCP tool × CLI). Assert: every dashboard-rendered action has at least 2 of (command, MCP tool, CLI). Every MCP tool has at least 1 of (command, CLI).
+- **Capability-map tests (R16):** parse `skills/alc-core/references/capability-map.md` (a matrix: user-action × command × MCP tool × CLI). Assert: every dashboard-rendered action has at least 2 of (command, MCP tool, CLI). Every MCP tool has at least 1 of (command, CLI). Cross-reference with `alc_mcp/catalog.py:MCP_TOOLS` (U17): every M-ID in MCP catalog appears at least once in capability-map; every dashboard surface has at least one M-ID partner.
 - **E2E pipeline test (R2):** runs the FULL pipeline on real data (not seeded). Asserts: `recommendations.json` is non-empty when corpus contains skill-mentions; anomalies are flagged when samples contain z>3 outlier; patches/ contains at least 1 bundle.
 - **Dashboard migration decision (ROOT 3):** commit a decision document that records: which path (keep both / port-and-delete / coexist) was chosen, why, and how the existing `dashboard/`'s `muted-domains.json` behavior is preserved. This is a written decision, not code — but it's a mandatory phase exit criterion.
 
