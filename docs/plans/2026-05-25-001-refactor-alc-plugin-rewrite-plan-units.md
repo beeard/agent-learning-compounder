@@ -1187,3 +1187,79 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 
 ---
 
+### U20. `alc-cloudflare-sync` — optional cross-repo memory via D1 + Vectorize (post-MVP)
+
+**Status:** post-MVP, opt-in per repo. **Scope-collapse safe**: hele sub-skillet dropps om G0.5.1 returnerer RED. W12 i wave-tabellen er ikke auto-dispatched fra LFG — operatør kjører separat etter Phase F merge.
+
+**Goal:** Mirror lokal `events.sqlite` til Cloudflare D1 + bygg Vectorize-index over actor-bærende events for cross-repo / cross-maskin semantic memory. ALC's lokale identitet uendret — sync er additiv replikator, ingen runtime-avhengighet på CF.
+
+**Requirements:** R27
+
+**Dependencies:** U5.5 (events.sqlite må eksistere), U6 (data-contracts for events), U10.5 (`alc_query.py` som read-API). **IKKE** dep på U10/U13 — sync er sidekanal.
+
+**Files:**
+- Create: `skills/alc-cloudflare-sync/SKILL.md` (tredje sub-skill ved siden av alc-core + alc-dashboard)
+- Create: `skills/alc-cloudflare-sync/references/architecture.md`, `setup.md`
+- Create: `bin/alc_sync_cloudflare`, `bin/alc_sync_cloudflare.py` (CLI: `--push`, `--query`, `--init`, `--status`)
+- Create: `bin/cloudflare_client.py` (thin wrapper over httpx; ingen `cloudflare`-SDK-dep)
+- Create: `cloudflare/wrangler.jsonc` + `cloudflare/src/index.ts` (Worker som tar imot batches, embedder via Workers AI, skriver til D1 + Vectorize)
+- Create: `cloudflare/migrations/0001_events_schema.sql` (D1-mirror av `EventV4.sqlite_ddl()`)
+- Create: `tests/test_alc_sync_cloudflare.py` (mocked CF endpoints; ingen ekte nettverk)
+- Modify: `.agent-learning.json` schema — legg til valgfri `cloudflare_sync: {enabled: bool, worker_url: str, api_token_env: str, vectorize_index: str, d1_database: str}`
+- Modify: `bin/state_handle.py` — eksponer `cloudflare_sync_config` (None hvis ikke konfigurert)
+
+**Approach:**
+
+1. **Trust-boundary først, ikke siste:** sync-pipeline kan KUN sende events som har passert `_enforce_boundary` allerede (KTD-16). Worker-API'et avviser også `payload.raw_*` felter på input — defense-in-depth.
+2. **Push-modell** (ikke pull):
+   - `bin/alc_sync_cloudflare --push` leser `events.sqlite` siden cursor `<state>/.cloudflare-sync.cursor`, batcher 100 events, POST til Worker-endpoint.
+   - Worker validerer schema (bruker `EventV4.jsonschema()`-generert skjema), embedder bounded summary-felt via Workers AI (`@cf/baai/bge-base-en-v1.5`), skriver til D1 + Vectorize.
+   - **Fail-soft (KTD-17):** hvis Worker er nede / API-token utløpt → log warning + behold cursor, retry neste push. ALC fortsetter å fungere lokalt.
+3. **Query-modell** (read-side):
+   - `bin/alc_sync_cloudflare --query "stack trace X"` → embeddings-query → Worker → Vectorize semantic search → returnerer rangerte `event_id`s + bounded summary.
+   - **Hybrid join** i `alc_query.py`: lokalt SQL-query + CF semantic-query, merge resultater. Lokalt vinner ved tie (lokalt er ground truth).
+4. **Embedding-policy** (begrenset surface):
+   - Embed kun: `event.summary` (bounded, scrubbed), `actor.name`, `tool_server`, `error_class`.
+   - **IKKE** embed: payload-bodies, tool-inputs, tool-outputs — selv om scrubbed.
+5. **Token-håndtering:**
+   - CF API-token leses fra env-var navngitt i config (default `CLOUDFLARE_API_TOKEN`). Aldri persistert i `.agent-learning.json`.
+   - Token-struktur: scoped til *kun* Workers AI + Vectorize + D1 for prosjekt-account. Ingen account-wide tokens.
+6. **Cross-repo memory som førsteklasses use-case:**
+   - Hver event tagged med `repo_id` (eksisterer allerede i `state_paths`).
+   - Query kan ta `--scope all | repo:<id> | recent:7d`.
+   - Vectorize-index har metadata-filter på `repo_id`, `actor_kind`, `ts_bucket`.
+7. **Wrangler-config:**
+   - `wrangler.jsonc`: `vectorize_indexes: [{binding: "EVENTS_INDEX", index_name: "alc-events"}]`, `d1_databases: [{binding: "DB", database_name: "alc-events"}]`, `ai: {binding: "AI"}`
+   - Deploy: `cd cloudflare && wrangler deploy`. Operatør-drevet, ikke automatisk.
+
+**Test scenarios:**
+
+- **Disabled-default:** alle eksisterende tester passerer uendret med `cloudflare_sync.enabled=false`
+- **Push happy path:** 100 events i sqlite → push → Worker mottar batch med riktig schema (mocked endpoint)
+- **Trust-boundary:** forsøk å pushe event med raw `payload.tool_output` → klient avviser før HTTP-call
+- **Failover:** Worker returnerer 503 → cursor uendret, neste push prøver samme batch på nytt; ingen events mistet
+- **Token-rotering:** token i env-var endres mellom pushes → klient leser ny token uten restart
+- **Cross-repo query:** query med `--scope all` returnerer hits fra ≥2 forskjellige `repo_id`-verdier
+- **Schema-version:** D1-mirror schema_version=4; push av v3-row blokkeres (upgrade lokalt først)
+- **Idempotens:** rerun samme batch → D1 INSERT...ON CONFLICT(event_id) DO NOTHING; Vectorize upsert; ingen duplicates
+
+**Patterns to follow:**
+- `skills/cloudflare/agents-sdk` (lokal mirror under `~/.claude/skills/`) for Worker-init og bindings
+- Eksisterende `bin/auto_distill_session` for cursor-pattern
+- `event_writer.write_events_batch` for batch-skrive-mønster lokalt (samme idempotency-shape)
+
+**Verification:**
+```
+python3 -m unittest tests.test_alc_sync_cloudflare -v       # all green, mocked HTTP
+bin/alc_sync_cloudflare --init --dry-run                     # genererer wrangler.jsonc, peker på unikt CF account
+cd cloudflare && wrangler deploy --dry-run                   # validerer schema + bindings
+bin/alc_sync_cloudflare --push --limit 10                    # send 10 events til faktisk Worker
+bin/alc_sync_cloudflare --query "premise validation" --scope all   # returnerer hits fra D1+Vectorize
+```
+
+**Execution note:** Test-first. Hele unitet feiler graceful om CF ikke er tilgjengelig; integration-testene mocker HTTP — skriv testene før Worker-koden.
+
+**Scope-collapse path:** G0.5.1 RED → drop U20. G0.5.2 RED → behold U20 men kjør kun fra Claude. G0.5.3 RED → drop U20 (ingen vits å speile dårlige data).
+
+---
+

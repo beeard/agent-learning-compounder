@@ -67,8 +67,9 @@ Every requirement maps back to a ROOT in the consolidated review. ROOTs with con
 | R24 | Events.jsonl indexed to events.sqlite for query-layer; analyst joins on actor/correlation, not only session aggregates | NEW | user-directed |
 | R25 | Background agents (cron, ScheduleWakeup-fired, MCP-spawned long-runners) call `bin/event_emit` to be visible in the stream | NEW | user-directed |
 | R26 | Exec-sandbox primitive (`bin/exec_sandbox`) lets judge agents, recommender, dev-explorer, and arkiv-agents run bounded test scenarios in fresh git worktrees to confirm/refute recommendations with evidence (not only LLM-judgment) | NEW | user-directed (this session) |
+| R27 | Opt-in cross-repo memory via Cloudflare D1 + Vectorize (post-MVP, `alc-cloudflare-sync` sub-skill); local-first behavior must remain fully functional with sync disabled (default) | NEW | user-directed (this session) |
 
-Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements R8-R26 may be dropped entirely.
+Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements R8-R27 may be dropped entirely.
 
 ---
 
@@ -82,6 +83,9 @@ Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements 
 - Read-only dashboard with diff preview, route-out to CLI for any mutation
 - Agent archive supporting dev/test/evals invocation
 - Eval-loop scaffold closing ROOT 6
+
+### In scope (optional, opt-in, post-MVP)
+- U20 `alc-cloudflare-sync` sub-skill (W12): cross-repo / cross-machine memory via Cloudflare D1 + Vectorize. Disabled by default; operator opts in per repo via `.agent-learning.json`. Local-first behavior must remain fully functional with sync disabled. Dropped entirely if G0.5.1 returns RED.
 
 ### Deferred to Follow-Up Work
 - Real-time dashboard via WebSocket — refresh-on-hook is sufficient for MVP
@@ -364,8 +368,11 @@ Per KTD-18, the unit dependency graph supports parallel subagent dispatch in wav
 | **W9b** | U10 + U11 implementation + U12 + U17 (**4 parallel** — all design against U11 contract) | W9a done | ~1.5 h |
 | **W10** | U15 + U16 + U13 (**3 parallel**) | U10 done (U15+U16); U12 + U13.5 done (U13) | ~1 h |
 | **W11** | U19 (integration validation — sequential) | all done | ~1 h |
+| **W12** (opt-in, post-MVP) | U20 (`alc-cloudflare-sync`) | W11 green + operator opt-in | ~1.5 h |
 
 **Critical-path units (cannot parallelize past their wave):** U1, U2, U3, U6, U7, U5.5.0a/0b, U8, U9, U11-contract, U19.
+
+**W12 is NOT auto-dispatched by LFG.** Operator runs separately after Phase F merge if they want cross-repo memory. Scope-collapse from G0.5.1 RED drops W12 entirely.
 
 **Max parallel fan-out per wave:** 5 subagents (W6 — U5.5 thin adapters).
 

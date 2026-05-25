@@ -121,6 +121,9 @@ PHASE E1+E2:
 PHASE F:
 - W11: Sequential U19 (context-boundary regression + capability-map + e2e smoke with REAL data, not seeded)
 
+POST-MVP (NOT auto-dispatched):
+- W12: U20 (`alc-cloudflare-sync`) — opt-in cross-repo memory via D1 + Vectorize. After W11 green and operator opt-in via `.agent-learning.json` (`cloudflare_sync.enabled=true`), operator runs `codex exec -m gpt-5.3-codex-spark` against U20's spec separately. Do NOT auto-dispatch W12 from the same LFG run as W1-W11.
+
 GATE-CHECK BETWEEN WAVES (parent orchestrator runs in the integration worktree):
   cd agent-learning-compounder
   python3 -m unittest discover -s tests 2>&1 | tail -5
