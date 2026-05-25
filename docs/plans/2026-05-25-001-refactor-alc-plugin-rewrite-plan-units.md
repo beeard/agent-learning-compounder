@@ -1,5 +1,4 @@
----
-
+# Refactor: ALC Plugin Rewrite — Implementation Units
 
 > **Plan structure (post pass-7 split):** This file is the IMPLEMENTER VIEW (22 detailed implementation units, U1-U19 + U5.5 + U10.5 + U13.5). Companion: `2026-05-25-001-refactor-alc-plugin-rewrite-plan.md` has the executive overview + decisions + roadmap + verification strategy.
 
@@ -861,7 +860,7 @@ The catalog enumerates which optimization question each query in `bin/analyst_qu
 - Recursion depth tracked via explicit `--depth N` CLI flag (NOT env var — survives env strip when called from tier 1/2 with stripped env)
 - max-depth check at exec_sandbox.py main(): refuse if `--depth >= 2`
 - Tier-3 exec that spawns sub-exec via alc_invoke MUST pass `--depth $(CURRENT_DEPTH + 1)`
-- alc_invoke recognizes ALC_SANDBOX_DEPTH from parent and threads it through
+- alc_invoke accepts an `--alc-sandbox-depth N` CLI flag from its caller and forwards it to any nested `bin/exec_sandbox` invocation via `--depth N+1`. No env-var fallback — keeping a single mechanism (explicit CLI flag) means recursion is enforceable even when env is stripped at sandbox entry (KTD-19).
 
 **Boot-time crash-recovery (A2):**
 - On every exec_sandbox.py invocation: scan `<state>/sandbox-worktrees/` for stale dirs
@@ -922,7 +921,7 @@ result: ExecResult = run(
 
 *Tier 3 (eval):*
 - `--scope eval --cmd 'bin/alc_invoke --agent evals/judge ...'` → subagent dispatched, event chain links exec_sandbox_run → subagent_invoke_start (parent_event_id)
-- Tier 3 command CANNOT spawn another tier 3 (recursion guard via env var `ALC_SANDBOX_DEPTH`)
+- Tier 3 command CANNOT spawn another tier 3 (recursion guard via explicit `--depth` CLI flag forwarded through alc_invoke; max-depth refuse at `--depth >= 2`)
 
 *Event emission:*
 - Every exec call appends one `exec_sandbox_run` event to events.jsonl
@@ -1040,7 +1039,7 @@ result: ExecResult = run(
 
 ### U17. MCP extensions + capability catalog (alc_mcp/server.py)
 
-**Goal:** Add 4 new MCP tools, drop direct mutation, refactor handlers to thin wrappers over alc_query (U10.5). Publish an explicit MCP capability catalog (M1-M9) parallel to Q1-Q10/G1-G5/DSL_TARGETS — agents can discover what alc_mcp exposes without reading server.py.
+**Goal:** Add 4 new MCP tools, drop direct mutation, refactor handlers to thin wrappers over alc_query (U10.5). Publish an explicit MCP capability catalog (M1-M10) parallel to Q1-Q10/G1-G5/DSL_TARGETS — agents can discover what alc_mcp exposes without reading server.py.
 
 **Requirements:** R3 (no MCP mutation), R16 (parity: every dashboard surface has MCP equivalent), KTD-15 (named-catalog mønster utvidet til MCP)
 
@@ -1051,7 +1050,7 @@ result: ExecResult = run(
 - Create: `alc_mcp/catalog.py` (canonical MCP_TOOLS dict — single source of truth for tools)
 - Create: `alc_mcp/tests/test_mcp_catalog.py` (test that registered tools match catalog exactly)
 - Create: `alc_mcp/tests/test_recommender_tools.py` (new tools' handlers)
-- Create: `skills/alc-core/references/mcp-catalog.md` (human-readable M1-M9 reference)
+- Create: `skills/alc-core/references/mcp-catalog.md` (human-readable M1-M10 reference)
 - Modify: `alc_mcp/README.md` (link to catalog ref)
 
 **MCP capability catalog (M1-M10) — published in `alc_mcp/catalog.py`:**
@@ -1090,7 +1089,7 @@ MCP_TOOLS: dict[str, MCPToolSpec] = {
 When a tool's signature/return-shape changes incompatibly, bump `version`. Agents call `list_capabilities()` and compare each tool's `version` to their own known version (caller-side responsibility). `min_compatible_version` lets the server signal "v2 callers can still use this, v1 callers cannot".
 
 **Capability-discovery surface:**
-- New built-in MCP tool `list_capabilities(repo) -> list[dict]` returns the M1-M9 catalog entries (without the handler functions, just metadata). Agents call this first to discover what alc_mcp can do.
+- New built-in MCP tool `list_capabilities(repo) -> list[dict]` returns the M1-M10 catalog entries (without the handler functions, just metadata). Agents call this first to discover what alc_mcp can do.
 - `alc_mcp/__init__.py` exports `MCP_TOOLS` so external code can import the catalog directly.
 - Test `test_mcp_catalog.py` asserts: every registered tool in server.py has matching MCP_TOOLS entry; every catalog entry has registered tool; M-IDs are unique and sequential.
 
@@ -1104,7 +1103,7 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 **Patterns to follow:** S13 (alc_mcp tool registrations), StateHandle (U7); tools-as-primitives per agent-native-audit; KTD-15 named-catalog (Q1-Q10 for analyst is reference precedent)
 
 **Test scenarios:**
-- `test_mcp_catalog`: every M1-M9 entry has matching server.py registration; no orphan tools either way
+- `test_mcp_catalog`: every M1-M10 entry has matching server.py registration; no orphan tools either way
 - `test_mcp_catalog`: catalog M-IDs are unique, sequential, and metadata fields complete (id, kind, summary, backing, parameters_schema, returns_schema, examples non-empty)
 - `handle_list_capabilities(repo)` returns 9 entries with correct shape
 - `handle_get_recommendations(repo)` returns list (empty if no recommendations.json); SQL/IO is in alc_query, not handler
@@ -1116,7 +1115,7 @@ When a tool's signature/return-shape changes incompatibly, bump `version`. Agent
 - All existing handler tests (`get_gates`, `report_outcome`, etc.) still pass — semantic preservation
 - MCP catalog is importable as `from alc_mcp import MCP_TOOLS` from external code
 
-**Verification:** `python3 -m unittest discover -s alc_mcp/tests -v` passes; manual: invoke `list_capabilities` from a Claude session via MCP, verify response matches M1-M9 catalog; invoke each tool, verify outputs.
+**Verification:** `python3 -m unittest discover -s alc_mcp/tests -v` passes; manual: invoke `list_capabilities` from a Claude session via MCP, verify response matches M1-M10 catalog; invoke each tool, verify outputs.
 
 **capability-map.md cross-reference (U19):** the M-IDs from this catalog are referenced in `skills/alc-core/references/capability-map.md` (R16) so every dashboard-rendered action is mappable to its MCP-tool-equivalent. Capability-map-test asserts every dashboard surface has at least one MCP M-tool partner.
 

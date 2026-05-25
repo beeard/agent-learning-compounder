@@ -1,5 +1,4 @@
----
-
+# Refactor: ALC Plugin Rewrite — Plan (Executive View)
 
 > **Plan structure (post pass-7 split):** This file is the EXECUTIVE VIEW (overview, decisions, roadmap, verification strategy). Companion: `2026-05-25-001-refactor-alc-plugin-rewrite-plan-units.md` has the 22 implementation units in detail.
 
@@ -69,7 +68,7 @@ Every requirement maps back to a ROOT in the consolidated review. ROOTs with con
 | R25 | Background agents (cron, ScheduleWakeup-fired, MCP-spawned long-runners) call `bin/event_emit` to be visible in the stream | NEW | user-directed |
 | R26 | Exec-sandbox primitive (`bin/exec_sandbox`) lets judge agents, recommender, dev-explorer, and arkiv-agents run bounded test scenarios in fresh git worktrees to confirm/refute recommendations with evidence (not only LLM-judgment) | NEW | user-directed (this session) |
 
-Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements R8-R25 may be dropped entirely.
+Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements R8-R26 may be dropped entirely.
 
 ---
 
@@ -112,7 +111,7 @@ Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements 
 | KTD-4 | DSL handles both `target_type: skill` and `target_type: agent` | User-directed (this session). Same executor, different validator per target_type. Reuses agent-creator's quality bar. |
 | KTD-5 | Agent archive split into dev/test/evals roots | Different lifecycle expectations per use: dev = ephemeral (auto-cleanup), test = repo-scoped, evals = retained for feedback loop. |
 | KTD-6 | Dashboard becomes read-only; apply moves to `bin/alc_apply` CLI | ROOT 2 Valg B (agent-native audit recommendation). Eliminates auth, path-traversal, file-write attack surface in one move. CLI is operator-only by nature. |
-| KTD-7 | `score_recommendations` reads `outcomes.json` written by `bin/alc_eval` | Closes R8/ROOT 6. First time the "compounder" name corresponds to behavior. Stateless ranker becomes outcome-aware. |
+| KTD-7 | `score_recommendations` reads the outcomes view over `events.sqlite` (rows where `event_type='eval_verdict'`) written by `bin/alc_eval` | Closes R8/ROOT 6. First time the "compounder" name corresponds to behavior. Stateless ranker becomes outcome-aware. |
 | KTD-8 | `bin/validate_artifacts.py` is NEW, not an overload of existing `validate_outputs.py` | Eliminates ROOT 4's fixtures-breakage risk. Existing positional-arg surface unchanged. |
 | KTD-9 | Phase B (foundation) builds new infrastructure side-by-side with existing `dashboard/` package; migration happens at Phase E | Avoids ROOT 3's "silently destructive" migration. Old + new coexist until explicit decision point. |
 | KTD-10 | `${ALC_PLUGIN_ROOT}` (set by wrapper script that detects runtime) replaces direct `${CLAUDE_PLUGIN_ROOT}` references | Resolves ROOT 5's Claude-only assumption. Wrapper detects Claude vs Codex vs neither, sets correct variable. |
@@ -120,7 +119,7 @@ Requirements R1-R2 are gating: if Phase A's validation gates fail, requirements 
 | KTD-12 | Apply-log uses `fcntl.flock` + try/except on JSONL parse + bounded-size compaction policy | Solves ROOT 2 AD#4 (concurrency bug). Apply-log won't corrupt dashboard. |
 | KTD-13 | **Unified observability:** all event emitters (hooks, MCP tools, subagents, background agents, transcripts, AND apply/eval CLIs) write to ONE stream (events.jsonl) via event_writer; SQLite-indexed mirror for query; no separate apply-log.jsonl or outcomes.json — those are SQL views over events.sqlite. | Without this, analyst sees only external-session activity, not ALC's own runtime cost/behavior. Three parallel log systems (events/apply-log/outcomes) were designed before event_writer existed; consolidation makes apply and eval first-class event types so ALC kompounderer faktisk læring om seg selv. |
 | KTD-14 | Schema_version bumps from 3 → 4 with backward-compat: old hook-events.jsonl rows still parseable; new fields (correlation_chain, actor, telemetry) optional on read | Doesn't break existing tooling; new analyst queries skip rows where required fields absent. |
-| KTD-15 | "Named catalog with explicit ownership" mønster brukes på 5 steder: analyst_queries (Q1-Q10), recommender generators (G1-G5), apply executor strategies (DSL_TARGETS), alc_query read API (catalog), MCP tools (M1-M9) | Hver ALC-pipeline-stage blir selv-dokumenterende: en leser kan lese katalogen og vite hva pipelinen kan svare på / produsere / utføre / eksponerer agent-side. MCP-katalogen er også capability-discovery-surface (R16): en agent som kobler seg på alc_mcp kan liste M1-M9 + vite hva hver tool gjør uten å lese server.py-kildekode. |
+| KTD-15 | "Named catalog with explicit ownership" mønster brukes på 5 steder: analyst_queries (Q1-Q10), recommender generators (G1-G5), apply executor strategies (DSL_TARGETS), alc_query read API (catalog), MCP tools (M1-M10) | Hver ALC-pipeline-stage blir selv-dokumenterende: en leser kan lese katalogen og vite hva pipelinen kan svare på / produsere / utføre / eksponerer agent-side. MCP-katalogen er også capability-discovery-surface (R16): en agent som kobler seg på alc_mcp kan liste M1-M10 + vite hva hver tool gjør uten å lese server.py-kildekode. |
 | KTD-16 | Context-boundary enforcement flyttet fra per-artifact-tester til write-path-invariant i event_writer.py + artifact_writer.py | Én write-path = ett sted å håndheve boundary. Fail-fast ved skrivning, ikke post-hoc-scan. Nye event-emittere arvelig safe. U19's boundary-test forenkles fra N artifact-scans til 1 writer-enforcement-test. |
 | KTD-17 | **Graceful degradation for reads, fail-fast for writes.** Read-paths fall back hvis preferred source mangler (events.sqlite → samples.json; .agent-learning.json → env var → default chain) and log degradation tier reached. Write-paths fail-fast on preflight invariant violation (allowed-roots, hash-match, boundary). | Consistent semantics across all units. Reads = "best effort with visible degradation"; writes = "all-or-nothing with safe-by-construction invariants". Implementer doesn't have to invent error-policy per unit. |
 | KTD-18 | **Interface-first publication for parallel subagent dispatch.** Units whose downstream consumers want parallel design publish contract modules early (e.g., `bin/alc_apply_contracts.py` before U11 implementation), validator-shapes early, and per-unit data-contracts manifests. Hot files (`data-contracts.json`) are split per-unit to eliminate merge conflicts. | Wall-clock time drops ~30-40% when subagent-dispatcher can fan out wider per wave. Pre-published contracts let U12+U17 design against U11 in parallel; per-unit data-contracts manifests let U8+U9+U10.5+U11+U12+U13 each register artifacts without fighting over one file. |
@@ -190,7 +189,7 @@ sequenceDiagram
  participant G as generators.py (Hermes-DSL ops)
  participant R as dashboard (read-only)
  participant CLI as bin/alc_apply
- participant LOG as apply-log.jsonl (flock'd)
+ participant EW as event_writer (events.jsonl + events.sqlite)
  participant INV as bin/alc_invoke
  participant EVAL as evals/rec-quality-judge
 
@@ -201,13 +200,13 @@ sequenceDiagram
  R-->>User: render diffs (no buttons)
  User->>CLI: bin/alc_apply --patch <id> --write
  CLI->>CLI: parse op, validate, flock, scrub_secrets, hash-check
- CLI->>LOG: append entry (with revert_op)
+ CLI->>EW: emit patch_applied event (with revert_op)
  CLI-->>User: revert command if needed
 
  Note over INV,EVAL: Eval loop (closes ROOT 6)
  INV->>EVAL: spawn arkiv-agent on N recent patches
  EVAL->>EVAL: verdict per patch (approve/reject/modify)
- EVAL->>A: outcomes.json (next session's input to scoring)
+ EVAL->>EW: emit eval_verdict events (next session's input to scoring via SQL view)
 ```
 
 ### State handle (one canonical resolver)
@@ -222,8 +221,8 @@ StateHandle:
  reports_dir -> personal archive
  dashboard_dir -> <repo_state>/dashboard/
  alc_agents_dirs -> {dev, test, evals, personal}
- alc_apply_log -> <repo_state>/apply-log.jsonl
- outcomes_json -> <repo_state>/outcomes.json
+ events_jsonl -> <repo_state>/events.jsonl       # KTD-13: unified stream
+ events_sqlite -> <repo_state>/events.sqlite     # KTD-13: indexed mirror; SQL views replace apply-log.jsonl + outcomes.json
 ```
 
 `bin/init_learning_system.py` writes `state_dir` to `.agent-learning.json` so MCP/dashboard/orchestrator converge on the same path.
@@ -293,7 +292,7 @@ One consolidated map of phases × units × files × gates. Replaces previously-s
 |------|------|----|
 | U15 | Single slash command with flags | `commands/alc-report.md` |
 | U16 | Hooks (expanded DEFAULT_EVENTS, dashboard refresh) | `hooks/{hooks.json, session-start, refresh_dashboard.py}` |
-| U17 | MCP extensions + capability catalog (M1-M9, KTD-15) | modifies `alc_mcp/server.py` + creates `alc_mcp/catalog.py` + `alc_mcp/tests/{test_mcp_catalog,test_recommender_tools}.py` + `skills/alc-core/references/mcp-catalog.md` |
+| U17 | MCP extensions + capability catalog (M1-M10, KTD-15) | modifies `alc_mcp/server.py` + creates `alc_mcp/catalog.py` + `alc_mcp/tests/{test_mcp_catalog,test_recommender_tools}.py` + `skills/alc-core/references/mcp-catalog.md` |
 
 **Gate to Phase F:** all surfaces operational; legacy `dashboard/` migration decision committed.
 
@@ -530,7 +529,7 @@ Each unit has its own verification step. System-wide verification at U19:
 5. python3 bin/run_pressure_tests
 6. python3 bin/validate_artifacts --check-contracts --state-dir <test-fixture-state>
 7. Manual: bash scripts/spike/spike_validate_premise.sh # confirm premise still holds
-8. Manual: /alc-report --eval # confirm eval loop produces outcomes.json
+8. Manual: /alc-report --eval # confirm eval loop emits eval_verdict events to events.sqlite
 9. Manual: bin/alc_apply --patch <real-patch-id> --write # apply one real patch
 10. Manual: bin/alc_apply --patch <same-patch-id> --revert # verify revert restores bytes
 11. Manual: open dashboard, attempt POST /apply via curl # expect 405 Method Not Allowed
