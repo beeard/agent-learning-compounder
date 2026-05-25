@@ -54,7 +54,14 @@ node "$ADAPTER_DIR/alc-session-metrics-adapter.mjs" \
 SAMPLE_COUNT=$(python3 -c "
 import json
 d = json.load(open('$OUTDIR/samples.json'))
-s = d.get('sessions', d if isinstance(d, list) else [])
+# adapter output: {schema_version, generated_at, source, metrics: [...], aggregate}
+# fallback: list (raw shape) or {sessions: [...]} (extracted shape)
+if isinstance(d, list):
+    s = d
+elif isinstance(d, dict):
+    s = d.get('metrics') or d.get('sessions') or []
+else:
+    s = []
 print(len(s))
 ")
 echo "✓ $SAMPLE_COUNT samples written → $OUTDIR/samples.json"
@@ -70,35 +77,61 @@ samples_path = os.path.join(os.environ["OUTDIR"], "samples.json")
 with open(samples_path) as f:
     raw = json.load(f)
 
-samples = raw["sessions"] if isinstance(raw, dict) and "sessions" in raw else raw
+# adapter output: {schema_version, generated_at, source, metrics: [...compactSession...], aggregate}
+# each compactSession has: session_ref, runtime, date, duration_minutes,
+# user_messages, assistant_messages, input_tokens, output_tokens, tool_errors,
+# top_tools (list of [name, count]), top_languages, etc.
+if isinstance(raw, list):
+    samples = raw
+elif isinstance(raw, dict):
+    samples = raw.get("metrics") or raw.get("sessions") or []
+else:
+    samples = []
 
 def bucket_for(s):
-    tc = s.get("tool_counts") or {}
-    if tc:
+    # top_tools shape: list of [name, count] pairs (topMapEntries output)
+    tt = s.get("top_tools")
+    if isinstance(tt, list) and tt:
+        first = tt[0]
+        if isinstance(first, (list, tuple)) and first:
+            return str(first[0])
+        if isinstance(first, dict):
+            return str(first.get("key") or first.get("name") or first.get("tool") or "?")
+    # fallback: tool_counts dict (raw extracted shape)
+    tc = s.get("tool_counts")
+    if isinstance(tc, dict) and tc:
         return max(tc.items(), key=lambda kv: kv[1])[0]
     return s.get("skill") or s.get("primary_tool") or "(none)"
 
 def duration_s(s):
-    if "duration_s" in s and isinstance(s["duration_s"], (int, float)):
+    if isinstance(s.get("duration_s"), (int, float)):
         return float(s["duration_s"])
-    if "duration_minutes" in s and isinstance(s["duration_minutes"], (int, float)):
+    if isinstance(s.get("duration_minutes"), (int, float)):
         return float(s["duration_minutes"]) * 60
     return None
 
+def session_id(s):
+    return str(s.get("session_ref") or s.get("session_id") or s.get("id") or "?")
+
 by_bucket = defaultdict(list)
+skipped_no_duration = 0
 for s in samples:
+    if not isinstance(s, dict):
+        continue
     d = duration_s(s)
     if d is None:
+        skipped_no_duration += 1
         continue
     by_bucket[bucket_for(s)].append((s, d))
 
+print(f"Total samples: {len(samples)}")
+print(f"Samples with usable duration: {sum(len(r) for r in by_bucket.values())} (skipped no-duration: {skipped_no_duration})")
 print(f"Buckets with ≥1 sample: {len(by_bucket)}")
-print(f"Total samples with duration: {sum(len(r) for r in by_bucket.values())}")
 print()
 print("Top buckets by sample count:")
 for b, rows in sorted(by_bucket.items(), key=lambda kv: -len(kv[1]))[:8]:
     durs = [d for _, d in rows]
-    print(f"  {b:24s} n={len(rows):4d}  median={statistics.median(durs):7.1f}s  max={max(durs):7.1f}s")
+    print(f"  {b:28s} n={len(rows):4d}  median={statistics.median(durs):7.1f}s  max={max(durs):8.1f}s")
 print()
 
 # Anomaly probe: z-score within bucket, min n=3
@@ -119,9 +152,10 @@ for b, rows in by_bucket.items():
                 "duration_s": dur,
                 "bucket_mean_s": mean,
                 "z": z,
-                "session_id": sample.get("session_id") or sample.get("id") or "?",
-                "errors": sample.get("tool_errors", 0),
+                "session_id": session_id(sample),
+                "errors": sample.get("tool_errors") or 0,
                 "tokens": (sample.get("input_tokens") or 0) + (sample.get("output_tokens") or 0),
+                "date": sample.get("date") or "?",
             })
 
 anomalies.sort(key=lambda a: -abs(a["z"]))
@@ -130,10 +164,10 @@ print(f"── top-10 duration anomalies (|z| ≥ 2, bucket n ≥ 3) ──")
 print(f"Total flagged: {len(anomalies)}")
 print()
 for i, a in enumerate(anomalies[:10], 1):
-    sid = (a["session_id"] or "?")[:16]
-    print(f"{i:2d}. bucket={a['bucket']:18s} dur={a['duration_s']:7.1f}s "
+    sid = a["session_id"][:16]
+    print(f"{i:2d}. {a['date']} bucket={a['bucket']:24s} dur={a['duration_s']:8.1f}s "
           f"(μ={a['bucket_mean_s']:7.1f}s) z={a['z']:+5.2f} "
-          f"err={a['errors']:3d} tok={a['tokens']:7d} ses={sid}")
+          f"err={a['errors']:3d} tok={a['tokens']:8d} ses={sid}")
 PY
 
 echo ""

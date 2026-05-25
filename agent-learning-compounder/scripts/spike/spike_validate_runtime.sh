@@ -20,7 +20,7 @@ if [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
   echo "  (verdict: GREEN)"
 else
   echo "⚠ NOT exported in this shell"
-  REFS=$(grep -rIl "CLAUDE_PLUGIN_ROOT" "$HOME/.claude" 2>/dev/null | head -5)
+  REFS=$(grep -rIl "CLAUDE_PLUGIN_ROOT" "$HOME/.claude" 2>/dev/null | head -5 || true)
   if [ -n "$REFS" ]; then
     echo "  but referenced in:"
     echo "$REFS" | sed 's/^/    /'
