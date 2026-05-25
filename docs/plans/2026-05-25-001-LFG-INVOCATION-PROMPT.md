@@ -33,13 +33,16 @@ Paste this prompt into a fresh Claude Code session (or `/lfg`) to delegate the f
 ```
 /lfg execute the implementation plan at:
 
-  docs/plans/2026-05-25-001-refactor-alc-plugin-rewrite-plan.md
+  docs/plans/2026-05-25-001-refactor-alc-plugin-rewrite-plan.md         (executive view: overview, KTDs, roadmap, verification)
+  docs/plans/2026-05-25-001-refactor-alc-plugin-rewrite-plan-units.md   (implementer view: 22 detailed units)
 
 Working directory: /home/tth/work/active/agent-learning-compounder-v2/
 All code work happens in subdir: agent-learning-compounder/ (per CLAUDE.md convention)
 Branch: alc-plugin-v2 (already pushed to origin/alc-plugin-v2)
 
-This plan supersedes docs/plans/2026-05-25-alc-plugin-refactor.md. Skip plan-creation phase; the plan is finalized through 5 review-passes (architecture review, ce-doc-review with 7 reviewers, agent-native audit, adversarial deep-review, plus 4 internal arch-passes with all findings baked in).
+This plan supersedes docs/plans/2026-05-25-alc-plugin-refactor.md.
+
+Plan-fil-splitting (post pass-7): subagents per unit should load BOTH files first — overview for context, units for their specific U-ID spec. Total: ~1768 linjer split into 578 (overview) + 1190 (units) for navigable subagent context windows. Skip plan-creation phase; the plan is finalized through 5 review-passes (architecture review, ce-doc-review with 7 reviewers, agent-native audit, adversarial deep-review, plus 4 internal arch-passes with all findings baked in).
 
 EXECUTION STRATEGY: wave-based parallel subagent dispatch per the plan's "Parallel Execution Plan" section. Critical path = ~12 wall-clock steps vs 21 units → ~40% reduction over serial execution.
 
