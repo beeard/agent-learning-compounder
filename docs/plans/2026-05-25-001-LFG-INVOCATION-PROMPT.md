@@ -78,6 +78,22 @@ codex exec -m gpt-5.3-codex-spark -s workspace-write --ignore-user-config \
 ## Prompt to paste
 
 ```
+RESUME CONTEXT — execute these checks FIRST before any wave dispatch:
+
+1. Read `agent-learning-compounder/scripts/spike/RESULTS.md`. If it contains a "Phase B decision" section where `phase_b_green_light` is **TRUE** (or equivalent green-light marker), then Phase A (W1 + W2) is COMPLETE. Do NOT re-run W1's baseline tests. Do NOT modify RESULTS.md unless explicitly correcting a graded verdict. Skip both Phase A waves.
+
+2. Run `git log --oneline alc-plugin-v2 | head -30`. Identify completed waves/units from commit subjects (e.g. "W1 baseline results", "Phase A gates graded", "U3 plugin shell"). Treat those waves/units as DONE; do not re-execute them.
+
+3. Honor plan adjustments documented in RESULTS.md's "Plan adjustments" section — these are operator decisions from W2 grading and override the plan's default unit specs (e.g. "U3 Codex scope: ship AGENTS.md only, no .codex-plugin/" → U3 produces only AGENTS.md, not both files).
+
+4. Resume by dispatching the lowest undone wave. If all of W1 + W2 are done and Phase B is green-lit, dispatch W3 (U3 + U5 in parallel) directly — do not pause, do not surface to operator.
+
+5. If the resume point is ambiguous (commits don't clearly mark which wave they belong to), surface to the operator with "RESUME AMBIGUOUS: <one-line reason>" and stop. Do NOT guess and re-execute work.
+
+The "Start with W1" instruction at the end of this prompt only applies when RESULTS.md is absent or Phase A is not yet green-lit. Otherwise use the resume point from (4).
+
+---
+
 Execute the implementation plan at:
 
   docs/plans/2026-05-25-001-refactor-alc-plugin-rewrite-plan.md         (executive view: overview, KTDs, roadmap, verification)
@@ -192,7 +208,7 @@ FINAL PR (after W11 green):
 - Reviewers: skip request_copilot_review; operator approves manually
 - Push only after operator confirms
 
-Start with W1. After W1 commits, stop and surface to operator: "W1 complete. W2 is operator-driven (3 validation gates). Ready to proceed when RESULTS.md commits green-light."
+Start with the lowest undone wave per the RESUME CONTEXT block at the top of this prompt. If RESULTS.md is absent or Phase A is not yet green-lit, start with W1 and after W1 commits stop and surface to operator: "W1 complete. W2 is operator-driven (3 validation gates). Ready to proceed when RESULTS.md commits green-light." Otherwise resume directly at the indicated wave (W3 onwards) without re-running completed work or modifying RESULTS.md.
 ```
 
 ---
