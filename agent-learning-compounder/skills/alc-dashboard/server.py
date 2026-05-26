@@ -18,19 +18,23 @@ import json
 import mimetypes
 import os
 import pathlib
+import sys
 import time
 import socketserver
 from typing import Any
 
-try:
-    from state_handle import StateHandle
-except ImportError:  # pragma: no cover
-    from bin.state_handle import StateHandle
+# Bootstrap sys.path so `from state_handle import …` resolves whether the
+# skill is launched as a Claude Code plugin (cwd elsewhere, PYTHONPATH empty)
+# or invoked directly via `python3 server.py`. Mirrors the pattern in
+# bin/alc_init, bin/render_state_surface, and alc_mcp/server.py.
+_PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[2]
+for _p in (_PLUGIN_ROOT / "bin", _PLUGIN_ROOT):
+    _ps = str(_p)
+    if _ps not in sys.path:
+        sys.path.insert(0, _ps)
 
-try:
-    import alc_query
-except ImportError:  # pragma: no cover
-    import bin.alc_query as alc_query
+from state_handle import StateHandle  # noqa: E402
+import alc_query  # noqa: E402
 
 
 SKILL_ROOT = pathlib.Path(__file__).resolve().parent
