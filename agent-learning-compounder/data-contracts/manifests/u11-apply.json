@@ -1,0 +1,44 @@
+{
+  "artifacts": [
+    {
+      "id": "patch_applied-event",
+      "path_template": "events.sqlite",
+      "producer": "alc_apply",
+      "consumers": ["alc_apply", "alc_query", "dashboard"],
+      "surface_in_dashboard": true,
+      "format": "sqlite-event",
+      "lifecycle": {
+        "create": "alc_apply",
+        "read": "all",
+        "update": "append_only",
+        "delete_or_retention": "events_retention",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 10000,
+        "cleanup_command": ""
+      },
+      "max_size": 52428800
+    },
+    {
+      "id": "patch_reverted-event",
+      "path_template": "events.sqlite",
+      "producer": "alc_apply",
+      "consumers": ["alc_apply", "alc_query", "dashboard"],
+      "surface_in_dashboard": true,
+      "format": "sqlite-event",
+      "lifecycle": {
+        "create": "alc_apply",
+        "read": "all",
+        "update": "append_only",
+        "delete_or_retention": "events_retention",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "180d",
+        "max_count": 10000,
+        "cleanup_command": ""
+      },
+      "max_size": 52428800
+    }
+  ]
+}
