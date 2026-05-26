@@ -1,14 +1,1 @@
-# Analyst queries catalog
-
-| Catalog ID | Question | Consumer | SQL skeleton | Output shape |
-|---|---|---|---|---|
-| Q1 | Which slash-command takes longest relative to its value? | `analyst_anomalies`, `analyst_correlations` | `SELECT actor_name AS skill, ... FROM events GROUP BY actor_name, event` | `skill`, `event_name`, `sample_count`, `avg_duration_ms`, `min_duration_ms`, `max_duration_ms` |
-| Q2 | Which model is overkill for which skill (high cost, high pass-rate)? | `analyst_correlations` | `SELECT actor_model, actor_name, ...` | `model`, `skill`, `sample_count`, `total_cost_usd`, `avg_cost_usd`, `pass_rate` |
-| Q3 | Which subagent dispatch patterns spawn most expensive subagents? | `analyst_correlations` | `JOIN events AS c ON c.parent_event_id = p.event_id` | `parent_actor`, `child_actor`, `child_model`, `event_count`, `avg_child_duration_ms`, `total_child_cost_usd` |
-| Q4 | Which background agents fail silently? | `analyst_anomalies` | `SELECT actor_name ... WHERE actor_kind='background_agent'` | `actor`, `sample_count`, `error_count`, `avg_duration_ms`, `total_cost_usd` |
-| Q5 | Which gates load at SessionStart but never get used in same session? | `analyst_correlations` | `session_start` joined to same-session `post_tool_use` | `gate_id`, `n_loaded_tools`, `n_error`, `pass_rate` |
-| Q6 | What time-of-day buckets have shortest/longest sessions? | `analyst_patterns` | `session_start/end` aggregated by `STRFTIME('%H', ts)` | `actor_name`, `hour_of_day`, `session_count`, `avg_session_seconds`, `min_session_seconds`, `max_session_seconds` |
-| Q7 | Which MCP servers are bottlenecks (avg duration_ms)? | `analyst_anomalies` | `GROUP BY tool_server` | `tool_server`, `sample_count`, `avg_duration_ms`, `min_duration_ms`, `max_duration_ms` |
-| Q8 | Frustration patterns: Stop within 30s after PostToolUse(error)? | `analyst_correlations` | windowed `post_tool_use`/`stop` join | `stop_event_id`, `session_id`, `failed_tool_events_earlier_30s` |
-| Q9 | Which skills have drifted (loaded freq dropped >50% over 30d)? | `analyst_patterns` | 30-day / 60-day actor_name windowed counts | `skill`, `recent_count`, `prior_count`, `ratio`, `is_drifted` |
-| Q10 | Eval-loop ROI: cost of eval vs. quality of resulting recommendations? | `analyst_correlations` | aggregate on `event='eval_verdict'` | `kind`, `sample_count`, `total_cost_usd`, `avg_tokens`, `failed_count` |
+../../reference-lib/analyst-queries-catalog

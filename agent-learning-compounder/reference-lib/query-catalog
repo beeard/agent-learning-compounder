@@ -1,0 +1,14 @@
+# query-catalog
+
+Generated from Python registry:
+`bin.analyst_queries`
+
+| id | kind | summary | backing | version |
+| --- | --- | --- | --- | --- |
+| UQ1 | read | Read patch apply log from events.sqlite | alc_query.get_apply_log | 1 |
+| UQ2 | read | Read eval verdict outcomes from events.sqlite | alc_query.get_outcomes | 1 |
+| UQ3 | read | Read recommendations artifact rows | alc_query.get_recommendations | 1 |
+| UQ4 | read | Read pending patches from local bundle store | alc_query.get_pending_patches | 1 |
+| UQ5 | read | Read session event DAG from sqlite recursive CTE | alc_query.get_event_dag | 1 |
+| UQ6 | read | Summarize actor-kind counts by time window | alc_query.get_actor_summary | 1 |
+| UQ7 | read | Read historical skill invocations by actor | alc_query.get_skill_invocation_history | 1 |

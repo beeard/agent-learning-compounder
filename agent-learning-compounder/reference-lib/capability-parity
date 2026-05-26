@@ -1,0 +1,16 @@
+# ALC Capability Parity
+
+| MCP ID | MCP tool | Backing | Query/propose/generator/analyst partner |
+| --- | --- | --- | --- |
+| M1 | get_gates | alc_query.get_gates | alc_query.get_gates |
+| M2 | get_skill_context | alc_query.get_skill_context | alc_query.get_skill_context |
+| M3 | get_recommendations | alc_query.get_recommendations | recommender_generators.GENERATORS |
+| M4 | list_pending_patches | alc_query.get_pending_patches | alc_query.get_pending_patches |
+| M5 | get_dashboard_url | state_handle.dashboard_url | alc_query dashboard read seam |
+| M6 | propose_apply | alc_propose.propose_apply | alc_propose.propose_apply |
+| M7 | propose_gate | alc_propose.propose_gate | alc_propose.propose_gate |
+| M8 | report_outcome | alc_propose.report_outcome | alc_propose.report_outcome |
+| M9 | report_agent_event | alc_propose.report_agent_event | alc_propose.report_agent_event |
+| M10 | exec_sandbox | exec_sandbox.run | analyst_queries.QUERIES |
+
+Deletion check, local only: temporarily remove one row from this table or one catalog registration backing an M-ID, then run `python3 -m unittest tests.test_capability_map tests.test_capability_parity -v`. The map/parity tests should fail before any consumer can silently bypass the catalog.
