@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import inspect
 import json
 import os
 import sys
@@ -18,7 +20,7 @@ import alc_propose  # noqa: E402
 import alc_query  # noqa: E402
 import exec_sandbox as sandbox  # noqa: E402
 import state_handle  # noqa: E402
-from alc_mcp.catalog import MCP_TOOLS  # noqa: E402
+from alc_mcp.catalog import MCP_TOOLS, MCPToolSpec  # noqa: E402
 
 
 def _agent_kind(args: dict[str, Any]) -> str:
@@ -38,68 +40,122 @@ def _schema(name: str, description: str, input_schema: dict[str, Any]) -> dict[s
     return {"name": name, "description": description, "inputSchema": input_schema}
 
 
-async def get_gates_handler(args: dict[str, Any]) -> list[dict[str, Any]]:
-    state = _state(args)
-    return alc_query.get_gates(state, args.get("scope"))
+# ---------------------------------------------------------------------------
+# Handler factory — resolves spec.backing at import time, builds async closure
+# ---------------------------------------------------------------------------
+
+def _make_handler(spec: MCPToolSpec):
+    """Return an async handler closure for the given MCP tool spec.
+
+    Imports the backing module once at registry-build time (startup cost paid
+    once; the module reference is cached in the closure).  The function is
+    looked up via ``getattr(module, func_name)`` on every call so that test
+    mocks applied to the module attribute are honoured.
+
+    Calling convention is determined from the backing function's static
+    signature (inspected at factory time, not per-call):
+
+    * First param named ``state`` → construct a StateHandle from ``args["repo"]``
+      and pass it as the first positional argument, then fill remaining params by
+      name from *args*.
+    * Otherwise (e.g. ``dashboard_url(repo)`` or keyword-only signatures) →
+      pass all args by name directly from *args*.  The caller is responsible for
+      any type coercions via an explicit override (see TOOL_HANDLERS below).
+    """
+    module_name, func_name = spec.backing.rsplit(".", 1)
+    mod = importlib.import_module(module_name)
+    # Inspect the signature once to determine calling convention.
+    params = list(inspect.signature(getattr(mod, func_name)).parameters.values())
+    uses_state = bool(params) and params[0].name == "state"
+
+    if uses_state:
+        rest_params = params[1:]
+
+        async def _state_handler(args: dict[str, Any]) -> Any:
+            fn = getattr(mod, func_name)
+            st = _state(args)
+            kwargs = {p.name: args[p.name] for p in rest_params if p.name in args}
+            return fn(st, **kwargs)
+
+        return _state_handler
+    else:
+        async def _direct_handler(args: dict[str, Any]) -> Any:
+            fn = getattr(mod, func_name)
+            kwargs = {p.name: args[p.name] for p in params if p.name in args}
+            return fn(**kwargs)
+
+        return _direct_handler
 
 
-async def get_skill_context_handler(args: dict[str, Any]) -> str:
-    return alc_query.get_skill_context(_state(args))
+# Build handlers for all catalog entries.  Explicit overrides follow.
+TOOL_HANDLERS: dict[str, Any] = {
+    name: _make_handler(spec) for name, spec in MCP_TOOLS.items()
+}
 
+# ---------------------------------------------------------------------------
+# Explicit overrides
+# ---------------------------------------------------------------------------
 
-async def get_recommendations_handler(args: dict[str, Any]) -> list[dict[str, Any]]:
-    return alc_query.get_recommendations(_state(args))
-
-
-async def list_pending_patches_handler(args: dict[str, Any]) -> list[dict[str, Any]]:
-    return alc_query.get_pending_patches(_state(args))
-
-
-async def get_dashboard_url_handler(args: dict[str, Any]) -> str:
-    return state_handle.dashboard_url(args["repo"])
-
-
-async def propose_apply_handler(args: dict[str, Any]) -> dict[str, str]:
-    return alc_propose.propose_apply(_state(args), args["patch_id"])
-
-
-async def propose_gate_handler(args: dict[str, Any]) -> dict[str, str]:
-    return alc_propose.propose_gate(_state(args), args["domain"], args["category"], args["gate"], args.get("evidence"))
-
-
-async def report_outcome_handler(args: dict[str, Any]) -> dict[str, Any]:
-    event_id = alc_propose.report_outcome(_state(args), args.get("recommendation_id") or args["gate_id"], args.get("verdict") or args["outcome"], args.get("reason") or args.get("correlation_id") or "reported via mcp")
+# report_outcome: alias args (recommendation_id/gate_id, verdict/outcome, reason/correlation_id)
+# and wrap the bare event_id return value.
+async def _report_outcome_handler(args: dict[str, Any]) -> dict[str, Any]:
+    event_id = alc_propose.report_outcome(
+        _state(args),
+        args.get("recommendation_id") or args["gate_id"],
+        args.get("verdict") or args["outcome"],
+        args.get("reason") or args.get("correlation_id") or "reported via mcp",
+    )
     return {"recorded": True, "event_id": event_id}
 
 
-async def report_agent_event_handler(args: dict[str, Any]) -> dict[str, Any]:
+TOOL_HANDLERS["report_outcome"] = _report_outcome_handler
+
+# report_agent_event: normalise kind via _agent_kind, resolve actor alias, wrap return.
+_auto_report_agent_event = TOOL_HANDLERS["report_agent_event"]
+
+
+async def _report_agent_event_handler(args: dict[str, Any]) -> dict[str, Any]:
     kind = _agent_kind(args)
-    event_id = alc_propose.report_agent_event(_state(args), kind, args.get("actor_name") or args.get("agent_role") or "mcp_caller", args.get("telemetry") or {k: v for k, v in args.items() if k not in {"repo", "kind", "event", "actor_name"}})
+    normalised = dict(args)
+    normalised["kind"] = kind
+    normalised.setdefault("actor_name", args.get("agent_role") or "mcp_caller")
+    if "telemetry" not in normalised:
+        normalised["telemetry"] = {
+            k: v for k, v in args.items() if k not in {"repo", "kind", "event", "actor_name"}
+        }
+    event_id = await _auto_report_agent_event(normalised)
     return {"recorded": True, "event_id": event_id, "event": f"agent_dispatch_{kind}"}
 
 
-async def exec_sandbox_handler(args: dict[str, Any]) -> dict[str, Any]:
-    result = sandbox.run(scope=args["scope"], command=args["command"], repo=Path(args["repo"]), base_ref=args.get("base_ref"), timeout_s=args.get("timeout_s"), actor=args.get("actor") or {"kind": "mcp_server", "name": "alc_mcp"})
-    return {"exit_code": result.exit_code, "stdout": str(result.stdout_path), "stderr": str(result.stderr_path), "event_id": result.event_id, "run_id": result.run_id}
+TOOL_HANDLERS["report_agent_event"] = _report_agent_event_handler
+
+# exec_sandbox: coerce repo to Path, inject default actor, transform ExecResult.
+async def _exec_sandbox_handler(args: dict[str, Any]) -> dict[str, Any]:
+    result = sandbox.run(
+        scope=args["scope"],
+        command=args["command"],
+        repo=Path(args["repo"]),
+        base_ref=args.get("base_ref"),
+        timeout_s=args.get("timeout_s"),
+        actor=args.get("actor") or {"kind": "mcp_server", "name": "alc_mcp"},
+    )
+    return {
+        "exit_code": result.exit_code,
+        "stdout": str(result.stdout_path),
+        "stderr": str(result.stderr_path),
+        "event_id": result.event_id,
+        "run_id": result.run_id,
+    }
 
 
-async def list_capabilities_handler(args: dict[str, Any]) -> list[dict[str, Any]]:
+TOOL_HANDLERS["exec_sandbox"] = _exec_sandbox_handler
+
+# list_capabilities: not in MCP_TOOLS catalog; returns catalog metadata itself.
+async def _list_capabilities_handler(args: dict[str, Any]) -> list[dict[str, Any]]:
     return [spec.to_dict() for spec in MCP_TOOLS.values()]
 
 
-TOOL_HANDLERS = {
-    "get_gates": get_gates_handler,
-    "get_skill_context": get_skill_context_handler,
-    "get_recommendations": get_recommendations_handler,
-    "list_pending_patches": list_pending_patches_handler,
-    "get_dashboard_url": get_dashboard_url_handler,
-    "propose_apply": propose_apply_handler,
-    "propose_gate": propose_gate_handler,
-    "report_outcome": report_outcome_handler,
-    "report_agent_event": report_agent_event_handler,
-    "exec_sandbox": exec_sandbox_handler,
-    "list_capabilities": list_capabilities_handler,
-}
+TOOL_HANDLERS["list_capabilities"] = _list_capabilities_handler
 
 
 TOOL_SCHEMAS = [
