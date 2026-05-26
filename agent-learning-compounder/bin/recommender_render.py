@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""Hermes-DSL patch-bundle writer for recommender output (U9)."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+from state_handle import StateHandle
+from state_paths import atomic_write_text
+
+try:
+    from recommender_generators import GENERATORS, render as render_bundle
+except ImportError:  # pragma: no cover
+    from bin.recommender_generators import GENERATORS, render as render_bundle
+
+try:
+    from exec_sandbox import run as run_in_sandbox
+except ImportError:  # pragma: no cover
+    from bin.exec_sandbox import run as run_in_sandbox
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=Path, help="repo root path")
+    parser.add_argument("--state", "--state-dir", "--state_dir", dest="state", type=Path, help="state directory")
+    parser.add_argument("--pre-validate", action="store_true", help="run per-recommendation validation command via exec_sandbox")
+    return parser.parse_args(argv)
+
+
+def _state_handle(repo: Path | None, state: Path | None) -> StateHandle:
+    if repo is None and state is None:
+        raise ValueError("either --repo or --state must be supplied")
+
+    if state is None:
+        return StateHandle.for_repo(repo)
+
+    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
+    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.resolve())
+    try:
+        return StateHandle.for_repo(repo or Path.cwd())
+    finally:
+        if previous is None:
+            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
+        else:
+            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
+
+
+def _read_recommendations(state: StateHandle) -> list[dict[str, Any]]:
+    path = state.reports_dir / "recommendations.json"
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload = payload.get("recommendations", payload.get("items", []))
+    if not isinstance(payload, list):
+        raise ValueError("recommendations.json must be a list")
+    return [entry for entry in payload if isinstance(entry, dict)]
+
+
+def _timestamp() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _rec_id(rec: dict[str, Any]) -> str:
+    value = rec.get("recommendation_id") or rec.get("id")
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("missing recommendation_id")
+    return value.strip()
+
+
+def _next_patch_id(kind: str, rec_id: str, used: set[str]) -> str:
+    base = f"{kind}-{rec_id}"
+    if base not in used:
+        used.add(base)
+        return base
+    index = 2
+    while True:
+        candidate = f"{base}-{index}"
+        if candidate not in used:
+            used.add(candidate)
+            return candidate
+        index += 1
+
+
+def _validate_recommendation(rec: dict[str, Any], *, prevalidate: bool, state: StateHandle) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    kind = str(rec.get("kind", "")).strip()
+    rec_id_value = rec.get("recommendation_id", rec.get("id"))
+    sid = str(rec_id_value or "unknown")
+
+    if kind not in GENERATORS:
+        return None, {"kind": kind, "recommendation_id": sid, "reason": "unsupported kind"}
+
+    if prevalidate:
+        command = str(rec.get("validation_command", "")).strip()
+        if command:
+            result = run_in_sandbox(
+                scope="worktree",
+                command=command,
+                repo=state.repo,
+                actor={"kind": "recommender", "name": "recommender_render"},
+                parent_event_id=None,
+                depth=0,
+            )
+            if result.exit_code != 0:
+                return None, {"kind": kind, "recommendation_id": sid, "reason": f"prevalidate_failed:{result.exit_code}"}
+
+    try:
+        bundle = render_bundle(rec)
+    except Exception as exc:
+        return None, {"kind": kind, "recommendation_id": sid, "reason": str(exc)}
+
+    if kind == "workflow_chain":
+        return {"kind": kind, "recommendation_id": sid, "suggestion": bundle.get("suggestion", {})}, None
+
+    return {"kind": kind, "bundle": bundle}, None
+
+
+def _write_patch(state: StateHandle, patch_id: str, payload: dict[str, Any]) -> None:
+    patches = state.repo_state_dir / "patches"
+    patches.mkdir(parents=True, exist_ok=True)
+    path = patches / f"{patch_id}.json"
+    path_data = dict(payload)
+    path_data["patch_id"] = patch_id
+    path_data["status"] = "pending"
+    path_data["created_at"] = _timestamp()
+    atomic_write_text(path, json.dumps(path_data, indent=2, sort_keys=True) + "\n")
+
+
+def _write_suggestions(state: StateHandle, suggestions: list[dict[str, Any]]) -> None:
+    payload = {
+        "generated_at": _timestamp(),
+        "suggestions": suggestions,
+    }
+    atomic_write_text(state.repo_state_dir / "suggestions.json", json.dumps(payload, indent=2, sort_keys=True) + "\n")
+
+
+def run(state: StateHandle, *, prevalidate: bool = False) -> tuple[int, list[dict[str, Any]], list[dict[str, Any]]]:
+    recommendations = _read_recommendations(state)
+
+    used: set[str] = set()
+    written = 0
+    suggestions: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    for rec in recommendations:
+        bundle_or_note, error = _validate_recommendation(rec, prevalidate=prevalidate, state=state)
+        if error:
+            skipped.append(error)
+            continue
+
+        if not bundle_or_note:
+            continue
+
+        if "suggestion" in bundle_or_note:
+            suggestion = dict(bundle_or_note["suggestion"])
+            suggestion.setdefault("recommendation_id", bundle_or_note.get("recommendation_id"))
+            suggestion.setdefault("kind", bundle_or_note.get("kind"))
+            suggestions.append(suggestion)
+            continue
+
+        kind = str(bundle_or_note["kind"])
+        bundle = bundle_or_note["bundle"]
+        rec_id = _rec_id(rec)
+        patch_id = _next_patch_id(kind, rec_id, used)
+        _write_patch(state, patch_id, bundle)
+        written += 1
+
+    if suggestions:
+        _write_suggestions(state, suggestions)
+
+    return written, suggestions, skipped
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+
+    try:
+        state = _state_handle(args.repo, args.state)
+        written, _suggestions, skipped = run(state, prevalidate=args.pre_validate)
+    except Exception as exc:  # pragma: no cover
+        print(str(exc), file=sys.stderr)
+        return 1
+
+    summary = {"written_patches": written, "skipped": len(skipped)}
+    print(json.dumps(summary, sort_keys=True))
+    if skipped:
+        print(json.dumps({"skipped": skipped}, sort_keys=True))
+        return 2
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
