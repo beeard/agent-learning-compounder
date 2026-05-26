@@ -18,6 +18,12 @@ instead of (or in addition to) a skills-root install.
   per-session PID lock. Mirrors the existing pattern for
   `/.claude/settings.local.json` — runtime state that should never enter
   the source tree.
+- `scripts/sanitize_skill_tree.sh` now strips `node_modules/` and `dist/`
+  directories during release staging in addition to the Python artifacts.
+  The new `dashboard/web/` Vite app pulls in ~24 MB of pnpm deps and a
+  Vite build output; without this, the release tarball ballooned from
+  ~225 KB to ~24 MB. `.gitignore` gains a matching `node_modules/`
+  pattern so the working tree stays clean too.
 
 No behavior change inside `agent-learning-compounder/` (the inner skill
 dir). `plus1.2` consumers do not need to upgrade unless they want the
