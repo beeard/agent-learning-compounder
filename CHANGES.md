@@ -1,5 +1,59 @@
 # Changes
 
+## 2026.05.27+review7-plus2.2
+
+Session-lifecycle synthesiser + self-dog-food doc contract.
+
+### New MCP tool — `next_action` (M11)
+
+Thin-skill + smart-MCP pattern. Consolidates "what's next", "session
+start", "session end", "where did I leave off", "recap" into one
+computed answer over the existing `alc_query` catalog (KTD-21).
+
+- `bin/alc_next_action.py` (572 lines) — the synthesiser. Five-rung
+  priority ladder: pending patches → recent rejected verdicts → stale
+  recommendations → recent commits without follow-up plan → idle state.
+- New skill `skills/alc-next/SKILL.md` triggers on English + Norwegian
+  lifecycle phrases ("hva er neste", "hvor var jeg", …) and just calls
+  the MCP tool + relays headline + rationale + suggested action.
+- Auto-registered via the `#01` `MCP_TOOLS` catalog pattern — no
+  `alc_mcp/server.py` edits required to ship a new tool now.
+- Cache side-effect: each call writes
+  `<state>/repos/<repo-id>/reports/latest-next-action.json` so future
+  dashboard and hook consumers can read the most recent.
+- 61 new unit tests covering each intent (`start`, `next`, `end`,
+  `recap`, `leftoff`, `auto`) + every priority-ladder rung + schema
+  validation + idempotency.
+
+Total MCP surface: 11 → 12 tools.
+
+### Self-dog-fooding the doc contract
+
+`alc_init`'s doc-contract check had been flagging ALC's own repo for
+6 missing canonical docs. Closed the architecture-tier gap:
+
+- `STRATEGY.md` (213 lines) — target problem, approach, users, key
+  metrics, tracks of work. Synthesised from project history in the
+  operator's voice; downstream CE skills (`/ce-ideate`,
+  `/ce-brainstorm`, `/ce-plan`) read it as grounding when present.
+- `ARCHITECTURE.md` (264 lines) — five-minute mental model of the
+  layered pipeline with a Mermaid diagram. Points at
+  `reference-lib/` for deep dives.
+- `CONTEXT.md` (258 lines) — LLM-agent-facing repo orientation.
+  Dual-name layout warning, install path comparison, state topology,
+  named-catalog vocabulary, read/propose seams (KTD-21), where to
+  read first for any given task.
+
+`alc_init` now reports doc_contract_missing 6/7 → 1/7 against this
+repo (last remaining is `docs/brainstorms/`, which gets created lazily
+when `/ce-brainstorm` first runs).
+
+### Tests
+
+363 `tests/` + 251 `fixtures/tests/` + 4 pressure tests all green.
++61 new tests for the synthesiser, +M11 catalog assertions in
+`test_mcp_registry.py` and `test_capability_parity.py`.
+
 ## 2026.05.27+review7-plus2.1
 
 Hotfix release — npm-distribution only. The 2.0 tarball published to npm

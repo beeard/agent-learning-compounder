@@ -1,6 +1,6 @@
 {
   "name": "agent-learning-compounder",
-  "version": "2026.05.27+review7-plus2.1",
+  "version": "2026.05.27+review7-plus2.2",
   "description": "Distills repo facts, session telemetry, and skill-health signals into durable, evidence-backed agent memory.",
   "author": {
     "name": "Tom",
