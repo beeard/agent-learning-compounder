@@ -15,3 +15,4 @@
 | Inspect anomalies | anomalies | `/alc-report` | M3 get_recommendations | `bin/analyst_anomalies --state <state>` |
 | Inspect patterns | patterns | `/alc-report` | M3 get_recommendations | `bin/analyst_patterns --state <state>` |
 | Inspect correlations | correlations | `/alc-report` | M3 get_recommendations | `bin/analyst_correlations --state <state>` |
+| Session lifecycle synthesiser | recommendations | `/alc-next` | M11 next_action | `python3 bin/alc_next_action.py --repo <repo>` |

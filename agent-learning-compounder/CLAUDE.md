@@ -15,7 +15,7 @@ directory; see `.claude-plugin/plugin.json`, `.mcp.json`, and `hooks/hooks.json`
 
 ## MCP tools
 
-11 stdio tools, auto-started via `.mcp.json`.
+12 stdio tools, auto-started via `.mcp.json`.
 
 **Read surface** (backed by `bin/alc_query.py` — the canonical read API per KTD-21):
 
@@ -24,7 +24,8 @@ directory; see `.claude-plugin/plugin.json`, `.mcp.json`, and `hooks/hooks.json`
 - `get_recommendations` — recommender output rows
 - `list_pending_patches` — patch bundles not yet applied
 - `get_dashboard_url` — dashboard URL for this repo
-- `list_capabilities` — M1–M10 MCP catalog metadata
+- `list_capabilities` — M1–M11 MCP catalog metadata
+- `next_action` (M11) — synthesise session-lifecycle recommendation (what's next, session start/end, where I left off); backed by `bin/alc_next_action.py`; writes `latest-next-action.json` cache
 
 **Propose / write surface** (backed by `bin/alc_propose.py` — the symmetric propose seam per KTD-21):
 

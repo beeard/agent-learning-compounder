@@ -13,6 +13,7 @@ BIN = ROOT / "bin"
 if str(BIN) not in sys.path:
     sys.path.insert(0, str(BIN))
 
+import alc_next_action
 import alc_propose
 import alc_query
 import analyst_queries
@@ -34,6 +35,7 @@ PARITY_PARTNERS = {
     "M8": ["alc_propose.report_outcome"],
     "M9": ["alc_propose.report_agent_event"],
     "M10": ["analyst_queries.QUERIES"],
+    "M11": ["alc_next_action.next_action"],
 }
 
 
@@ -62,6 +64,8 @@ class CapabilityParityTests(unittest.TestCase):
                 available[f"alc_propose.{name}"] = func
         available["recommender_generators.GENERATORS"] = recommender_generators.GENERATORS
         available["analyst_queries.QUERIES"] = analyst_queries.QUERIES
+        available["alc_next_action"] = alc_next_action
+        available["alc_next_action.next_action"] = alc_next_action.next_action
 
         for spec in MCP_TOOLS.values():
             partners = PARITY_PARTNERS.get(spec.id, [])

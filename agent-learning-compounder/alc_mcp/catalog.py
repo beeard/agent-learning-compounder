@@ -136,4 +136,82 @@ MCP_TOOLS: dict[str, MCPToolSpec] = {
         version=1,
         min_compatible_version=1,
     ),
+    "next_action": MCPToolSpec(
+        id="M11",
+        kind="read",
+        summary="Synthesise a session-lifecycle recommendation (what's next, session start/end, where I left off).",
+        backing="alc_next_action.next_action",
+        parameters_schema={
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": _REPO_PARAM,
+                "intent": {
+                    "type": "string",
+                    "enum": ["start", "next", "end", "recap", "leftoff", "auto"],
+                    "description": "Lifecycle hint. Defaults to 'auto'.",
+                },
+                "session_id": {
+                    "type": "string",
+                    "description": "Optional session identifier for scoped lookups.",
+                },
+            },
+        },
+        returns_schema={
+            "type": "object",
+            "required": ["intent", "headline", "rationale", "suggested", "alternatives", "signals"],
+            "properties": {
+                "intent": {"type": "string"},
+                "headline": {"type": "string"},
+                "rationale": {"type": "string"},
+                "suggested": {
+                    "type": "object",
+                    "required": ["skill", "args", "prompt"],
+                    "properties": {
+                        "skill": {"type": ["string", "null"]},
+                        "args": {"type": ["string", "null"]},
+                        "prompt": {"type": "string"},
+                    },
+                },
+                "alternatives": {
+                    "type": "array",
+                    "maxItems": 3,
+                    "items": {
+                        "type": "object",
+                        "required": ["skill", "rationale"],
+                        "properties": {
+                            "skill": {"type": ["string", "null"]},
+                            "rationale": {"type": "string"},
+                        },
+                    },
+                },
+                "signals": {
+                    "type": "object",
+                    "required": ["pending_patches", "pending_recommendations", "recent_applies_7d", "recent_verdicts_7d", "last_activity_iso"],
+                    "properties": {
+                        "pending_patches": {"type": "integer"},
+                        "pending_recommendations": {"type": "integer"},
+                        "recent_applies_7d": {"type": "integer"},
+                        "recent_verdicts_7d": {
+                            "type": "object",
+                            "properties": {
+                                "approve": {"type": "integer"},
+                                "reject": {"type": "integer"},
+                                "modify": {"type": "integer"},
+                            },
+                        },
+                        "last_activity_iso": {"type": ["string", "null"]},
+                    },
+                },
+            },
+        },
+        examples=[
+            {"repo": "/path/to/repo"},
+            {"repo": "/path/to/repo", "intent": "start"},
+            {"repo": "/path/to/repo", "intent": "leftoff"},
+            {"repo": "/path/to/repo", "intent": "end"},
+        ],
+        version=1,
+        min_compatible_version=1,
+    ),
 }

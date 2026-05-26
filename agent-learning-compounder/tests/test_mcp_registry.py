@@ -42,8 +42,22 @@ class TestMakeHandlerResolvesAllCatalogEntries(unittest.TestCase):
         self.assertTrue(callable(TOOL_HANDLERS["list_capabilities"]))
 
     def test_total_handler_count_matches_catalog_plus_list_capabilities(self):
-        # 10 catalog tools + list_capabilities = 11
+        # 11 catalog tools (M1-M11) + list_capabilities = 12
         self.assertEqual(len(TOOL_HANDLERS), len(MCP_TOOLS) + 1)
+
+    def test_next_action_in_catalog(self):
+        self.assertIn("next_action", MCP_TOOLS)
+
+    def test_next_action_has_handler(self):
+        self.assertIn("next_action", TOOL_HANDLERS)
+        self.assertTrue(callable(TOOL_HANDLERS["next_action"]))
+
+    def test_next_action_catalog_id_is_m11(self):
+        self.assertEqual(MCP_TOOLS["next_action"].id, "M11")
+
+    def test_next_action_handler_resolves_to_callable(self):
+        import inspect
+        self.assertTrue(inspect.iscoroutinefunction(TOOL_HANDLERS["next_action"]))
 
     def test_make_handler_returns_async_callable(self):
         import asyncio
