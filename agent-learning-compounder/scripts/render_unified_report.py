@@ -108,12 +108,31 @@ def _pipeline_commands(state: StateHandle, corpus: pathlib.Path, baseline: pathl
     latest_report = state.reports_dir / "latest-report.md"
     samples = state.reports_dir / "samples.json"
 
-    return [
+    # distill_learning expects --corpus to be a FILE (it calls Path.read_text).
+    # If the caller passed a directory (the common case — ~/.claude/projects
+    # transcripts), run extract_sessions first to produce a corpus text file;
+    # otherwise pass the file through unchanged.
+    commands: list[list[str]] = []
+    if corpus.is_dir():
+        corpus_file = state.reports_dir / "corpus.txt"
+        commands.append([
+            sys.executable,
+            str(BIN / "extract_sessions"),
+            "--path",
+            str(corpus),
+            "--output",
+            str(corpus_file),
+        ])
+        distill_corpus = corpus_file
+    else:
+        distill_corpus = corpus
+
+    commands.extend([
         [
             sys.executable,
             str(BIN / "distill_learning"),
             "--corpus",
-            str(corpus),
+            str(distill_corpus),
             "--baseline",
             str(baseline),
             "--output",
@@ -137,7 +156,8 @@ def _pipeline_commands(state: StateHandle, corpus: pathlib.Path, baseline: pathl
             "--state",
             str(state.repo_state_dir),
         ],
-    ]
+    ])
+    return commands
 
 
 def run_unified_report(
