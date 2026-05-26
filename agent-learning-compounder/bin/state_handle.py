@@ -166,3 +166,15 @@ class StateHandle:
             events_jsonl=repo_state / "events.jsonl",
             events_sqlite=repo_state / "events.sqlite",
         )
+
+
+def dashboard_url(repo: str | pathlib.Path) -> str:
+    handle = StateHandle.for_repo(pathlib.Path(repo))
+    marker = handle.dashboard_dir / "server.json"
+    payload = _read_json_or_none(marker)
+    if payload:
+        url = payload.get("url")
+        if isinstance(url, str) and url.startswith(("http://127.0.0.1:", "http://localhost:")):
+            return url
+    index = handle.dashboard_dir / "index.html"
+    return index.resolve().as_uri() if index.exists() else handle.dashboard_dir.resolve().as_uri()

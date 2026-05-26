@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import secrets
+import threading
 import time
 from pathlib import Path
 from typing import Any, Literal
@@ -48,6 +49,8 @@ MAX_DOMAIN_LEN = 80
 MAX_CATEGORY_LEN = 80
 MAX_KIND_LEN = 80
 MAX_NAME_LEN = 80
+ABSOLUTE_PATH_PREFIXES = ("/home/", "/Users/", "C:\\Users\\", "/etc/")
+_EVENT_WRITER_LOCK = threading.RLock()
 
 
 @contextlib.contextmanager
@@ -90,8 +93,18 @@ def _emit(state: StateHandle, row: dict[str, Any], *, source: str, auto_id_fallb
     if "[REDACTED" in payload:
         raise ValueError("payload contained secret-like content")
 
-    with _event_writer_state(state):
+    with _EVENT_WRITER_LOCK, _event_writer_state(state):
         return write_event(row, source=source, auto_id_fallback=auto_id_fallback)
+
+
+def _safe_telemetry(value: Any) -> Any:
+    if isinstance(value, str):
+        return "<path>" if value.startswith(ABSOLUTE_PATH_PREFIXES) else value
+    if isinstance(value, list):
+        return [_safe_telemetry(member) for member in value]
+    if isinstance(value, dict):
+        return {key: _safe_telemetry(member) for key, member in value.items()}
+    return value
 
 
 def _append_jsonl_locked(path: Path, row: dict[str, Any]) -> None:
@@ -112,6 +125,8 @@ def _append_jsonl_locked(path: Path, row: dict[str, Any]) -> None:
 
 
 def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evidence: str | None = None) -> dict[str, str]:
+    if not state.repo_state_dir.is_dir():
+        raise FileNotFoundError("improvement queue missing; run init_learning_system first")
     domain = _require(domain, "domain", MAX_DOMAIN_LEN)
     category = _require(category, "category", MAX_CATEGORY_LEN)
     gate_text = _require(gate, "gate", MAX_GATE_TEXT_LEN)
@@ -203,7 +218,7 @@ def report_agent_event(state: StateHandle, kind: str, actor_name: str, telemetry
         "event": f"agent_dispatch_{kind}",
         "actor": {"kind": "mcp_server", "name": actor_name},
         "ts": _timestamp(),
-        "telemetry": dict(telemetry or {}),
+        "telemetry": _safe_telemetry(dict(telemetry or {})),
     }
     return _emit(state, payload, source="background")
 

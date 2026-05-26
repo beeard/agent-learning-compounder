@@ -36,6 +36,47 @@ def _read_json(path: Path) -> Any:
         return None
 
 
+def _read_agent_learning_config(state: StateHandle) -> dict[str, Any]:
+    data = _read_json(state.repo / ".agent-learning.json")
+    return data if isinstance(data, dict) else {}
+
+
+def _configured_path(state: StateHandle, key: str, fallback: Path) -> Path:
+    value = _read_agent_learning_config(state).get(key)
+    return Path(value) if isinstance(value, str) and value.strip() else fallback
+
+
+def get_gates(state: StateHandle, scope: str | None = None) -> list[dict[str, Any]]:
+    path = _configured_path(state, "latest_approved_gates", state.reports_dir / "latest-approved-gates.md")
+    if not path.is_file():
+        return []
+    out: list[dict[str, Any]] = []
+    for i, block in enumerate(path.read_text(encoding="utf-8").split("\n- domain:")):
+        if i == 0:
+            continue
+        lines = block.splitlines()
+        if not lines:
+            continue
+        domain = lines[0].strip()
+        row: dict[str, Any] = {"domain": domain}
+        for line in lines[1:]:
+            stripped = line.strip()
+            if stripped.startswith("gate_id:"):
+                row["gate_id"] = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("gate_category:"):
+                row["category"] = stripped.split(":", 1)[1].strip()
+            elif stripped.startswith("gate:"):
+                row["gate"] = stripped.split(":", 1)[1].strip()
+        if {"gate_id", "category", "gate"} <= set(row):
+            out.append(row)
+    return [gate for gate in out if gate["domain"] == scope] if scope else out
+
+
+def get_skill_context(state: StateHandle) -> str:
+    path = _configured_path(state, "latest_skill_context", state.reports_dir / "latest-skill-context.md")
+    return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+
 def _to_iso(dt_value: dt.datetime) -> str:
     if dt_value.tzinfo is None:
         dt_value = dt_value.replace(tzinfo=dt.timezone.utc)
