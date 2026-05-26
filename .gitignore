@@ -17,3 +17,7 @@ node_modules/
 
 # Claude Code runtime artifact (per-session PID lock)
 /.claude/scheduled_tasks.lock
+
+# WIP diagram render sources (not for distribution)
+agent-learning-compounder/assets/_*.html
+agent-learning-compounder/assets/_*.png
