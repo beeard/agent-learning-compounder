@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ALC Read-only Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="dashboard-shell" x-data>
+    <header class="hero">
+      <h1>Agent Learning Dashboard</h1>
+      <p>Read-only operator surface with actionable context and terminal-safe apply verbs.</p>
+    </header>
+
+    <script id="dashboard-data" type="application/json">{{ ALC_DASHBOARD_DATA }}</script>
+
+    <section class="tabs-wrap" aria-label="Dashboard sections">
+      <div role="tablist" id="dashboard-tabs" class="tabs" aria-label="Dashboard views">
+        <button class="tab" role="tab" id="tab-recommendations" aria-controls="panel-recommendations" aria-selected="true">Recommendations</button>
+        <button class="tab" role="tab" id="tab-pending" aria-controls="panel-pending" aria-selected="false">Pending patches</button>
+        <button class="tab" role="tab" id="tab-anomalies" aria-controls="panel-anomalies" aria-selected="false">Anomalies</button>
+        <button class="tab" role="tab" id="tab-patterns" aria-controls="panel-patterns" aria-selected="false">Patterns</button>
+        <button class="tab" role="tab" id="tab-correlations" aria-controls="panel-correlations" aria-selected="false">Correlations</button>
+        <button class="tab" role="tab" id="tab-apply" aria-controls="panel-apply" aria-selected="false">Apply log</button>
+        <button class="tab" role="tab" id="tab-gates" aria-controls="panel-gates" aria-selected="false">Gates &amp; insights</button>
+        <button class="tab" role="tab" id="tab-suggestions" aria-controls="panel-suggestions" aria-selected="false">Suggestions</button>
+      </div>
+
+      <div role="tabpanel" id="panel-recommendations" class="panel"></div>
+      <div role="tabpanel" id="panel-pending" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-anomalies" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-patterns" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-correlations" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-apply" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-gates" class="panel hidden"></div>
+      <div role="tabpanel" id="panel-suggestions" class="panel hidden"></div>
+    </section>
+  </main>
+
+  <script src="/static/alpine.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
