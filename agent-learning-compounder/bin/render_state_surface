@@ -1,0 +1,338 @@
+#!/usr/bin/env python3
+"""Unified hook surface: render ALC state in a requested format.
+
+Usage:
+    render_state_surface --repo PATH [--state-dir PATH] \\
+        --format {markdown,html,session-report,json} [--out PATH]
+
+Formats
+-------
+markdown      Cat-equivalent of latest-approved-gates.md +
+              latest-session-context.md + latest-skill-context.md +
+              alc-core/SKILL.md.  Emits to stdout (same as the old
+              session-start bash hook).
+
+html          Regenerates <state>/repos/<id>/dashboard/data.json +
+              dashboard.html.  Prints the dashboard dir path on stdout.
+
+session-report  Builds a per-session markdown summary using recent
+              activity from alc_query (last 1 h) and writes it to
+              <state>/repos/<id>/reports/latest-session-report.md.
+              Rotates up to 10 backup copies (.001 … .010).  Prints
+              the report path on stdout.
+
+json          Structured JSON summary of counts + recent activity +
+              MCP status.  Emits to stdout (or --out).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import json
+import os
+import pathlib
+import sys
+import time
+from importlib.machinery import SourceFileLoader
+from typing import Any
+
+PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
+
+import alc_query  # noqa: E402
+from state_handle import StateHandle  # noqa: E402
+
+_FORMATS = ("markdown", "html", "session-report", "json")
+_SESSION_REPORT_KEEP = 10
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _setup_state(repo: pathlib.Path, state_dir: pathlib.Path | None) -> StateHandle:
+    """Build a StateHandle using env-variable injection to honour the
+    state_dir override without changing the public StateHandle API."""
+    if state_dir is not None:
+        prev = os.environ.get("AGENT_LEARNING_STATE_DIR")
+        os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_dir)
+        try:
+            return StateHandle.for_repo(repo)
+        finally:
+            if prev is None:
+                os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
+            else:
+                os.environ["AGENT_LEARNING_STATE_DIR"] = prev
+    return StateHandle.for_repo(repo)
+
+
+def _read_text(path: pathlib.Path) -> str:
+    if not path.is_file():
+        return ""
+    try:
+        return path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
+def _load_dashboard_server():
+    server_src = PLUGIN_ROOT / "skills" / "alc-dashboard" / "server.py"
+    loader = SourceFileLoader("alc_dashboard_server_rss", str(server_src))
+    return loader.load_module()
+
+
+# ---------------------------------------------------------------------------
+# Format: markdown
+# ---------------------------------------------------------------------------
+
+def render_markdown(state: StateHandle) -> str:
+    """Equivalent of the old session-start bash hook: cat the three durable
+    surfaces plus alc-core/SKILL.md."""
+    parts: list[str] = []
+
+    gates_md = _read_text(state.reports_dir / "latest-approved-gates.md")
+    if gates_md:
+        parts.append(gates_md.rstrip())
+
+    session_ctx = _read_text(state.reports_dir / "latest-session-context.md")
+    if session_ctx:
+        parts.append(session_ctx.rstrip())
+
+    skill_ctx = _read_text(state.reports_dir / "latest-skill-context.md")
+    if skill_ctx:
+        parts.append(skill_ctx.rstrip())
+
+    skill_md = _read_text(PLUGIN_ROOT / "skills" / "alc-core" / "SKILL.md")
+    if skill_md:
+        parts.append(skill_md.rstrip())
+
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Format: html
+# ---------------------------------------------------------------------------
+
+def render_html(state: StateHandle) -> pathlib.Path:
+    """Regenerate dashboard.html + data.json; return the dashboard dir."""
+    server = _load_dashboard_server()
+
+    state.dashboard_dir.mkdir(parents=True, exist_ok=True)
+
+    payload = server.build_data_blob(state)
+    (state.dashboard_dir / "data.json").write_text(
+        json.dumps(payload, sort_keys=True, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    html = server._inject_payload(server._read_template(), payload)
+    (state.dashboard_dir / "dashboard.html").write_text(html, encoding="utf-8")
+    return state.dashboard_dir
+
+
+# ---------------------------------------------------------------------------
+# Format: session-report
+# ---------------------------------------------------------------------------
+
+def _rotate_session_reports(dest: pathlib.Path, keep: int = _SESSION_REPORT_KEEP) -> None:
+    """Rotate existing backups: push them up, drop the oldest if > keep.
+
+    Backups are named <dest.name>.<NNN> where NNN is a zero-padded integer,
+    e.g. latest-session-report.md.001.  The current file becomes .001 and
+    existing backups are pushed up; anything beyond `keep` is deleted.
+    """
+    base = dest.name  # e.g. "latest-session-report.md"
+
+    def _backup(n: int) -> pathlib.Path:
+        return dest.parent / f"{base}.{n:03d}"
+
+    # Collect existing backups sorted highest-to-lowest so we can push up
+    # without conflicts.
+    siblings = sorted(
+        (p for p in dest.parent.glob(f"{base}.*")
+         if p.name[len(base) + 1:].isdigit()),
+        key=lambda p: int(p.name[len(base) + 1:]),
+        reverse=True,
+    )
+
+    for old in siblings:
+        n = int(old.name[len(base) + 1:]) + 1
+        if n > keep:
+            old.unlink(missing_ok=True)
+        else:
+            old.rename(_backup(n))
+
+    # Move current file into .001
+    if dest.is_file():
+        dest.rename(_backup(1))
+
+
+def render_session_report(state: StateHandle) -> pathlib.Path:
+    """Build a per-session markdown report from the last hour of activity."""
+    since = "1h"
+
+    actors = alc_query.get_actor_summary(state, since=since)
+    applies = alc_query.get_apply_log(state, since=since)
+    outcomes = alc_query.get_outcomes(state, since=since)
+    pending = alc_query.get_pending_patches(state)
+    recommendations = alc_query.get_recommendations(state)
+
+    now_str = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    lines: list[str] = [
+        f"# Session report — {state.repo.name}",
+        "",
+        f"_Generated at {now_str} by `render_state_surface --format session-report`._",
+        f"_Covers activity in the last {since}._",
+        "",
+        "## Activity summary",
+        "",
+    ]
+
+    total = actors.get("total") or 0
+    if total > 0:
+        by_kind = actors.get("by_actor_kind") or []
+        kind_str = ", ".join(
+            f"{r['count']} {r['actor_kind']} ({r['unique_actors']} unique)"
+            for r in by_kind
+        )
+        lines.append(f"- **Events:** {total} — {kind_str}")
+    else:
+        lines.append("- _No events recorded in this window._")
+
+    lines.append("")
+    lines.append("## Apply log")
+    lines.append("")
+    if applies:
+        from collections import Counter
+        breakdown = Counter(row.get("event", "?") for row in applies)
+        for ev, count in breakdown.most_common():
+            lines.append(f"- {count}× `{ev}`")
+    else:
+        lines.append("- _No apply events in this window._")
+
+    lines.append("")
+    lines.append("## Outcomes / verdicts")
+    lines.append("")
+    if outcomes:
+        lines.append(f"- {len(outcomes)} `eval_verdict` event(s) recorded.")
+    else:
+        lines.append("- _No verdict events in this window._")
+
+    lines.append("")
+    lines.append("## Pending review")
+    lines.append("")
+    if recommendations or pending:
+        if recommendations:
+            lines.append(f"- {len(recommendations)} recommendation(s) queued.")
+        if pending:
+            lines.append(f"- {len(pending)} pending patch(es).")
+        lines.append("")
+        lines.append("Run `alc_apply --list-pending` or `/alc-report` to triage.")
+    else:
+        lines.append("- _Nothing pending._")
+
+    lines.append("")
+    body = "\n".join(lines)
+
+    dest = state.reports_dir / "latest-session-report.md"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    _rotate_session_reports(dest)
+
+    tmp = dest.with_suffix(dest.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    tmp.replace(dest)
+    return dest
+
+
+# ---------------------------------------------------------------------------
+# Format: json
+# ---------------------------------------------------------------------------
+
+def render_json(state: StateHandle) -> dict[str, Any]:
+    """Structured state summary for IDE bars / scripts."""
+    pending = alc_query.get_pending_patches(state)
+    recommendations = alc_query.get_recommendations(state)
+    actors = alc_query.get_actor_summary(state, since="24h")
+    applies_1h = alc_query.get_apply_log(state, since="1h")
+
+    return {
+        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "repo": str(state.repo),
+        "state_root": str(state.state_root),
+        "pending_patches": len(pending),
+        "recommendations": len(recommendations),
+        "recent_activity_24h": actors.get("total") or 0,
+        "apply_events_1h": len(applies_1h),
+        "mcp_status": _probe_mcp_status(),
+    }
+
+
+def _probe_mcp_status() -> str:
+    """Quick probe: return 'configured' if .mcp.json exists, else 'unknown'."""
+    if (PLUGIN_ROOT / ".mcp.json").is_file():
+        return "configured"
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--repo", type=pathlib.Path, default=pathlib.Path.cwd(),
+                   help="host repo path (default: cwd)")
+    p.add_argument("--state-dir", type=pathlib.Path,
+                   help="ALC state root (default: <repo>/.agent-learning)")
+    p.add_argument("--format", dest="fmt", required=True, choices=_FORMATS,
+                   metavar="{" + ",".join(_FORMATS) + "}",
+                   help="output format")
+    p.add_argument("--out", type=pathlib.Path,
+                   help="write output to PATH instead of stdout (json format)")
+    return p.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    repo = args.repo.expanduser().resolve()
+    state_dir = args.state_dir.expanduser().resolve() if args.state_dir else None
+
+    state = _setup_state(repo, state_dir)
+
+    if args.fmt == "markdown":
+        text = render_markdown(state)
+        sys.stdout.write(text)
+        if text and not text.endswith("\n"):
+            sys.stdout.write("\n")
+
+    elif args.fmt == "html":
+        try:
+            dashboard_dir = render_html(state)
+            print(str(dashboard_dir))
+        except Exception as exc:
+            print(f"render_state_surface html: {exc}", file=sys.stderr)
+            return 1
+
+    elif args.fmt == "session-report":
+        try:
+            path = render_session_report(state)
+            print(str(path))
+        except Exception as exc:
+            print(f"render_state_surface session-report: {exc}", file=sys.stderr)
+            return 1
+
+    elif args.fmt == "json":
+        data = render_json(state)
+        text = json.dumps(data, indent=2, sort_keys=True) + "\n"
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(text, encoding="utf-8")
+        else:
+            sys.stdout.write(text)
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
