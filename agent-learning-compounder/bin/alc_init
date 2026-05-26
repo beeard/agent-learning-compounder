@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""First-run setup: profile host repo, smoke alc_mcp, write session context.
+
+Run from inside a target repo after the package is installed. Idempotent.
+
+Usage:
+    alc_init [--repo PATH] [--state-dir PATH] [--install-deps] [--skip-mcp-smoke] [--quiet]
+
+Reads from:
+    - the host repo file tree (read-only profiling)
+    - optionally pip-installs `requirements-optional.txt` from the plugin dir
+
+Writes:
+    - <state-root>/repos/<repo-id>/reports/latest-session-context.md
+    - prints a JSON summary on stdout
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import subprocess
+import sys
+
+PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
+
+from state_handle import StateHandle  # noqa: E402
+
+EXT_TO_LANG = {
+    ".py": "python", ".rb": "ruby", ".ts": "typescript", ".tsx": "typescript",
+    ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
+    ".go": "go", ".rs": "rust", ".java": "java", ".kt": "kotlin",
+    ".swift": "swift", ".cs": "csharp", ".php": "php", ".clj": "clojure",
+    ".ex": "elixir", ".exs": "elixir", ".erl": "erlang", ".scala": "scala",
+    ".lua": "lua", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
+    ".sql": "sql", ".vue": "vue", ".svelte": "svelte",
+}
+
+SKIP_DIRS = {
+    "node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "build",
+    ".next", ".nuxt", ".cache", "vendor", "target", ".pytest_cache",
+    ".agent-learning", "coverage", ".mypy_cache", ".ruff_cache",
+}
+
+
+def detect_repo(repo: pathlib.Path) -> dict:
+    """Profile the host repo. Read-only; bounded traversal."""
+    profile: dict = {
+        "name": repo.name,
+        "abspath": str(repo),
+        "has_git": (repo / ".git").is_dir(),
+        "languages": {},
+        "frameworks": [],
+        "has_tests": False,
+        "has_frontend": False,
+        "monorepo": False,
+        "package_managers": [],
+    }
+
+    ext_counts: dict[str, int] = {}
+    for dirpath, dirnames, filenames in os.walk(repo):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        for fname in filenames:
+            ext = pathlib.Path(fname).suffix.lower()
+            if ext:
+                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+
+    for ext, count in ext_counts.items():
+        lang = EXT_TO_LANG.get(ext)
+        if lang:
+            profile["languages"][lang] = profile["languages"].get(lang, 0) + count
+
+    # Framework + package-manager hints (file-presence-based)
+    fm = profile["frameworks"]
+    pms = profile["package_managers"]
+    if (repo / "Gemfile").is_file():
+        pms.append("bundler")
+        if (repo / "config" / "application.rb").is_file():
+            fm.append("rails")
+    if (repo / "package.json").is_file():
+        pms.append("npm")
+        try:
+            pkg = json.loads((repo / "package.json").read_text(encoding="utf-8"))
+            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
+            for key, label in (
+                ("next", "nextjs"), ("react", "react"), ("vue", "vue"),
+                ("svelte", "svelte"), ("@sveltejs/kit", "sveltekit"),
+                ("express", "express"), ("fastify", "fastify"),
+                ("hono", "hono"), ("@cloudflare/workers-types", "cloudflare-workers"),
+            ):
+                if key in deps:
+                    fm.append(label)
+            if not fm or fm == ["node"]:
+                fm.append("node")
+        except Exception:
+            pass
+    if (repo / "pyproject.toml").is_file():
+        pms.append("pip/poetry/uv")
+        try:
+            text = (repo / "pyproject.toml").read_text(encoding="utf-8", errors="ignore").lower()
+            if "fastapi" in text:
+                fm.append("fastapi")
+            if "flask" in text:
+                fm.append("flask")
+            if "django" in text:
+                fm.append("django")
+        except Exception:
+            pass
+    if (repo / "manage.py").is_file():
+        fm.append("django")
+    if (repo / "wrangler.toml").is_file() or (repo / "wrangler.jsonc").is_file():
+        fm.append("cloudflare-workers")
+    if (repo / "Cargo.toml").is_file():
+        pms.append("cargo")
+    if (repo / "go.mod").is_file():
+        pms.append("go-modules")
+    if (repo / "pom.xml").is_file():
+        pms.append("maven")
+    if (repo / "build.gradle").is_file() or (repo / "build.gradle.kts").is_file():
+        pms.append("gradle")
+
+    # Tests
+    for tdir in ("tests", "test", "spec", "__tests__"):
+        if (repo / tdir).is_dir():
+            profile["has_tests"] = True
+            break
+
+    # Frontend
+    frontend_frameworks = {"react", "vue", "svelte", "sveltekit", "nextjs"}
+    if any(f in frontend_frameworks for f in fm):
+        profile["has_frontend"] = True
+
+    # Monorepo
+    if (repo / "pnpm-workspace.yaml").is_file() or (repo / "lerna.json").is_file():
+        profile["monorepo"] = True
+    if (repo / "packages").is_dir() and (repo / "package.json").is_file():
+        profile["monorepo"] = True
+    if (repo / "apps").is_dir() and (repo / "package.json").is_file():
+        profile["monorepo"] = True
+
+    # Dedupe + sort
+    profile["frameworks"] = sorted(set(fm))
+    profile["package_managers"] = sorted(set(pms))
+    return profile
+
+
+def ensure_mcp(install: bool, quiet: bool) -> dict:
+    """Check for `mcp`. If missing and install=True, pip install --user."""
+    status = {"available": False, "installed_now": False, "error": None}
+    try:
+        __import__("mcp")
+        status["available"] = True
+        return status
+    except ImportError:
+        pass
+
+    req = PLUGIN_ROOT / "requirements-optional.txt"
+    if not install:
+        status["error"] = (
+            "mcp not installed; pass --install-deps to pip-install optional extras "
+            f"from {req}"
+        )
+        return status
+
+    if not req.is_file():
+        status["error"] = f"requirements-optional.txt missing at {req}"
+        return status
+
+    cmd = [sys.executable, "-m", "pip", "install", "--user", "-r", str(req)]
+    if not quiet:
+        print(f"alc_init: pip-installing optional deps from {req}", file=sys.stderr)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        status["error"] = (proc.stderr or proc.stdout).strip()[:500]
+        return status
+
+    status["installed_now"] = True
+    try:
+        __import__("mcp")
+        status["available"] = True
+    except ImportError as exc:
+        status["error"] = f"pip succeeded but mcp still not importable: {exc}"
+    return status
+
+
+def smoke_mcp(timeout_s: int = 10) -> dict:
+    """Run alc_mcp/server.py with initialize + tools/list; return status + tool names."""
+    server = PLUGIN_ROOT / "alc_mcp" / "server.py"
+    if not server.is_file():
+        return {"status": "missing", "tools": [], "error": f"{server} not found"}
+
+    init = (
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{'
+        '"protocolVersion":"2024-11-05","capabilities":{},'
+        '"clientInfo":{"name":"alc_init","version":"1.0"}}}'
+    )
+    list_req = '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+    payload = init + "\n" + list_req + "\n"
+
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(server)],
+            input=payload, text=True, capture_output=True, timeout=timeout_s,
+        )
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout", "tools": [], "error": f"no response within {timeout_s}s"}
+    except Exception as exc:
+        return {"status": "error", "tools": [], "error": str(exc)}
+
+    tools: list[str] = []
+    for line in proc.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if msg.get("id") == 2:
+            tools = [t["name"] for t in msg.get("result", {}).get("tools", [])]
+            break
+
+    if not tools:
+        err = (proc.stderr or "").strip()[:500] or "no tools returned"
+        return {"status": "no_tools", "tools": [], "error": err}
+    return {"status": "green", "tools": tools, "error": None}
+
+
+def render_session_context(profile: dict, mcp_status: dict, playbook_md: str = "") -> str:
+    lang_line = ""
+    if profile.get("languages"):
+        top = sorted(profile["languages"].items(), key=lambda x: -x[1])[:3]
+        lang_line = ", ".join(f"{lang} ({count})" for lang, count in top)
+
+    lines = [
+        "# Session context — agent-learning-compounder",
+        "",
+        f"_Generated by `alc init` for `{profile['name']}` at `{profile['abspath']}`._",
+        "",
+        "## Repo profile",
+        "",
+        f"- **Languages**: {lang_line or '_none detected_'}",
+        f"- **Frameworks**: {', '.join(profile['frameworks']) or '_none detected_'}",
+        f"- **Package managers**: {', '.join(profile['package_managers']) or '_none_'}",
+        f"- **Tests**: {'yes' if profile['has_tests'] else 'no'}",
+        f"- **Frontend**: {'yes' if profile['has_frontend'] else 'no'}",
+        f"- **Monorepo**: {'yes' if profile['monorepo'] else 'no'}",
+        f"- **Git repo**: {'yes' if profile['has_git'] else 'no'}",
+        "",
+        "## ALC MCP status",
+        "",
+        f"- **Status**: `{mcp_status['status']}`",
+    ]
+    if mcp_status.get("tools"):
+        lines.append(f"- **Tools** ({len(mcp_status['tools'])}): "
+                     + ", ".join(f"`{t}`" for t in mcp_status["tools"]))
+    if mcp_status.get("error"):
+        lines.append(f"- **Note**: {mcp_status['error']}")
+    lines.append("")
+    lines.append("## Compound-engineering playbook")
+    lines.append("")
+    if playbook_md:
+        lines.append(playbook_md)
+    else:
+        lines.append("_CE playbook generation lands in a follow-up. Until then,_")
+        lines.append("_invoke `/ce-brainstorm`, `/ce-plan`, `/ce-work`,_")
+        lines.append("_`/ce-simplify-code`, or `/improve-codebase-architecture`_")
+        lines.append("_directly when the workflow fits._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def write_session_context(state_root: pathlib.Path, repo_id: str, body: str) -> pathlib.Path:
+    out = state_root / "repos" / repo_id / "reports" / "latest-session-context.md"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    tmp = out.with_suffix(out.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    tmp.replace(out)
+    return out
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path.cwd(),
+                        help="host repo to profile (default: cwd)")
+    parser.add_argument("--state-dir", type=pathlib.Path,
+                        help="state root (default: <repo>/.agent-learning)")
+    parser.add_argument("--install-deps", action="store_true",
+                        help="pip-install requirements-optional.txt if mcp missing")
+    parser.add_argument("--skip-mcp-smoke", action="store_true",
+                        help="don't actually launch the MCP server")
+    parser.add_argument("--quiet", action="store_true",
+                        help="suppress progress on stderr")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    repo = args.repo.expanduser().resolve()
+    state_root = (args.state_dir.expanduser().resolve()
+                  if args.state_dir else repo / ".agent-learning")
+
+    if not args.quiet:
+        print(f"alc_init: repo={repo}", file=sys.stderr)
+        print(f"alc_init: state={state_root}", file=sys.stderr)
+
+    profile = detect_repo(repo)
+    if not args.quiet:
+        top_lang = max(profile["languages"].items(), key=lambda x: x[1])[0] if profile["languages"] else "_none_"
+        print(f"alc_init: top language={top_lang} "
+              f"frameworks={profile['frameworks']} "
+              f"tests={profile['has_tests']}", file=sys.stderr)
+
+    deps_status = ensure_mcp(install=args.install_deps, quiet=args.quiet)
+    if not args.quiet:
+        print(f"alc_init: mcp available={deps_status['available']} "
+              f"installed_now={deps_status['installed_now']}", file=sys.stderr)
+
+    if args.skip_mcp_smoke:
+        mcp_status = {"status": "skipped", "tools": [], "error": "smoke skipped via --skip-mcp-smoke"}
+    elif not deps_status["available"]:
+        mcp_status = {"status": "unavailable", "tools": [], "error": deps_status.get("error")}
+    else:
+        mcp_status = smoke_mcp()
+    if not args.quiet:
+        print(f"alc_init: mcp_status={mcp_status['status']} "
+              f"tools={len(mcp_status['tools'])}", file=sys.stderr)
+
+    repo_id = StateHandle.repo_id(repo)
+    body = render_session_context(profile, mcp_status)
+    out = write_session_context(state_root, repo_id, body)
+    if not args.quiet:
+        print(f"alc_init: wrote {out}", file=sys.stderr)
+
+    summary = {
+        "repo": str(repo),
+        "state_root": str(state_root),
+        "repo_id": repo_id,
+        "profile": profile,
+        "deps": deps_status,
+        "mcp": mcp_status,
+        "session_context": str(out),
+    }
+    print(json.dumps(summary, indent=2, sort_keys=True))
+    # Exit non-zero if MCP is broken in a way the user should know about.
+    if mcp_status["status"] in {"green", "skipped"}:
+        return 0
+    return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

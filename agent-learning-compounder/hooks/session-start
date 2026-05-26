@@ -7,4 +7,5 @@ if [ -z "$plugin_root" ]; then
   exit 1
 fi
 cat "$state_root"/repos/*/reports/latest-approved-gates.md 2>/dev/null || true
+cat "$state_root"/repos/*/reports/latest-session-context.md 2>/dev/null || true
 cat "$state_root"/repos/*/reports/latest-skill-context.md "$plugin_root"/skills/alc-core/SKILL.md 2>/dev/null || true

@@ -367,6 +367,13 @@ if [ -n "$bootstrap_repo" ]; then
   if [ "$hook_mode" = --dry-run ]; then
     echo "Runtime hooks ran in dry-run mode. Pass --apply-runtime-hooks to apply changes."
   fi
+
+  # First-run: profile host repo, smoke alc_mcp, write session context.
+  # Best-effort — failures here don't unwind the bootstrap.
+  if ! python3 "$bootstrap_dest/bin/alc_init" --repo "$repo_root" >/dev/null; then
+    echo "note: alc_init reported an issue (often just \"mcp not installed\"); install agent-learning-compounder/requirements-optional.txt to get the full first-run flow." >&2
+  fi
+
   printf 'bootstrapped agent-learning-compounder into: %s\n' "$repo_root"
   exit 0
 fi
