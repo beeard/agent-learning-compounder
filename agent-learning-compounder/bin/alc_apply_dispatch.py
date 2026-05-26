@@ -231,24 +231,27 @@ class HermesExecutor(Executor):
         if self._unreverted_apply(patch_id):
             raise ApplyError("patch already applied")
 
-        target, current, new = self._target(op)
+        # Early validation against current state (fails fast before grabbing the
+        # lock); the authoritative read+transform happens INSIDE the lock to
+        # close the TOCTOU window — file may change between these two reads.
+        self._target(op)
         with _apply_lock(self.state):
             _index_state(self.state)
             if self._unreverted_apply(patch_id):
                 raise ApplyError("patch already applied")
-            reread = _read_bytes(target)
+            target, current, new = self._target(op)
             expected = str(op.get("expected_target_sha256") or "")
-            if expected and expected != sha256_bytes(reread):
+            if expected and expected != sha256_bytes(current):
                 raise ApplyError("expected_target_sha256 mismatch after lock")
             apply_ts = _now()
-            scrubbed_original = scrub(reread.decode("utf-8", errors="replace")).encode("utf-8")
+            scrubbed_original = scrub(current.decode("utf-8", errors="replace")).encode("utf-8")
             original_b64 = base64.b64encode(scrubbed_original).decode("ascii")
             event_id = EventV4.deterministic_id("operator", "patch_applied", f"{patch_id}:{apply_ts}")
             rel_target = str(target.relative_to(self.state.repo)) if _under(target, self.state.repo) else str(target.name)
             payload = {
                 "patch_id": patch_id,
                 "target": rel_target,
-                "original_sha256": sha256_bytes(reread),
+                "original_sha256": sha256_bytes(current),
                 "original_bytes_b64": original_b64,
                 "revert_op": {
                     "action": "write_file",

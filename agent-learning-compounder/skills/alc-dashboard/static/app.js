@@ -1,11 +1,29 @@
 const DATA_ELEMENT = document.getElementById("dashboard-data");
 const DATA = DATA_ELEMENT ? JSON.parse(DATA_ELEMENT.textContent || "{}") : {};
 
-const fallbackMessage = (title) => `<article class="section-card score-mid"><strong>${title}</strong><p>No records yet.</p></article>`;
+const HTML_ESCAPE_MAP = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+  "`": "&#96;",
+};
 
-function safeText(value) {
-  return String(value == null ? "" : value);
+function escapeHtml(value) {
+  return String(value == null ? "" : value).replace(/[&<>"'`]/g, (c) => HTML_ESCAPE_MAP[c]);
 }
+
+// safeText returns HTML-escaped text suitable for direct inclusion in template
+// literals that get assigned to innerHTML. Event names, actor names, recommendation
+// text, etc. originate from hooks/transcripts/MCP callers — treat all of it as
+// untrusted. Callers that need raw values should access the data dict directly
+// and never inject into HTML.
+function safeText(value) {
+  return escapeHtml(value);
+}
+
+const fallbackMessage = (title) => `<article class="section-card score-mid"><strong>${safeText(title)}</strong><p>No records yet.</p></article>`;
 
 function riskClass(score) {
   if (typeof score !== "number" || Number.isNaN(score)) {

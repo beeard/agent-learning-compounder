@@ -169,8 +169,12 @@ def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evid
 
 def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
     patch_id = _require(patch_id, "patch_id", MAX_CATEGORY_LEN)
+    # Command matches the actual alc_apply CLI surface (--patch + --write).
+    # Token validation in alc_apply is not yet implemented; the token is
+    # emitted in telemetry only so a future audit can correlate proposal
+    # → apply via event_id rather than via runtime trust.
     token = secrets.token_urlsafe(16)
-    command = f"alc_apply --patch-id {patch_id} --approve-token {token}"
+    command = f"bin/alc_apply --patch {patch_id} --write"
 
     event = {
         "event": "apply_proposed",

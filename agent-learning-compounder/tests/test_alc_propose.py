@@ -75,7 +75,14 @@ class AlcProposeTests(unittest.TestCase):
         after = patch_path.read_text(encoding="utf-8")
         self.assertEqual(before, after)
         self.assertIn("patch-1", result["command"])
-        self.assertIn(result["token"], result["command"])
+        self.assertIn("--patch", result["command"])
+        self.assertIn("--write", result["command"])
+        # Token is returned for telemetry correlation but NOT embedded in the
+        # command (alc_apply has no --approve-token flag; embedding it would
+        # produce an unrunnable command). Telemetry carries the token via the
+        # apply_proposed event payload.
+        self.assertNotIn(result["token"], result["command"])
+        self.assertTrue(result["token"])  # token still issued
 
         events = self._event_rows()
         self.assertEqual(events[-1]["event"], "apply_proposed")
