@@ -181,7 +181,9 @@ ALC's safety posture is load-bearing. Preserve these:
   the operator. Personal-name variants via `AGENT_LEARNING_SUBJECT_NAMES`
   (comma-separated; regex-escaped).
 - **Default to read-only.** `distill_learning.py` mutates durable memory
-  only with `--write` plus `--personal` root or `AGENT_LEARNING_PERSONAL`.
+  only with `--write` plus an explicit user-scope root: `--user <path>`
+  (alias: `--personal`, deprecated) or `AGENT_LEARNING_USER` (compat:
+  `AGENT_LEARNING_PERSONAL`).
 - **Hook event log files** created with `os.open(..., 0o600)` — no
   group/world-readable window between create and chmod.
 

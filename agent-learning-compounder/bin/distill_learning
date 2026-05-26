@@ -814,13 +814,22 @@ def export_approved_gates(report_path: pathlib.Path, report: str, output: pathli
     return output
 
 
-def resolve_personal_arg(value: str | None) -> pathlib.Path | None:
+def resolve_user_arg(value: str | None) -> pathlib.Path | None:
+    """Resolve user-scope memory root from `--user`/`--personal` or env.
+
+    Reads ``AGENT_LEARNING_USER`` first, then ``AGENT_LEARNING_PERSONAL``
+    for one-release backwards compatibility.
+    """
     if value:
         return pathlib.Path(value).expanduser()
-    env_value = os.environ.get("AGENT_LEARNING_PERSONAL")
+    env_value = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
     if env_value:
         return pathlib.Path(env_value).expanduser()
     return None
+
+
+# Deprecated alias kept for one minor release; new callers use resolve_user_arg.
+resolve_personal_arg = resolve_user_arg
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -830,7 +839,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True)
     parser.add_argument("--mode", default="all")
     parser.add_argument("--write", action="store_true")
-    parser.add_argument("--personal", help="Personal memory root. Required for --write unless AGENT_LEARNING_PERSONAL is set.")
+    parser.add_argument(
+        "--user",
+        "--personal",
+        dest="user",
+        help=(
+            "User-scope memory root (cross-repo learning). Required for --write "
+            "unless AGENT_LEARNING_USER is set. The --personal alias is kept for "
+            "backwards compatibility and will be removed in a future release."
+        ),
+    )
     parser.add_argument(
         "--approved-gates-output",
         help="Optional markdown path for compact approved gates registry. With --write, defaults to personal/reports/agent-learning/latest-approved-gates.md.",
@@ -860,9 +878,13 @@ def main(argv: list[str] | None = None) -> int:
 
     corpus = pathlib.Path(args.corpus).read_text(encoding="utf-8")
     baseline = load_json(pathlib.Path(args.baseline))
-    personal = resolve_personal_arg(args.personal)
+    personal = resolve_user_arg(args.user)
     if args.write and personal is None:
-        print("--write requires --personal or AGENT_LEARNING_PERSONAL", file=sys.stderr)
+        print(
+            "--write requires --user (alias: --personal) or AGENT_LEARNING_USER "
+            "(compat: AGENT_LEARNING_PERSONAL)",
+            file=sys.stderr,
+        )
         return 1
     skill_map = load_optional_json(args.skill_map) or skill_map_from_baseline(baseline)
     skill_usage = load_optional_json(args.skill_usage)
@@ -937,7 +959,7 @@ def main(argv: list[str] | None = None) -> int:
         print("append-only updates: written " + ", ".join(str(path) for path in touched))
     else:
         refused = False
-        personal_root = pathlib.Path(args.personal) if args.personal else None
+        personal_root = pathlib.Path(args.user) if args.user else None
         for flag, value in (
             ("--approved-gates-output", args.approved_gates_output),
             ("--skill-context-output", args.skill_context_output),

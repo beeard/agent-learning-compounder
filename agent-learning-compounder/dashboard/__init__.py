@@ -134,16 +134,17 @@ def _read_dashboard_html(personal: pathlib.Path) -> str:
 def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = None):
     """Construct the FastAPI dashboard app.
 
-    `personal` is the agent-learning personal archive root. If not supplied,
-    falls back to AGENT_LEARNING_PERSONAL env then `<repo>/.agent-learning`
-    when `repo` is provided, then `~/.agent-learning`.
+    `personal` is the agent-learning user-scope archive root. If not supplied,
+    falls back to AGENT_LEARNING_USER (compat: AGENT_LEARNING_PERSONAL) env,
+    then `<repo>/.agent-learning` when `repo` is provided, then
+    `~/.agent-learning`.
     """
     if not _FASTAPI_AVAILABLE:
         raise ImportError("fastapi required for dashboard (pip install fastapi uvicorn)")
 
-    # Resolve personal root.
+    # Resolve user-scope root.
     if personal is None:
-        env = os.environ.get("AGENT_LEARNING_PERSONAL")
+        env = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
         if env:
             personal = pathlib.Path(env)
         elif repo is not None:
@@ -202,7 +203,8 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
 
         def _run() -> None:
             env = os.environ.copy()
-            env["AGENT_LEARNING_PERSONAL"] = str(personal)
+            env["AGENT_LEARNING_USER"] = str(personal)
+            env["AGENT_LEARNING_PERSONAL"] = str(personal)  # compat: removed in next minor
             try:
                 proc = subprocess.Popen(
                     [str(AUTO_DISTILL)],

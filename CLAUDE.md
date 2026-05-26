@@ -134,7 +134,8 @@ Trust model the code enforces — preserve these when changing things:
   catch personal-name variants, set `AGENT_LEARNING_SUBJECT_NAMES="Lisa,Per"` (comma- or
   whitespace-separated; entries are regex-escaped).
 - **Default to read-only**; `distill_learning.py` only mutates durable memory with
-  `--write` plus an explicit `--personal` root or `AGENT_LEARNING_PERSONAL`.
+  `--write` plus an explicit user-scope root: `--user <path>` (alias: `--personal`,
+  deprecated) or `AGENT_LEARNING_USER` (compat: `AGENT_LEARNING_PERSONAL`).
 
 ### Runtime adapter matrix
 

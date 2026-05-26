@@ -177,27 +177,59 @@ matching `reference-lib/architecture` § 2:
   operator. Personal-name variants via `AGENT_LEARNING_SUBJECT_NAMES`
   (comma-separated, regex-escaped).
 - `distill_learning` mutates durable memory only with `--write` plus an
-  explicit `--personal` root or `AGENT_LEARNING_PERSONAL`.
+  explicit user-scope root: `--user <path>` (alias: `--personal`,
+  deprecated) or `AGENT_LEARNING_USER` (compat: `AGENT_LEARNING_PERSONAL`).
 - Hook event log files created with `os.open(..., 0o600)` — no
   group/world-readable window between create and chmod.
 - Runtime hook install is **manifest-only by default.**
   `install_runtime_hooks --apply` is the only path that writes a real
   `.codex/hooks.json` or `.claude/settings.local.json`.
 
-## 4. State topology
+## 4. Scope model: user vs project
+
+ALC has two scopes, named to mirror the runtime convention used for the
+skill executor itself.
+
+| Scope | What lives here | Default path | Env override |
+|---|---|---|---|
+| **User** | Cross-repo learning. Gates that apply regardless of project. Skill-impact and session-lifecycle that follows *you* across all your work. The executor is itself user-scoped (`~/.claude/skills/`, `~/.codex/skills/`, `~/.agents/skills/`) — its persistent learning lives next to it. | `~/.agent-learning/` | `AGENT_LEARNING_USER` |
+| **Project** | Per-repo events. That repo's baseline, improvement queue, hook telemetry, and dashboard view for "this codebase." Created by `init_learning_system` on bootstrap. | `<repo>/.agent-learning/` | `AGENT_LEARNING_STATE_DIR` |
+
+`auto_distill_session` (the Stop-hook distiller) writes user-scope —
+gates and insights belong to *you*, not to any one repo.
+`collect_hook_event` (the per-tool-use hook) writes project-scope —
+events belong to the repo where they happened.
+
+Dashboards and `next_action` synthesise from **both** scopes so the
+operator sees "this project" and "across all your work" as two views of
+the same surface.
+
+> **Naming history.** The env var was `AGENT_LEARNING_PERSONAL` before
+> `2026.05.27+review7-plus3`. The old name still works for one minor
+> release as a compatibility shim. New code and docs should use
+> `AGENT_LEARNING_USER`.
+
+### 4.1 State topology
 
 ```
+<user-state-root>/                       # AGENT_LEARNING_USER, default ~/.agent-learning/
+├── learning.md                          # dated gate accumulation (auto_distill writes here)
+├── insights.md                          # summary insights across all repos
+├── reports/agent-learning/              # historical distillations + metrics
+├── actions/muted-domains.json
+└── alc-agents/personal/                 # operator's pinned agents (cross-repo)
+
 <repo>/
-├── .agent-learning.json              # integration manifest (auto-gitignored)
-└── .agent-learning/
+├── .agent-learning.json                 # integration manifest (auto-gitignored)
+└── .agent-learning/                     # PROJECT state-root
     └── repos/<repo-id>/
-        ├── config.json               # state_version, retention, runtime
+        ├── config.json                  # state_version, retention, runtime
         ├── baseline.json
         ├── domain-rules.active.json
         ├── skill-map.json
-        ├── hook-events.jsonl         # PRIMARY storage (append-only)
+        ├── hook-events.jsonl            # PRIMARY storage (append-only)
         ├── improvement-queue.jsonl
-        ├── events.sqlite             # INDEXED CACHE over the JSONL
+        ├── events.sqlite                # INDEXED CACHE over the JSONL
         ├── reports/
         │   ├── latest-approved-gates.md
         │   ├── latest-skill-context.md
@@ -214,13 +246,15 @@ matching `reference-lib/architecture` § 2:
 
 1. `--state-dir` flag
 2. `AGENT_LEARNING_STATE_DIR` env var
-3. `--personal` flag
-4. `<repo>/.agent-learning` ← **production default**
-5. `$XDG_STATE_HOME/agent-learning`
-6. `~/.local/state/agent-learning`
+3. `--user` flag (alias: `--personal`, deprecated)
+4. `AGENT_LEARNING_USER` env var (compat: `AGENT_LEARNING_PERSONAL`)
+5. `<repo>/.agent-learning` ← **production default for project-scope**
+6. `$XDG_STATE_HOME/agent-learning`
+7. `~/.local/state/agent-learning`
 
-Repo-local (rule 4) is the recommended default — keeps all per-repo state
-colocated and avoids cross-repo root-leak ambiguity.
+Repo-local (rule 5) is the recommended default for project-scope. The
+user-scope root only resolves through rule 3 or 4 — code that asks for
+user-scope state must do so explicitly via `StateHandle.for_user()`.
 
 ## 5. Runtime adapter matrix
 

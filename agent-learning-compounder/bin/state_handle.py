@@ -46,16 +46,22 @@ def _resolve_state_root(
     state_dir: str | pathlib.Path | None = None,
     personal: str | pathlib.Path | None = None,
     repo: str | pathlib.Path | None = None,
+    user: str | pathlib.Path | None = None,
 ) -> tuple[pathlib.Path, str]:
-    """Resolve `state_root` using the legacy precedence chain.
+    """Resolve `state_root` using the documented precedence chain.
 
-    Resolution order:
-      1. explicit state_dir argument
-      2. AGENT_LEARNING_STATE_DIR env
-      3. explicit personal argument
-      4. repo/.agent-learning
-      5. $XDG_STATE_HOME/agent-learning
-      6. ~/.local/state/agent-learning
+    Resolution order (first match wins):
+      1. explicit ``state_dir`` argument (`--state-dir`)
+      2. ``AGENT_LEARNING_STATE_DIR`` env
+      3. explicit ``user`` argument (`--user`; alias: ``personal``/`--personal`,
+         deprecated and still honoured for one minor release)
+      4. ``AGENT_LEARNING_USER`` env (compat: ``AGENT_LEARNING_PERSONAL``)
+      5. ``repo/.agent-learning`` when a repo path is supplied
+      6. ``$XDG_STATE_HOME/agent-learning``
+      7. ``~/.local/state/agent-learning``
+
+    See ARCHITECTURE.md § 4 ("Scope model") for the user-vs-project
+    distinction this resolver enforces.
     """
     if state_dir:
         return pathlib.Path(state_dir).expanduser().resolve(), "legacy_explicit_state_dir"
@@ -64,8 +70,13 @@ def _resolve_state_root(
     if env_state:
         return pathlib.Path(env_state).expanduser().resolve(), "legacy_env_state_dir"
 
-    if personal:
-        return pathlib.Path(personal).expanduser().resolve() / "reports" / "agent-learning", "legacy_personal"
+    user_arg = user if user is not None else personal
+    if user_arg:
+        return pathlib.Path(user_arg).expanduser().resolve() / "reports" / "agent-learning", "legacy_personal"
+
+    env_user = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
+    if env_user:
+        return pathlib.Path(env_user).expanduser().resolve() / "reports" / "agent-learning", "legacy_env_user"
 
     if repo is not None:
         return pathlib.Path(repo).expanduser().resolve() / ".agent-learning", "legacy_repo_root"
@@ -81,8 +92,9 @@ def _resolve_repo_state_dir(
     repo: str | pathlib.Path,
     state_dir: str | pathlib.Path | None = None,
     personal: str | pathlib.Path | None = None,
+    user: str | pathlib.Path | None = None,
 ) -> tuple[pathlib.Path, str]:
-    resolved, tier = _resolve_state_root(state_dir, personal, repo)
+    resolved, tier = _resolve_state_root(state_dir, personal, repo, user)
     return resolved / "repos" / _repo_id(pathlib.Path(repo)), tier
 
 
@@ -121,16 +133,44 @@ class StateHandle:
         state_dir: str | pathlib.Path | None = None,
         personal: str | pathlib.Path | None = None,
         repo: str | pathlib.Path | None = None,
+        user: str | pathlib.Path | None = None,
     ) -> tuple[pathlib.Path, str]:
-        return _resolve_state_root(state_dir, personal, repo)
+        return _resolve_state_root(state_dir, personal, repo, user)
 
     @staticmethod
     def resolve_repo_state_dir(
         repo: str | pathlib.Path,
         state_dir: str | pathlib.Path | None = None,
         personal: str | pathlib.Path | None = None,
+        user: str | pathlib.Path | None = None,
     ) -> tuple[pathlib.Path, str]:
-        return _resolve_repo_state_dir(repo, state_dir, personal)
+        return _resolve_repo_state_dir(repo, state_dir, personal, user)
+
+    @classmethod
+    def for_user(cls, user_root: str | pathlib.Path | None = None) -> pathlib.Path:
+        """Return the user-scope state-root path (cross-repo learning).
+
+        Resolution: explicit ``user_root`` → ``AGENT_LEARNING_USER`` env →
+        ``AGENT_LEARNING_PERSONAL`` env (compat) → ``~/.agent-learning``.
+
+        Returns a bare path (not a StateHandle dataclass) because user-scope
+        is single-rooted by design — no per-repo subdirectory.
+        """
+        if user_root is not None:
+            return pathlib.Path(user_root).expanduser().resolve()
+        env_user = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
+        if env_user:
+            return pathlib.Path(env_user).expanduser().resolve()
+        return (pathlib.Path.home() / ".agent-learning").resolve()
+
+    @classmethod
+    def for_project(cls, repo_path: pathlib.Path) -> "StateHandle":
+        """Project-scope state surface for a specific repo (canonical name).
+
+        Equivalent to :meth:`for_repo`; the latter is kept as a deprecated
+        alias for one minor release.
+        """
+        return cls.for_repo(repo_path)
 
     @classmethod
     def for_repo(cls, repo_path: pathlib.Path) -> "StateHandle":

@@ -292,7 +292,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", type=pathlib.Path)
     parser.add_argument("--state", "--state-dir", "--state_dir", dest="state", type=pathlib.Path)
-    parser.add_argument("--personal", "--personal-dir", type=pathlib.Path)
+    parser.add_argument(
+        "--user",
+        "--personal",
+        "--personal-dir",
+        dest="personal",
+        type=pathlib.Path,
+        help="User-scope archive root. --personal/--personal-dir are deprecated aliases.",
+    )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=0)
     return parser.parse_args(argv)

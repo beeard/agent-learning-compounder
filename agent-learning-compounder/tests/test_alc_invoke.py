@@ -78,6 +78,7 @@ class AlcInvokeTests(unittest.TestCase):
         self.env.pop("CODEX_PLUGIN_ROOT", None)
         self.env.pop("CODEX_HOME", None)
         self.env.pop("AGENT_LEARNING_PERSONAL", None)
+        self.env.pop("AGENT_LEARNING_USER", None)
 
         self.handle = state_handle.StateHandle.for_repo(self.repo)
         for directory in self.handle.alc_agents_dirs.values():

@@ -1156,7 +1156,8 @@ class AgentLearningCompounderTests(unittest.TestCase):
             result = run_script("distill_learning.py", "--corpus", corpus, "--baseline", baseline, "--output", out, "--write")
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("--write requires --personal or AGENT_LEARNING_PERSONAL", result.stderr)
+            self.assertIn("--write requires --user", result.stderr)
+            self.assertIn("AGENT_LEARNING_USER", result.stderr)
             self.assertFalse(out.exists())
 
     def test_pressure_harness_passes(self):

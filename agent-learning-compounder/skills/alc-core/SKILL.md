@@ -23,9 +23,11 @@ python3 ../../bin/init_learning_system.py \
 ```
 
 - State resolution: explicit repo-local root (`--state-dir`) first, then
-  `AGENT_LEARNING_STATE_DIR`, then `--personal/reports/agent-learning`, then
-  the repo-local default `<repo>/.agent-learning` when invoked with a repo,
-  then `$XDG_STATE_HOME/agent-learning`, then `~/.local/state/agent-learning`.
+  `AGENT_LEARNING_STATE_DIR`, then `--user/reports/agent-learning` (alias:
+  `--personal`, deprecated), then `AGENT_LEARNING_USER` (compat:
+  `AGENT_LEARNING_PERSONAL`), then the repo-local default
+  `<repo>/.agent-learning` when invoked with a repo, then
+  `$XDG_STATE_HOME/agent-learning`, then `~/.local/state/agent-learning`.
 - Domain rules are JSON data. Init writes generic
   `domain-rules.active.json`; use `--domain-rules <json>` or `--domain-preset tm-norge`.
 - Repo integrations should load compact exports (`latest-approved-gates.md`,
@@ -120,11 +122,11 @@ For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
   - Emits a self-contained graphical HTML report alongside the markdown (`report.html` next to `report.md`). Override path with `--html-output`, or pass `--no-html` to skip.
   - With `--write`, also archives `YYYY-MM-DD.html` and `latest-report.html` under `personal/reports/agent-learning/`.
 - Standalone HTML: `python3 ../../bin/render_html_report.py --corpus ... --baseline ... --output report.html [--payload-json payload.json]` (same inputs as distill, HTML only).
-- Auto-distill on session end: `bin/auto_distill_session` is a non-blocking wrapper that forks the full pipeline and writes to `$AGENT_LEARNING_PERSONAL` (default `~/.agent-learning`). Wire it into a Claude Code `Stop` hook (or Codex equivalent). With `--write`, `learning.md` gets one dated line per gate at level ≥ 2 in addition to the summary entry in `insights.md`.
+- Auto-distill on session end: `bin/auto_distill_session` is a non-blocking wrapper that forks the full pipeline and writes to `$AGENT_LEARNING_USER` (compat: `$AGENT_LEARNING_PERSONAL`; default `~/.agent-learning`). Wire it into a Claude Code `Stop` hook (or Codex equivalent). With `--write`, `learning.md` gets one dated line per gate at level ≥ 2 in addition to the summary entry in `insights.md`.
 - Custom domains: add `--domain-rules <json>` or `--domain-preset tm-norge`; initialized repos auto-read `.agent-learning.json`.
 - Gates/context: `export_gates.py`, `map_active_skills.py`, `extract_skill_usage.py`, `evaluate_skill_impact.py`, `export_skill_context.py`.
 - Refresh/hooks: `refresh_learning_state.py`, `collect_hook_event.py`, `install_runtime_hooks.py --dry-run` then `--apply`.
-- Write archive: rerun `distill_learning.py` with `--write --personal <personal-root>` or `AGENT_LEARNING_PERSONAL`.
+- Write archive: rerun `distill_learning.py` with `--write --user <user-root>` (alias: `--personal`, deprecated) or `AGENT_LEARNING_USER` (compat: `AGENT_LEARNING_PERSONAL`).
 - Verify: `python3 -m unittest discover -s fixtures/tests`, `python3 -m unittest discover -s tests`, `python3 ../../bin/run_pressure_tests.py`.
 
 ## Health Contract

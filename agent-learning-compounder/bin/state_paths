@@ -42,28 +42,35 @@ def resolve_state_dir(
     state_dir: str | pathlib.Path | None = None,
     personal: str | pathlib.Path | None = None,
     repo: str | pathlib.Path | None = None,
+    user: str | pathlib.Path | None = None,
 ) -> pathlib.Path:
-    """Resolve the agent-learning state root using the legacy precedence chain.
+    """Resolve the agent-learning state root using the precedence chain.
 
     Precedence (highest wins):
-      1. ``state_dir`` argument (typically ``--state-dir``)
-      2. ``AGENT_LEARNING_STATE_DIR`` environment variable
-      3. ``personal`` argument (typically ``--personal``) — resolves under
-         ``<personal>/reports/agent-learning``
-      4. ``<repo>/.agent-learning`` when ``repo`` is supplied
-      5. ``$XDG_STATE_HOME/agent-learning`` when set
-      6. ``~/.local/state/agent-learning`` as the final fallback
+      1. ``state_dir`` argument (`--state-dir`)
+      2. ``AGENT_LEARNING_STATE_DIR`` env
+      3. ``user`` argument (`--user`; alias: ``personal``/`--personal`,
+         deprecated) — resolves under ``<root>/reports/agent-learning``
+      4. ``AGENT_LEARNING_USER`` env (compat: ``AGENT_LEARNING_PERSONAL``)
+      5. ``<repo>/.agent-learning`` when ``repo`` is supplied
+      6. ``$XDG_STATE_HOME/agent-learning`` when set
+      7. ``~/.local/state/agent-learning`` as the final fallback
 
     This precedence is part of the public contract; tests in
     ``fixtures/tests/test_state_paths_precedence.py`` lock it in place.
     Callers that want the XDG/home fallback even when a repo path is known
     must pass ``repo=None``.
     """
-    return StateHandle.resolve_state_root(state_dir, personal, repo)[0]
+    return StateHandle.resolve_state_root(state_dir, personal, repo, user)[0]
 
 
-def repo_state_dir(repo: str | pathlib.Path, state_dir: str | pathlib.Path | None = None, personal: str | pathlib.Path | None = None) -> pathlib.Path:
-    resolved, _ = StateHandle.resolve_repo_state_dir(repo, state_dir, personal)
+def repo_state_dir(
+    repo: str | pathlib.Path,
+    state_dir: str | pathlib.Path | None = None,
+    personal: str | pathlib.Path | None = None,
+    user: str | pathlib.Path | None = None,
+) -> pathlib.Path:
+    resolved, _ = StateHandle.resolve_repo_state_dir(repo, state_dir, personal, user)
     return resolved
 
 
