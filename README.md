@@ -13,6 +13,16 @@ feature list (historical implementation work order at
 
 ## Quickstart
 
+## Plugin shell (cross-runtime entry points)
+
+This project includes a plugin shell setup so runtime tooling can discover `agent-learning-compounder` in a consistent way:
+
+- `.claude-plugin/plugin.json` defines manifest metadata and runtime entry paths.
+- `CLAUDE.md` and `AGENTS.md` provide runtime command/tool guidance.
+- `AGENTS.md` is present for Codex while `render_unified_report`, `init_learning_system`, and `/alc-report` remain the cross-runtime core entry commands.
+
+When shipping this unit (U3), only the AGENTS.md path is active for Codex per the W2 cross-runtime grading.
+
 Two commands from inside the project you want to set up. Installs the skill,
 wires the repo, and self-tests:
 

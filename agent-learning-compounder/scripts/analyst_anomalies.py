@@ -1,0 +1,1 @@
+../bin/analyst_anomalies

@@ -1,0 +1,1 @@
+../bin/synthesize_samples

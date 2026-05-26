@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Apply and revert Hermes-DSL patch bundles."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import re
+import sys
+from typing import Any
+
+try:
+    from alc_apply_contracts import ApplyError, RevertError
+    from alc_apply_dispatch import HermesExecutor
+    from alc_propose import mark_patch_status
+    from alc_query import get_pending_patches
+    from index_events import run as index_events
+    from state_handle import StateHandle
+except ImportError:  # pragma: no cover
+    from bin.alc_apply_contracts import ApplyError, RevertError
+    from bin.alc_apply_dispatch import HermesExecutor
+    from bin.alc_propose import mark_patch_status
+    from bin.alc_query import get_pending_patches
+    from bin.index_events import run as index_events
+    from bin.state_handle import StateHandle
+
+
+PATCH_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=pathlib.Path, default=pathlib.Path.cwd())
+    parser.add_argument("--patch", dest="patch_id")
+    parser.add_argument("--write", action="store_true", help="apply patch")
+    parser.add_argument("--revert", action="store_true", help="revert patch")
+    parser.add_argument("--mark-deferred", dest="mark_deferred")
+    parser.add_argument("--mark-rejected", dest="mark_rejected")
+    parser.add_argument("--list-pending", action="store_true")
+    return parser.parse_args(argv)
+
+
+def _validate_patch_id(patch_id: str) -> str:
+    if not PATCH_ID_RE.fullmatch(patch_id):
+        raise ValueError("invalid patch id")
+    return patch_id
+
+
+def _state(repo: pathlib.Path) -> StateHandle:
+    return StateHandle.for_repo(repo)
+
+
+def _patch_path(state: StateHandle, patch_id: str) -> pathlib.Path:
+    patch_id = _validate_patch_id(patch_id)
+    path = state.repo_state_dir / "patches" / f"{patch_id}.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"patch bundle not found: {patch_id}")
+    return path
+
+
+def _load_op(state: StateHandle, patch_id: str) -> dict[str, Any]:
+    data = json.loads(_patch_path(state, patch_id).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("patch bundle must be a JSON object")
+    if str(data.get("apply_strategy", "hermes_dsl")) == "copy_to_clipboard":
+        raise ApplyError("copy_to_clipboard is not a Hermes-DSL op")
+    op = data.get("skill_manage_op")
+    if not isinstance(op, dict):
+        raise ValueError("patch bundle missing skill_manage_op")
+    preflight = data.get("preflight") if isinstance(data.get("preflight"), dict) else {}
+    merged = dict(op)
+    merged["patch_id"] = patch_id
+    merged["revert_op"] = data.get("revert_op")
+    merged["expected_target_sha256"] = preflight.get("expected_target_sha256", merged.get("expected_target_sha256"))
+    return merged
+
+
+def _index(state: StateHandle) -> None:
+    index_events(state.repo_state_dir)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    actions = [args.write, args.revert, bool(args.mark_deferred), bool(args.mark_rejected), args.list_pending]
+    if sum(1 for action in actions if action) != 1:
+        print("ERROR: choose exactly one action", file=sys.stderr)
+        return 1
+
+    state = _state(args.repo)
+    try:
+        if args.list_pending:
+            for row in get_pending_patches(state):
+                print(row.get("patch_id", ""))
+            return 0
+
+        if args.mark_deferred or args.mark_rejected:
+            patch_id = _validate_patch_id(args.mark_deferred or args.mark_rejected)
+            status = "deferred" if args.mark_deferred else "rejected"
+            mark_patch_status(state, patch_id, status)
+            _index(state)
+            print(f"{patch_id} {status}")
+            return 0
+
+        if not args.patch_id:
+            print("ERROR: --patch is required", file=sys.stderr)
+            return 1
+        patch_id = _validate_patch_id(args.patch_id)
+        executor = HermesExecutor(state)
+        _index(state)
+        if args.write:
+            result = executor.apply(_load_op(state, patch_id))
+            _index(state)
+            print(f"applied {result.patch_id} {result.event_id}")
+            return 0
+        result = executor.revert(patch_id)
+        _index(state)
+        print(f"reverted {result.patch_id} {result.event_id}")
+        return 0
+    except ApplyError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2 if "already applied" in str(exc) else 1
+    except (RevertError, ValueError, FileNotFoundError, json.JSONDecodeError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

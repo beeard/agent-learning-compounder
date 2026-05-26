@@ -12,6 +12,7 @@
 set -u
 
 PERSONAL="${AGENT_LEARNING_PERSONAL:-$HOME/.agent-learning}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 
 # Resolve the skill directory. Prefer an explicit override, otherwise use the
 # directory of this script's parent (works both for .claude/skills and .agents/skills).
@@ -60,6 +61,19 @@ read -r -d '' child <<EOF || true
   exec >>"$log" 2>&1
   echo "[auto-distill] start \$(date -Is)"
   echo "[auto-distill] skill=$SKILL_DIR personal=$PERSONAL"
+  start_ms="\$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)"
+  emit_script="$SKILL_DIR/bin/event_emit"
+  if [ ! -x "\$emit_script" ]; then
+    emit_script="$SCRIPT_DIR/event_emit"
+  fi
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH-}" "\$emit_script" \\
+    --kind distill_start \\
+    --actor-name auto_distill_session \\
+    || true
 
   run_dir="\$(mktemp -d)"
   trap 'rm -rf "\$run_dir"' EXIT
@@ -82,6 +96,18 @@ read -r -d '' child <<EOF || true
     --mode all \\
     --write \\
     --personal "$PERSONAL"
+
+  end_ms="\$(python3 - <<'PY'
+import time
+print(int(time.time() * 1000))
+PY
+)"
+  duration_ms="\$((end_ms - start_ms))"
+  distill_payload=\$(printf '{\"telemetry\":{\"duration_ms\":%d}}' "\$duration_ms")
+  PYTHONPATH="$SCRIPT_DIR:${PYTHONPATH-}" "\$emit_script" \\
+    --kind distill_end \\
+    --actor-name auto_distill_session \\
+    --payload-json "\$distill_payload" || true
 
   echo "[auto-distill] done \$(date -Is)"
 EOF

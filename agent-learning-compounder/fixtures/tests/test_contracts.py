@@ -76,6 +76,11 @@ class ContractTests(unittest.TestCase):
         for path in manifest["required_docs"]:
             target = PACKAGE_ROOT.parent / path
             self.assertTrue(target.exists(), f"missing required doc: {path}")
+            if path.startswith("agent-learning-compounder/skills/alc-core/references/") and path.endswith(".md"):
+                self.assertTrue(target.is_symlink(), f"required doc should be symlink: {path}")
+                self.assertEqual(target.readlink(), pathlib.Path("../../reference-lib") / target.stem)
+            if target.is_symlink():
+                self.assertTrue(target.resolve().exists(), f"broken doc symlink: {path}")
             if target.is_symlink():
                 self.assertTrue(target.resolve().exists(), f"broken doc symlink: {path}")
 

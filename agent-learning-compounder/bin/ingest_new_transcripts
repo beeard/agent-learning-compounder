@@ -1,0 +1,135 @@
+#!/usr/bin/env python3
+"""Live transcript ingest using a cursor checkpoint."""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import os
+import pathlib
+import sys
+
+from state_paths import resolve_state_dir
+import event_writer
+from transcript_parser import parse_claude_transcript, parse_codex_transcript
+
+
+def _state_root(state_dir: str | None) -> pathlib.Path:
+    return resolve_state_dir(state_dir)
+
+
+def _cursor_path(state_root: pathlib.Path) -> pathlib.Path:
+    return state_root / ".transcript-cursor"
+
+
+def _read_cursor(path: pathlib.Path) -> dt.datetime | None:
+    if not path.exists():
+        return None
+    try:
+        text = path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    if not text:
+        return None
+    try:
+        if text.endswith("Z"):
+            text = text[:-1] + "+00:00"
+        return dt.datetime.fromisoformat(text).astimezone(dt.timezone.utc)
+    except ValueError:
+        return None
+
+
+def _write_cursor(path: pathlib.Path, value: dt.datetime) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value.isoformat(), encoding="utf-8")
+
+
+def _transcript_files(root: pathlib.Path) -> list[pathlib.Path]:
+    if not root.exists():
+        return []
+    if root.is_file():
+        return [root]
+    files = [*root.rglob("*.jsonl"), *root.rglob("*.json")]
+    deduped: list[pathlib.Path] = []
+    seen: set[pathlib.Path] = set()
+    for candidate in files:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append(candidate)
+    return sorted(deduped, key=lambda path: (path.stat().st_mtime, str(path)))
+
+
+def _extract_ts(raw: dict) -> dt.datetime:
+    ts_value = str(raw.get("ts", "")).strip()
+    if not ts_value:
+        return dt.datetime.now(dt.timezone.utc)
+    if ts_value.endswith("Z"):
+        ts_value = ts_value[:-1] + "+00:00"
+    try:
+        return dt.datetime.fromisoformat(ts_value).astimezone(dt.timezone.utc)
+    except ValueError:
+        return dt.datetime.now(dt.timezone.utc)
+
+
+def _collect_rows(path: pathlib.Path, source: str) -> list[dict]:
+    if source == "claude":
+        return list(parse_claude_transcript(path))
+    return list(parse_codex_transcript(path))
+
+
+def ingest(*, claude_dir: str, codex_dir: str, state_dir: str | None) -> tuple[int, dt.datetime | None]:
+    state = _state_root(state_dir)
+    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state)
+    cursor = _read_cursor(_cursor_path(state))
+
+    written = 0
+    newest = cursor
+    for file in _transcript_files(pathlib.Path(claude_dir).expanduser()):
+        for row in _collect_rows(file, source="claude"):
+            parsed = _extract_ts(row)
+            if cursor is not None and parsed <= cursor:
+                continue
+            event_writer.write_event(row, source="transcript")
+            written += 1
+            if newest is None or parsed > newest:
+                newest = parsed
+
+    for file in _transcript_files(pathlib.Path(codex_dir).expanduser()):
+        for row in _collect_rows(file, source="codex"):
+            parsed = _extract_ts(row)
+            if cursor is not None and parsed <= cursor:
+                continue
+            event_writer.write_event(row, source="transcript")
+            written += 1
+            if newest is None or parsed > newest:
+                newest = parsed
+
+    if newest is not None and written:
+        _write_cursor(_cursor_path(state), newest)
+    return written, cursor
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--claude-dir", default=os.path.expanduser("~/.claude/projects"))
+    parser.add_argument("--codex-dir", default=os.path.expanduser("~/.codex/sessions"))
+    parser.add_argument("--state-dir", default=None, help="Override AGENT_LEARNING_STATE_DIR")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        written, cursor = ingest(claude_dir=args.claude_dir, codex_dir=args.codex_dir, state_dir=args.state_dir)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ingest_new_transcripts failed: {exc}", file=sys.stderr)
+        return 1
+    if cursor is None and written:
+        print(f"wrote {written} events")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

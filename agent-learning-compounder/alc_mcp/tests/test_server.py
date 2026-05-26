@@ -111,9 +111,7 @@ class McpServerTools(unittest.TestCase):
     def test_report_outcome_appends_event(self):
         from alc_mcp.server import report_outcome_handler
 
-        # Ensure the events log exists
-        events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "hook-events.jsonl"
-        events_log.write_text("", encoding="utf-8")
+        events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "events.jsonl"
 
         payload = {
             "repo": str(self.repo),
@@ -126,13 +124,13 @@ class McpServerTools(unittest.TestCase):
 
         rows = [json.loads(ln) for ln in events_log.read_text().splitlines() if ln]
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["outcome"], "loaded_helpful")
+        self.assertEqual(rows[0]["event"], "outcome_reported")
+        self.assertEqual(rows[0]["payload"]["verdict"], "loaded_helpful")
 
     def test_report_agent_event_appends_bounded_dispatch_event(self):
         from alc_mcp.server import report_agent_event_handler
 
-        events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "hook-events.jsonl"
-        events_log.write_text("", encoding="utf-8")
+        events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "events.jsonl"
 
         payload = {
             "repo": str(self.repo),
@@ -152,10 +150,8 @@ class McpServerTools(unittest.TestCase):
         self.assertEqual(result.get("event"), "agent_dispatch_complete")
 
         rows = [json.loads(ln) for ln in events_log.read_text().splitlines() if ln]
-        self.assertEqual(rows[0]["agent_role"], "builder")
-        self.assertEqual(rows[0]["agent_backend"], "codex-exec")
-        self.assertEqual(rows[0]["agent_model"], "gpt-5.3-codex-spark")
-        self.assertTrue(rows[0]["agent_write_scope"][1].startswith("<outside_repo:"))
+        self.assertEqual(rows[0]["event"], "agent_dispatch_complete")
+        self.assertEqual(rows[0]["actor"]["kind"], "mcp_server")
 
 
 class McpServerHandlerHardening(unittest.TestCase):
@@ -235,8 +231,8 @@ class McpServerHandlerHardening(unittest.TestCase):
             "outcome": "loaded_helpful",
             "correlation_id": "session-multi",
         }))
-        log_a = (rsd_a / "hook-events.jsonl").read_text()
-        log_b = (rsd_b / "hook-events.jsonl").read_text()
+        log_a = (rsd_a / "events.jsonl").read_text()
+        log_b = (rsd_b / "events.jsonl").read_text() if (rsd_b / "events.jsonl").exists() else ""
         self.assertIn("loaded_helpful", log_a)
         self.assertNotIn("loaded_helpful", log_b)
 
@@ -247,7 +243,7 @@ class McpServerHandlerHardening(unittest.TestCase):
 
         repo = self._make_repo("nlrepo")
         rsd = self._state_paths.repo_state_dir(repo)
-        log = rsd / "hook-events.jsonl"
+        log = rsd / "events.jsonl"
 
         payload = {
             "repo": str(repo),

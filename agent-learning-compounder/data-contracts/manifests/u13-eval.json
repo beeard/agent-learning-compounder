@@ -1,0 +1,53 @@
+{
+  "artifacts": [
+    {
+      "id": "u13-eval-verdict-events",
+      "path_template": "events.jsonl",
+      "producer": "alc_eval",
+      "consumers": ["alc_query.get_outcomes", "analyst_score", "dashboard"],
+      "surface_in_dashboard": true,
+      "format": "event-v4-jsonl",
+      "lifecycle": {
+        "create": "bin/alc_eval",
+        "read": "all",
+        "update": "append-only",
+        "delete_or_retention": "events-log-retention",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "90d",
+        "max_count": 100000,
+        "cleanup_command": ""
+      },
+      "event": "eval_verdict",
+      "payload_schema": {
+        "type": "object",
+        "required": ["verdict", "judge_reason", "recommendation_kind"],
+        "properties": {
+          "verdict": {"enum": ["approve", "reject", "modify"]},
+          "judge_reason": {"type": "string", "maxLength": 200},
+          "recommendation_kind": {"type": "string"}
+        }
+      }
+    },
+    {
+      "id": "u13-eval-judge-agent",
+      "path_template": "repos/*/alc-agents/evals/rec-quality-judge.md",
+      "producer": "u13-seed",
+      "consumers": ["alc_eval", "alc_invoke"],
+      "surface_in_dashboard": false,
+      "format": "text",
+      "lifecycle": {
+        "create": "seeded",
+        "read": "all",
+        "update": "manual",
+        "delete_or_retention": "manual",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "none",
+        "max_count": 1,
+        "cleanup_command": ""
+      },
+      "max_size": 8192
+    }
+  ]
+}

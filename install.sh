@@ -256,7 +256,7 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
-if [ ! -f "$skill_src/SKILL.md" ]; then
+if [ ! -f "$skill_src/SKILL.md" ] && [ ! -f "$skill_src/skills/alc-core/SKILL.md" ]; then
   echo "missing packaged skill at $skill_src" >&2
   exit 1
 fi

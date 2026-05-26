@@ -14,8 +14,17 @@ import fcntl
 import hashlib
 import os
 import pathlib
+import warnings
 import re
 import stat
+
+from state_handle import StateHandle
+
+warnings.warn(
+    "state_paths is deprecated; use bin.state_handle.StateHandle for canonical state resolution",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 def slugify(value: str, fallback: str = "repo") -> str:
@@ -34,7 +43,7 @@ def resolve_state_dir(
     personal: str | pathlib.Path | None = None,
     repo: str | pathlib.Path | None = None,
 ) -> pathlib.Path:
-    """Resolve the agent-learning state root using a fixed precedence chain.
+    """Resolve the agent-learning state root using the legacy precedence chain.
 
     Precedence (highest wins):
       1. ``state_dir`` argument (typically ``--state-dir``)
@@ -50,28 +59,12 @@ def resolve_state_dir(
     Callers that want the XDG/home fallback even when a repo path is known
     must pass ``repo=None``.
     """
-    if state_dir:
-        return pathlib.Path(state_dir).expanduser().resolve()
-
-    env_state = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    if env_state:
-        return pathlib.Path(env_state).expanduser().resolve()
-
-    if personal:
-        return (pathlib.Path(personal).expanduser().resolve() / "reports" / "agent-learning")
-
-    if repo is not None:
-        return pathlib.Path(repo).expanduser().resolve() / ".agent-learning"
-
-    xdg = os.environ.get("XDG_STATE_HOME")
-    if xdg:
-        return (pathlib.Path(xdg).expanduser().resolve() / "agent-learning")
-    return pathlib.Path.home() / ".local" / "state" / "agent-learning"
+    return StateHandle.resolve_state_root(state_dir, personal, repo)[0]
 
 
 def repo_state_dir(repo: str | pathlib.Path, state_dir: str | pathlib.Path | None = None, personal: str | pathlib.Path | None = None) -> pathlib.Path:
-    root = resolve_state_dir(state_dir, personal, repo)
-    return root / "repos" / repo_id(pathlib.Path(repo))
+    resolved, _ = StateHandle.resolve_repo_state_dir(repo, state_dir, personal)
+    return resolved
 
 
 # --- durable-write primitives ------------------------------------------------

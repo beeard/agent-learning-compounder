@@ -1,0 +1,17 @@
+# ALC Capability Map
+
+| User action | Dashboard section | Command | MCP tool | CLI |
+| --- | --- | --- | --- | --- |
+| Review approved gates | gates_and_insights | `/alc-report` | M1 get_gates | `bin/alc_query gates --repo <repo>` |
+| Read skill context | gates_and_insights | `/alc-report` | M2 get_skill_context | `bin/alc_query skill-context --repo <repo>` |
+| Review recommendations | recommendations | `/alc-report` | M3 get_recommendations | `bin/alc_query recommendations --repo <repo>` |
+| Review pending patches | pending_patches | `/alc-report` | M4 list_pending_patches | `bin/alc_query pending-patches --repo <repo>` |
+| Open dashboard | recommendations | `/alc-report` | M5 get_dashboard_url | `bin/alc_query dashboard-url --repo <repo>` |
+| Propose patch apply | pending_patches | `/alc-report` | M6 propose_apply | `bin/alc_propose apply --repo <repo> --patch-id <id>` |
+| Propose a gate | suggestions | `/alc-report` | M7 propose_gate | `bin/alc_propose gate --repo <repo>` |
+| Report recommendation outcome | recommendations | `/alc-report` | M8 report_outcome | `bin/alc_propose outcome --repo <repo>` |
+| Report agent telemetry | apply_log | `/alc-report` | M9 report_agent_event | `bin/alc_propose agent-event --repo <repo>` |
+| Run sandbox command | apply_log | `/alc-report` | M10 exec_sandbox | `bin/alc_invoke --repo <repo> --scope read -- <cmd>` |
+| Inspect anomalies | anomalies | `/alc-report` | M3 get_recommendations | `bin/analyst_anomalies --state <state>` |
+| Inspect patterns | patterns | `/alc-report` | M3 get_recommendations | `bin/analyst_patterns --state <state>` |
+| Inspect correlations | correlations | `/alc-report` | M3 get_recommendations | `bin/analyst_correlations --state <state>` |

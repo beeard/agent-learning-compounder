@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/event-sources.schema.json",
+  "title": "event-sources rows",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "runtime",
+      "name",
+      "normalized"
+    ],
+    "properties": {
+      "runtime": {
+        "type": "string",
+        "enum": ["claude", "codex", "opencode", "gemini"]
+      },
+      "name": {
+        "type": "string"
+      },
+      "normalized": {
+        "type": "string",
+        "pattern": "^[a-z_]+$"
+      }
+    }
+  }
+}

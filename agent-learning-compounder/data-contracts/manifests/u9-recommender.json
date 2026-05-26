@@ -1,0 +1,44 @@
+{
+  "artifacts": [
+    {
+      "id": "patch-bundle",
+      "path_template": "patches/*.json",
+      "producer": "recommender_render",
+      "consumers": ["apply", "dashboard"],
+      "surface_in_dashboard": false,
+      "format": "json",
+      "lifecycle": {
+        "create": "recommender_render",
+        "read": "all",
+        "update": "recommender_render",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "30d",
+        "max_count": 128,
+        "cleanup_command": ""
+      },
+      "max_size": 262144
+    },
+    {
+      "id": "suggestions",
+      "path_template": "suggestions.json",
+      "producer": "recommender_render",
+      "consumers": ["dashboard"],
+      "surface_in_dashboard": true,
+      "format": "json",
+      "lifecycle": {
+        "create": "recommender_render",
+        "read": "all",
+        "update": "recommender_render",
+        "delete_or_retention": "manual_cleanup",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "7d",
+        "max_count": 2,
+        "cleanup_command": ""
+      },
+      "max_size": 32768
+    }
+  ]
+}

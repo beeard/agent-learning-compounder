@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Synthesize bounded session-metrics samples from local Claude transcripts.
+
+This is Path A for U5: a Python wrapper around the native audit-export
+adapter at `/home/tth/alc-agent-native-audit-export-2026-05-25T17-16-05/scripts`.
+
+NOTE: `data-contracts.json` wiring for the `session-metrics` artifact is added
+in U6; this script intentionally does not modify it here.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+from typing import Any
+
+from scrub_secrets import scrub
+
+INSIGHTS_EXTRACTOR = "/home/tth/alc-agent-native-audit-export-2026-05-25T17-16-05/scripts/claude-insights-extracted.mjs"
+SESSION_ADAPTER = "/home/tth/alc-agent-native-audit-export-2026-05-25T17-16-05/scripts/alc-session-metrics-adapter.mjs"
+
+MODEL_PRICING = {
+    "claude-opus-4-7": (15.0, 75.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-4-5": (0.80, 4.0),
+}
+
+DEFAULT_MODEL = "claude-opus-4-7"
+
+SECRET_PATTERNS = [
+    re.compile(r"\bsk-[A-Za-z0-9_-]+\b"),
+    re.compile(r"(?i)\bbearer\s+[A-Za-z0-9+/=_-]+"),
+    re.compile(r"\bghp_[A-Za-z0-9]+\b"),
+    re.compile(r"\bgho_[A-Za-z0-9]+\b"),
+    re.compile(r"\baws_access_key_[A-Za-z0-9_]+\b"),
+]
+
+FORBIDDEN_KEY_SUBSTRINGS = (
+    "prompt",
+    "transcript",
+    "raw_prompt",
+    "raw_transcript",
+    "transcript_chunk",
+)
+
+ABSOLUTE_HOME_PATH_RE = re.compile(r"/home/[A-Za-z0-9._~!$&'()*+,;=:@%-]+(?:/[A-Za-z0-9._~!$&'()*+,;=:@%-]+)*")
+
+
+def slug(value: str | None) -> str:
+    out = re.sub(r"[^a-z0-9._-]+", "-", str(value or "").lower()).strip("-")
+    return out or "unknown"
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--source",
+        choices=["hook-events", "claude-insights", "combined"],
+        default="claude-insights",
+    )
+    parser.add_argument("--output", required=True)
+    parser.add_argument("--corpus", default="~/.claude/projects")
+    return parser.parse_args(argv)
+
+
+def run_node_command(command: list[str], stdout_path: pathlib.Path | None = None) -> subprocess.CompletedProcess[str]:
+    if stdout_path is None:
+        return subprocess.run(command, text=True, capture_output=True)
+    with stdout_path.open("w", encoding="utf-8") as stdout:
+        return subprocess.run(command, text=True, stdout=stdout, stderr=subprocess.PIPE)
+
+
+def find_hook_events_jsonl(corpus_dir: pathlib.Path) -> pathlib.Path | None:
+    explicit = corpus_dir / "hook-events.jsonl"
+    if explicit.is_file():
+        return explicit
+    candidates = sorted(corpus_dir.glob("**/hook-events.jsonl"))
+    return candidates[0] if candidates else None
+
+
+def run_claude_insights(corpus_dir: pathlib.Path) -> str:
+    cmd = ["node", INSIGHTS_EXTRACTOR, "--json", "--projects-dir", str(corpus_dir)]
+    result = run_node_command(cmd)
+    if result.returncode != 0:
+        stderr = result.stderr.strip() or "node script failed with no stderr"
+        raise RuntimeError(f"insights extractor failed: {stderr}")
+    return result.stdout
+
+
+def run_session_metrics_adapter(
+    insights_path: pathlib.Path,
+    output_path: pathlib.Path,
+    hook_events_path: pathlib.Path | None = None,
+) -> None:
+    cmd = [
+        "node",
+        SESSION_ADAPTER,
+        "--claude-insights-json",
+        str(insights_path),
+        "--output",
+        str(output_path),
+    ]
+    if hook_events_path is not None:
+        cmd.extend(["--hook-events", str(hook_events_path)])
+    result = run_node_command(cmd, stdout_path=output_path)
+    if result.returncode != 0:
+        stderr = result.stderr.strip() or "node script failed with no stderr"
+        raise RuntimeError(f"session adapter failed: {stderr}")
+
+
+def normalize_paths(value: str, repo_root: pathlib.Path | None = None) -> str:
+    def _relativize(match: re.Match[str]) -> str:
+        raw = match.group(0)
+        if repo_root is not None:
+            try:
+                relative = pathlib.Path(raw).resolve().relative_to(repo_root.resolve())
+                return str(relative)
+            except (FileNotFoundError, ValueError):
+                pass
+        if raw.startswith("/home/"):
+            parts = raw.split("/")
+            if len(parts) > 2:
+                return "/".join(parts[3:]) or "home_path"
+        return raw
+
+    return ABSOLUTE_HOME_PATH_RE.sub(_relativize, value)
+
+
+def redact_text(value: str) -> str:
+    output = scrub(value)
+    for pattern in SECRET_PATTERNS:
+        output = pattern.sub("[REDACTED]", output)
+    output = normalize_paths(output)
+    return output
+
+
+def is_forbidden_key(key: str) -> bool:
+    lower = key.lower()
+    return any(fragment in lower for fragment in FORBIDDEN_KEY_SUBSTRINGS)
+
+
+def sanitize_value(value: Any, repo_root: pathlib.Path | None = None) -> Any:
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, val in value.items():
+            if not isinstance(key, str) or is_forbidden_key(key):
+                continue
+            cleaned_key = redact_text(key)
+            sanitized[cleaned_key] = sanitize_value(val, repo_root)
+        return sanitized
+    if isinstance(value, list):
+        return [sanitize_value(item, repo_root) for item in value]
+    if isinstance(value, str):
+        return redact_text(normalize_paths(value, repo_root))
+    return value
+
+
+def model_pricing(model_name: str | None) -> tuple[float, float, bool]:
+    if not model_name:
+        return MODEL_PRICING[DEFAULT_MODEL][0], MODEL_PRICING[DEFAULT_MODEL][1], True
+    normalized = str(model_name).lower()
+    if normalized in MODEL_PRICING:
+        in_price, out_price = MODEL_PRICING[normalized]
+        return in_price, out_price, False
+    in_price, out_price = MODEL_PRICING[DEFAULT_MODEL]
+    return in_price, out_price, True
+
+
+def compute_cost(sample: dict[str, Any], model_name: str | None) -> float:
+    in_tokens = float(sample.get("input_tokens") or 0)
+    out_tokens = float(sample.get("output_tokens") or 0)
+    in_price, out_price, unknown = model_pricing(model_name)
+    return (in_tokens / 1_000_000 * in_price) + (out_tokens / 1_000_000 * out_price), unknown
+
+
+def load_json_text(raw: str | None) -> dict[str, Any]:
+    if not raw:
+        return {}
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def load_sessions(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    sessions = payload.get("sessions", []) if isinstance(payload, dict) else []
+    if not isinstance(sessions, list):
+        return {}
+    output: dict[str, dict[str, Any]] = {}
+    for session in sessions:
+        if not isinstance(session, dict):
+            continue
+        sid = session.get("session_id") or session.get("id")
+        output[slug(str(sid))] = session
+    return output
+
+
+def synthesize(samples_json: dict[str, Any], raw_sessions: dict[str, dict[str, Any]], repo_dir: pathlib.Path) -> list[dict[str, Any]]:
+    metrics = samples_json.get("metrics", []) if isinstance(samples_json, dict) else []
+    if not isinstance(metrics, list):
+        metrics = []
+
+    unknown_models: set[str] = set()
+    output_samples: list[dict[str, Any]] = []
+    for session in metrics:
+        if not isinstance(session, dict):
+            continue
+        sample = dict(session)
+        ref = sample.get("session_ref")
+        raw = raw_sessions.get(slug(str(ref)))
+        if isinstance(raw, dict):
+            if "agent_model" not in sample and isinstance(raw.get("agent_model"), str):
+                sample["agent_model"] = raw.get("agent_model")
+            if "project_path" not in sample and isinstance(raw.get("project_path"), str):
+                sample["project_path"] = raw["project_path"]
+
+        cost, unknown = compute_cost(sample, sample.get("agent_model"))
+        if unknown:
+            unknown_models.add(str(sample.get("agent_model") or "unknown"))
+        sample["cost_usd"] = cost
+        output_samples.append(sanitize_value(sample, repo_dir))
+
+    for model in sorted(unknown_models):
+        print(f"unknown model '{model}'; falling back to {DEFAULT_MODEL} pricing", file=sys.stderr)
+    return output_samples
+
+
+def write_samples(payload: list[dict[str, Any]], output: str) -> None:
+    if output == "-":
+        print(json.dumps(payload, sort_keys=True))
+        return
+
+    path = pathlib.Path(output)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    corpus = pathlib.Path(args.corpus).expanduser()
+    raw_insights = {"sessions": [], "aggregate": {}}
+
+    if args.source in {"claude-insights", "combined"}:
+        try:
+            raw_insights_text = run_claude_insights(corpus)
+        except (OSError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        raw_insights = load_json_text(raw_insights_text)
+    elif args.source == "hook-events":
+        raw_insights = {"sessions": [], "aggregate": {}}
+
+    raw_sessions = load_sessions(raw_insights)
+
+    with tempfile.TemporaryDirectory(prefix="alc-u5-metrics-") as tempdir:
+        temp_root = pathlib.Path(tempdir)
+        insights_path = temp_root / "claude-insights.json"
+        samples_path = temp_root / "samples_raw.json"
+        insights_path.write_text(json.dumps(raw_insights), encoding="utf-8")
+
+        hook_events_path = None
+        if args.source == "combined":
+            hook_events_path = find_hook_events_jsonl(corpus)
+
+        try:
+            run_session_metrics_adapter(insights_path, samples_path, hook_events_path=hook_events_path)
+        except (OSError, RuntimeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+
+        try:
+            sample_payload = json.loads(samples_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"invalid adapter output: {exc}", file=sys.stderr)
+            return 2
+
+    samples = synthesize(sample_payload, raw_sessions, corpus)
+    write_samples(samples, args.output)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

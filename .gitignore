@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 .agent-learning/
 .agent-learning.json
+.venv/
 dist/
 
 # agent-learning-compounder: hook config contains absolute $HOME paths

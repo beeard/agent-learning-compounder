@@ -1,1 +1,0 @@
-../reference-lib/capability-rubric

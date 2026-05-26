@@ -1,0 +1,1 @@
+../bin/ingest_new_transcripts

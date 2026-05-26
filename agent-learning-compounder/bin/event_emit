@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+"""Thin CLI + API for background event emission."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from typing import Any
+
+from event_writer import write_event
+
+
+def event_emit(
+    kind: str,
+    actor_name: str,
+    actor_kind: str = "background_agent",
+    parent_event_id: str | None = None,
+    payload: Any = None,
+) -> str:
+    row: dict[str, Any] = {
+        "event": kind,
+        "actor": {
+            "kind": actor_kind,
+            "name": actor_name,
+        },
+    }
+    if parent_event_id is not None:
+        row["parent_event_id"] = parent_event_id
+    if payload is not None:
+        if isinstance(payload, dict):
+            payload_dict = dict(payload)
+            telemetry = payload_dict.pop("telemetry", None)
+            if isinstance(telemetry, dict):
+                row["telemetry"] = telemetry
+            payload = {k: v for k, v in payload_dict.items() if v is not None}
+            if payload:
+                row["payload"] = payload
+        else:
+            row["payload"] = payload
+    return write_event(row, source="background")
+
+
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--kind", required=True, help="event type")
+    parser.add_argument("--actor-name", required=True, help="actor name")
+    parser.add_argument(
+        "--actor-kind",
+        default="background_agent",
+        help='actor.kind (default: "background_agent")',
+    )
+    parser.add_argument(
+        "--parent-event-id",
+        default=None,
+        help="optional parent_event_id",
+    )
+    parser.add_argument(
+        "--payload-json",
+        default=None,
+        help="JSON string payload",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parse_args(argv)
+    payload = None
+    if args.payload_json is not None:
+        try:
+            payload = json.loads(args.payload_json)
+        except json.JSONDecodeError as error:
+            print(f"invalid --payload-json: {error}", file=sys.stderr)
+            return 2
+
+    event_id = event_emit(
+        kind=args.kind,
+        actor_name=args.actor_name,
+        actor_kind=args.actor_kind,
+        parent_event_id=args.parent_event_id,
+        payload=payload,
+    )
+    print(event_id)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

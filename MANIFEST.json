@@ -36,14 +36,14 @@
   "required_docs": [
     "README.md",
     "CHANGES.md",
-    "agent-learning-compounder/SKILL.md",
-    "agent-learning-compounder/references/agent-quickstart.md",
-    "agent-learning-compounder/references/architecture.md",
-    "agent-learning-compounder/references/event-schema-evolution.md",
-    "agent-learning-compounder/references/queue-dedup.md",
-    "agent-learning-compounder/references/gate-effectiveness.md",
-    "agent-learning-compounder/references/domain-rules-learning.md",
-    "agent-learning-compounder/references/cross-repo-gates.md"
+    "agent-learning-compounder/skills/alc-core/SKILL.md",
+    "agent-learning-compounder/skills/alc-core/references/agent-quickstart.md",
+    "agent-learning-compounder/skills/alc-core/references/architecture.md",
+    "agent-learning-compounder/skills/alc-core/references/event-schema-evolution.md",
+    "agent-learning-compounder/skills/alc-core/references/queue-dedup.md",
+    "agent-learning-compounder/skills/alc-core/references/gate-effectiveness.md",
+    "agent-learning-compounder/skills/alc-core/references/domain-rules-learning.md",
+    "agent-learning-compounder/skills/alc-core/references/cross-repo-gates.md"
   ],
   "excluded_from_package": [
     "__pycache__",
