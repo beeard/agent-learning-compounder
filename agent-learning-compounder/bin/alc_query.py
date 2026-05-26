@@ -11,7 +11,7 @@ import re
 import sqlite3
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 try:
     from state_handle import StateHandle
@@ -24,8 +24,31 @@ _ALLOWED_KIND_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 _NOW = dt.datetime.now
 
 
+# Scope model — see ARCHITECTURE.md § 4.
+Scope = Literal["user", "project", "both"]
+_VALID_SCOPES = frozenset({"user", "project", "both"})
+
+
 class QueryError(RuntimeError):
     pass
+
+
+def _validate_scope(scope: str) -> str:
+    if scope not in _VALID_SCOPES:
+        raise QueryError(f"scope must be one of {sorted(_VALID_SCOPES)}, got {scope!r}")
+    return scope
+
+
+def _user_reports_dir(user_root: Path | None) -> Path:
+    """Return user-scope reports directory.
+
+    Resolves to ``<user_root>/reports/agent-learning`` or, when ``user_root``
+    is ``None``, defers to :meth:`StateHandle.for_user` which honours
+    ``AGENT_LEARNING_USER`` (compat: ``AGENT_LEARNING_PERSONAL``) before
+    falling back to ``~/.agent-learning``.
+    """
+    base = Path(user_root) if user_root is not None else StateHandle.for_user()
+    return base / "reports" / "agent-learning"
 
 
 def _read_json(path: Path) -> Any:
@@ -47,19 +70,16 @@ def _configured_path(state: StateHandle, key: str, fallback: Path) -> Path:
     return Path(value) if isinstance(value, str) and value.strip() else fallback
 
 
-def get_gates(state: StateHandle, scope: str | None = None) -> list[dict[str, Any]]:
-    path = _configured_path(state, "latest_approved_gates", state.reports_dir / "latest-approved-gates.md")
-    if not path.is_file():
-        return []
+def _parse_gates_markdown(text: str, *, source: str) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    for i, block in enumerate(path.read_text(encoding="utf-8").split("\n- domain:")):
+    for i, block in enumerate(text.split("\n- domain:")):
         if i == 0:
             continue
         lines = block.splitlines()
         if not lines:
             continue
         domain = lines[0].strip()
-        row: dict[str, Any] = {"domain": domain}
+        row: dict[str, Any] = {"domain": domain, "_source_scope": source}
         for line in lines[1:]:
             stripped = line.strip()
             if stripped.startswith("gate_id:"):
@@ -70,12 +90,81 @@ def get_gates(state: StateHandle, scope: str | None = None) -> list[dict[str, An
                 row["gate"] = stripped.split(":", 1)[1].strip()
         if {"gate_id", "category", "gate"} <= set(row):
             out.append(row)
-    return [gate for gate in out if gate["domain"] == scope] if scope else out
+    return out
 
 
-def get_skill_context(state: StateHandle) -> str:
-    path = _configured_path(state, "latest_skill_context", state.reports_dir / "latest-skill-context.md")
-    return path.read_text(encoding="utf-8") if path.is_file() else ""
+def get_gates(
+    state: StateHandle | None = None,
+    domain: str | None = None,
+    *,
+    scope: Scope = "project",
+    user_root: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Approved gates, optionally scoped.
+
+    ``scope="project"`` (default): read ``<state.reports_dir>/latest-approved-gates.md``
+    — the per-repo register.
+    ``scope="user"``: read ``<user_root>/reports/agent-learning/latest-approved-gates.md``
+    — cross-repo learning produced by ``auto_distill_session``.
+    ``scope="both"``: union, deduped by ``gate_id``; project entries win on conflict.
+
+    ``domain`` filters the returned list by gate ``domain`` field.
+    """
+    _validate_scope(scope)
+    rows: list[dict[str, Any]] = []
+    if scope in ("project", "both"):
+        if state is None:
+            if scope == "project":
+                raise QueryError("get_gates(scope='project') requires a StateHandle")
+        else:
+            path = _configured_path(
+                state, "latest_approved_gates", state.reports_dir / "latest-approved-gates.md"
+            )
+            if path.is_file():
+                rows.extend(_parse_gates_markdown(path.read_text(encoding="utf-8"), source="project"))
+    if scope in ("user", "both"):
+        path = _user_reports_dir(user_root) / "latest-approved-gates.md"
+        if path.is_file():
+            user_rows = _parse_gates_markdown(path.read_text(encoding="utf-8"), source="user")
+            if scope == "both":
+                seen = {row.get("gate_id") for row in rows}
+                user_rows = [row for row in user_rows if row.get("gate_id") not in seen]
+            rows.extend(user_rows)
+    if domain:
+        rows = [gate for gate in rows if gate["domain"] == domain]
+    return rows
+
+
+def get_skill_context(
+    state: StateHandle | None = None,
+    *,
+    scope: Scope = "project",
+    user_root: Path | None = None,
+) -> str:
+    """Compact skill-context markdown for the given scope.
+
+    Project scope returns the per-repo file. User scope returns the cross-repo
+    file produced by ``auto_distill_session``. Both returns user followed by
+    project, separated by a header so consumers can distinguish them.
+    """
+    _validate_scope(scope)
+    parts: list[str] = []
+    if scope in ("user", "both"):
+        user_path = _user_reports_dir(user_root) / "latest-skill-context.md"
+        if user_path.is_file():
+            text = user_path.read_text(encoding="utf-8")
+            parts.append(f"<!-- scope: user -->\n{text}" if scope == "both" else text)
+    if scope in ("project", "both"):
+        if state is not None:
+            project_path = _configured_path(
+                state, "latest_skill_context", state.reports_dir / "latest-skill-context.md"
+            )
+            if project_path.is_file():
+                text = project_path.read_text(encoding="utf-8")
+                parts.append(f"<!-- scope: project -->\n{text}" if scope == "both" else text)
+        elif scope == "project":
+            raise QueryError("get_skill_context(scope='project') requires a StateHandle")
+    return "\n\n".join(parts)
 
 
 def _to_iso(dt_value: dt.datetime) -> str:
@@ -173,7 +262,22 @@ def _ensure_session_filter(conn: sqlite3.Connection) -> bool:
     return "session_id" in cols
 
 
-def get_apply_log(state: StateHandle, since: str | dt.datetime | int | float | None = None, kind_filter=None) -> list[dict[str, Any]]:
+def get_apply_log(
+    state: StateHandle,
+    since: str | dt.datetime | int | float | None = None,
+    kind_filter=None,
+    *,
+    scope: Scope = "project",
+) -> list[dict[str, Any]]:
+    """Patch apply events from project-scope events.sqlite.
+
+    User-scope has no apply log (gates are written, not applied) so
+    ``scope="user"`` returns ``[]`` and ``scope="both"`` is equivalent to
+    ``scope="project"``.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     path = state.events_sqlite
     if not path.is_file():
         return []
@@ -202,7 +306,19 @@ def get_apply_log(state: StateHandle, since: str | dt.datetime | int | float | N
     return [_row_to_dict(row) for row in rows]
 
 
-def get_outcomes(state: StateHandle, since: str | dt.datetime | int | float | None = None) -> list[dict[str, Any]]:
+def get_outcomes(
+    state: StateHandle,
+    since: str | dt.datetime | int | float | None = None,
+    *,
+    scope: Scope = "project",
+) -> list[dict[str, Any]]:
+    """Eval-verdict outcomes from project-scope events.sqlite.
+
+    Eval outcomes are project-bound. ``scope="user"`` returns ``[]``.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     path = state.events_sqlite
     if not path.is_file():
         return []
@@ -220,7 +336,19 @@ def get_outcomes(state: StateHandle, since: str | dt.datetime | int | float | No
     return [_row_to_dict(row) for row in rows]
 
 
-def get_recommendations(state: StateHandle) -> list[dict[str, Any]]:
+def get_recommendations(
+    state: StateHandle,
+    *,
+    scope: Scope = "project",
+) -> list[dict[str, Any]]:
+    """Analyst recommendations for this project.
+
+    Recommendations are produced from project-scope events. ``scope="user"``
+    returns ``[]``.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     data = _read_json(state.reports_dir / "recommendations.json")
     if data is None:
         return []
@@ -233,7 +361,18 @@ def get_recommendations(state: StateHandle) -> list[dict[str, Any]]:
     return [row if isinstance(row, dict) else {} for row in rows]
 
 
-def get_pending_patches(state: StateHandle) -> list[dict[str, Any]]:
+def get_pending_patches(
+    state: StateHandle,
+    *,
+    scope: Scope = "project",
+) -> list[dict[str, Any]]:
+    """Patch bundles awaiting operator review for this project.
+
+    Patches are emitted by project-scope recommenders. ``scope="user"`` returns ``[]``.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     out: list[dict[str, Any]] = []
     patch_dir = state.repo_state_dir / "patches"
     if not patch_dir.is_dir():
@@ -254,7 +393,19 @@ def get_pending_patches(state: StateHandle) -> list[dict[str, Any]]:
     return out
 
 
-def get_event_dag(state: StateHandle, session_id: str) -> dict[str, Any]:
+def get_event_dag(
+    state: StateHandle,
+    session_id: str,
+    *,
+    scope: Scope = "project",
+) -> dict[str, Any]:
+    """Event DAG for ``session_id`` from project-scope events.sqlite.
+
+    Sessions are project-scope. ``scope="user"`` returns an empty DAG.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return {"session_id": session_id, "nodes": []}
     path = state.events_sqlite
     if not path.is_file():
         return {"session_id": session_id, "nodes": []}
@@ -328,7 +479,19 @@ def get_event_dag(state: StateHandle, session_id: str) -> dict[str, Any]:
     }
 
 
-def get_actor_summary(state: StateHandle, since: str = "7d") -> dict[str, Any]:
+def get_actor_summary(
+    state: StateHandle,
+    since: str = "7d",
+    *,
+    scope: Scope = "project",
+) -> dict[str, Any]:
+    """Per-actor counts from project-scope events.sqlite.
+
+    Actor telemetry is project-bound. ``scope="user"`` returns an empty summary.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return {"since": since, "total": 0, "by_actor_kind": []}
     path = state.events_sqlite
     if not path.is_file():
         return {"since": since, "total": 0, "by_actor_kind": []}
@@ -359,6 +522,8 @@ def get_skill_usage_summary(
     state: StateHandle,
     since: str | dt.datetime | int | float | None = None,
     prefix_filter: list[str] | tuple[str, ...] | None = None,
+    *,
+    scope: Scope = "project",
 ) -> list[dict[str, Any]]:
     """Aggregate actor_name counts in the indexed events.
 
@@ -372,7 +537,12 @@ def get_skill_usage_summary(
     error.
 
     Output row shape: `{actor_name, count, last_used_ts}`.
+
+    Skill usage is project-scope. ``scope="user"`` returns ``[]``.
     """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     path = state.events_sqlite
     if not path.is_file():
         return []
@@ -405,7 +575,19 @@ def get_skill_usage_summary(
     ]
 
 
-def get_skill_invocation_history(state: StateHandle, skill_name: str) -> list[dict[str, Any]]:
+def get_skill_invocation_history(
+    state: StateHandle,
+    skill_name: str,
+    *,
+    scope: Scope = "project",
+) -> list[dict[str, Any]]:
+    """Skill invocation events from project-scope events.sqlite.
+
+    Invocations are project-bound. ``scope="user"`` returns ``[]``.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
     path = state.events_sqlite
     if not path.is_file():
         return []

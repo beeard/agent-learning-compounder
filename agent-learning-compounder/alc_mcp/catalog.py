@@ -24,50 +24,71 @@ class MCPToolSpec:
 
 _REPO_PARAM = {"type": "string", "description": "Repository root path."}
 
+# Scope param — see ARCHITECTURE.md § 4 ("Scope model").
+# user = cross-repo learning; project = per-repo events; both = union.
+_SCOPE_PARAM = {
+    "type": "string",
+    "enum": ["user", "project", "both"],
+    "default": "project",
+    "description": (
+        "State scope to read. 'user' = cross-repo learning under "
+        "AGENT_LEARNING_USER (default ~/.agent-learning). 'project' = "
+        "per-repo state under <repo>/.agent-learning. 'both' = union."
+    ),
+}
+_DOMAIN_PARAM = {
+    "type": "string",
+    "description": "Optional domain filter (e.g. 'tests', 'cloudflare').",
+}
+
 
 MCP_TOOLS: dict[str, MCPToolSpec] = {
     "get_gates": MCPToolSpec(
         id="M1",
         kind="read",
-        summary="Return approved gates loaded for repo, optionally scoped by domain.",
+        summary="Return approved gates, scoped by state-root (user/project/both) and optionally filtered by domain.",
         backing="alc_query.get_gates",
-        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM, "scope": {"type": "string"}}},
+        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM, "scope": _SCOPE_PARAM, "domain": _DOMAIN_PARAM}},
         returns_schema={"type": "array", "items": {"type": "object"}},
-        examples=[{"repo": "/path/to/repo"}, {"repo": "/path/to/repo", "scope": "tests"}],
-        version=1,
+        examples=[
+            {"repo": "/path/to/repo"},
+            {"repo": "/path/to/repo", "scope": "user"},
+            {"repo": "/path/to/repo", "scope": "both", "domain": "tests"},
+        ],
+        version=2,
         min_compatible_version=1,
     ),
     "get_skill_context": MCPToolSpec(
         id="M2",
         kind="read",
-        summary="Return latest skill-context markdown for repo.",
+        summary="Return latest skill-context markdown, scoped by state-root (user/project/both).",
         backing="alc_query.get_skill_context",
-        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM}},
+        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM, "scope": _SCOPE_PARAM}},
         returns_schema={"type": "string"},
-        examples=[{"repo": "/path/to/repo"}],
-        version=1,
+        examples=[{"repo": "/path/to/repo"}, {"repo": "/path/to/repo", "scope": "both"}],
+        version=2,
         min_compatible_version=1,
     ),
     "get_recommendations": MCPToolSpec(
         id="M3",
         kind="read",
-        summary="Return recommender output rows from recommendations.json.",
+        summary="Return recommender output rows from recommendations.json (project-scope).",
         backing="alc_query.get_recommendations",
-        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM}},
+        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM, "scope": _SCOPE_PARAM}},
         returns_schema={"type": "array", "items": {"type": "object"}},
         examples=[{"repo": "/path/to/repo"}],
-        version=1,
+        version=2,
         min_compatible_version=1,
     ),
     "list_pending_patches": MCPToolSpec(
         id="M4",
         kind="read",
-        summary="Return pending patch bundles, excluding rejected/deferred patches.",
+        summary="Return pending patch bundles, excluding rejected/deferred patches (project-scope).",
         backing="alc_query.get_pending_patches",
-        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM}},
+        parameters_schema={"type": "object", "required": ["repo"], "properties": {"repo": _REPO_PARAM, "scope": _SCOPE_PARAM}},
         returns_schema={"type": "array", "items": {"type": "object"}},
         examples=[{"repo": "/path/to/repo"}],
-        version=1,
+        version=2,
         min_compatible_version=1,
     ),
     "get_dashboard_url": MCPToolSpec(
@@ -201,6 +222,15 @@ MCP_TOOLS: dict[str, MCPToolSpec] = {
                             },
                         },
                         "last_activity_iso": {"type": ["string", "null"]},
+                        "approved_gates": {
+                            "type": "object",
+                            "description": "Cross-scope gate breakdown (PR 2d). 'total' = union, 'user' = cross-repo, 'project' = per-repo.",
+                            "properties": {
+                                "total": {"type": "integer"},
+                                "user": {"type": "integer"},
+                                "project": {"type": "integer"},
+                            },
+                        },
                     },
                 },
             },

@@ -103,22 +103,32 @@ def _seven_days_ago() -> str:
 
 
 def _collect_signals(state: StateHandle) -> dict[str, Any]:
-    """Collect bucketed signals from the state.  Never raw rows."""
-    # Pending patches (not rejected/deferred)
+    """Collect bucketed signals from the state.  Never raw rows.
+
+    Reads project-scope state (events, patches, recommendations) and
+    user-scope state (cross-repo approved gates) to inform synthesis.
+    """
+    # Pending patches (not rejected/deferred) — project-scope
     pending_patches = alc_query.get_pending_patches(state)
     pending_patch_count = len(pending_patches)
     # First pending patch id — used for the suggested args, not for dumping
     first_patch_id: str | None = pending_patches[0].get("patch_id") if pending_patches else None
 
-    # Pending recommendations
+    # Pending recommendations — project-scope
     recs = alc_query.get_recommendations(state)
     pending_rec_count = len(recs)
 
-    # Recent apply events (7d)
+    # Approved gates — combined: cross-repo user-scope union project-scope
+    gates_both = alc_query.get_gates(state, scope="both")
+    gates_count = len(gates_both)
+    gates_user_count = sum(1 for g in gates_both if g.get("_source_scope") == "user")
+    gates_project_count = sum(1 for g in gates_both if g.get("_source_scope") == "project")
+
+    # Recent apply events (7d) — project-scope
     applies_7d = alc_query.get_apply_log(state, since="7d")
     recent_applies_7d = len(applies_7d)
 
-    # Recent verdicts (7d) — get_outcomes returns eval_verdict events
+    # Recent verdicts (7d) — get_outcomes returns eval_verdict events (project-scope)
     outcomes_7d = alc_query.get_outcomes(state, since="7d")
     verdict_counts: dict[str, int] = {"approve": 0, "reject": 0, "modify": 0}
     last_ts: str | None = None
@@ -163,6 +173,11 @@ def _collect_signals(state: StateHandle) -> dict[str, Any]:
         "recent_applies_7d": recent_applies_7d,
         "recent_verdicts_7d": verdict_counts,
         "last_activity_iso": last_ts,
+        "approved_gates": {
+            "total": gates_count,
+            "user": gates_user_count,
+            "project": gates_project_count,
+        },
     }
 
 
@@ -477,6 +492,10 @@ def _build_result(
         "recent_applies_7d": signals["recent_applies_7d"],
         "recent_verdicts_7d": dict(signals["recent_verdicts_7d"]),
         "last_activity_iso": signals["last_activity_iso"],
+        # approved_gates added in PR 2d. Tolerate older signal-dicts (e.g.
+        # those produced by tests that pre-date the field) by defaulting to
+        # an empty breakdown so the public schema is always complete.
+        "approved_gates": signals.get("approved_gates", {"total": 0, "user": 0, "project": 0}),
     }
     alternatives_raw = synthesis.get("alternatives") or []
     alternatives = [
