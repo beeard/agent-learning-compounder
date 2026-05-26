@@ -1,0 +1,35 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "agent-learning-compounder",
+  "owner": {
+    "name": "Tom",
+    "url": "https://github.com/beeard"
+  },
+  "metadata": {
+    "description": "Marketplace shell for the agent-learning-compounder plugin.",
+    "version": "2026.5.26"
+  },
+  "plugins": [
+    {
+      "name": "agent-learning-compounder",
+      "source": "./agent-learning-compounder",
+      "description": "Distills repo facts, session telemetry, and skill-health signals into durable, evidence-backed agent memory.",
+      "author": {
+        "name": "Tom",
+        "url": "https://github.com/beeard"
+      },
+      "homepage": "https://github.com/beeard/agent-learning-compounder",
+      "category": "workflow",
+      "tags": [
+        "agent-learning",
+        "agent-memory",
+        "telemetry",
+        "mcp",
+        "codex",
+        "claude-code",
+        "skills",
+        "hooks"
+      ]
+    }
+  ]
+}

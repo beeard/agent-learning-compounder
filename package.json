@@ -1,0 +1,53 @@
+{
+  "name": "agent-learning-compounder",
+  "version": "2026.5.26-review7.plus1.3",
+  "description": "Distills repo facts, session telemetry, and skill-health signals into durable, evidence-backed agent memory. Installs as a Codex skill, a Claude Code plugin, or both.",
+  "keywords": [
+    "agent-learning",
+    "agent-memory",
+    "telemetry",
+    "mcp",
+    "codex",
+    "claude-code",
+    "skills",
+    "hooks",
+    "plugin"
+  ],
+  "homepage": "https://github.com/beeard/agent-learning-compounder#readme",
+  "bugs": {
+    "url": "https://github.com/beeard/agent-learning-compounder/issues"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Tom",
+    "url": "https://github.com/beeard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beeard/agent-learning-compounder.git"
+  },
+  "bin": {
+    "alc-install": "scripts/alc-install.mjs"
+  },
+  "files": [
+    "install.sh",
+    "bootstrap.sh",
+    "scripts/alc-install.mjs",
+    "scripts/sanitize_skill_tree.sh",
+    "scripts/build_release.sh",
+    "agent-learning-compounder/",
+    ".claude-plugin/marketplace.json",
+    "README.md",
+    "CHANGES.md",
+    "MANIFEST.json",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "type": "module",
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  }
+}
