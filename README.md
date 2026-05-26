@@ -3,31 +3,23 @@
 Portable skill package for mining repo baselines, session evidence, hook telemetry,
 and skill-health signals into durable future-agent context.
 
-This version (`2026.05.24+review7-plus1`) layers eight upgrades on top of
-upstream `review7-production`: schema-versioned hook events with replay, semantic
-queue dedup, stable per-gate IDs with effectiveness scoring, domain-rule mining,
-deterministic A/B causal probes, cross-repo gate federation, an optional MCP
-server, and an optional operator dashboard. See `CHANGES.md` for the shipped
-feature list (historical implementation work order at
-`docs/history/PLAN-eight-upgrade.md`).
+Current release: **`2026.05.26+review7-plus1.3`** — see
+[`CHANGES.md`](CHANGES.md) for the shipped feature list. Historical
+implementation work orders archived under [`docs/history/`](docs/history/).
+
+> **Install surface is being modernized.** A `2026.05.27+plus2` series adds
+> `npx alc-install` / `curl … | sh` / Claude Code `/plugin install` paths and a
+> first-run `alc init` flow that brings the MCP server up green. This README
+> documents the install surface that works **today** (`install.sh`); the new
+> one-liners will replace this section when they land.
 
 ## Quickstart
-
-## Plugin shell (cross-runtime entry points)
-
-This project includes a plugin shell setup so runtime tooling can discover `agent-learning-compounder` in a consistent way:
-
-- `.claude-plugin/plugin.json` defines manifest metadata and runtime entry paths.
-- `CLAUDE.md` and `AGENTS.md` provide runtime command/tool guidance.
-- `AGENTS.md` is present for Codex while `render_unified_report`, `init_learning_system`, and `/alc-report` remain the cross-runtime core entry commands.
-
-When shipping this unit (U3), only the AGENTS.md path is active for Codex per the W2 cross-runtime grading.
 
 Two commands from inside the project you want to set up. Installs the skill,
 wires the repo, and self-tests:
 
 ```bash
-git clone https://github.com/beeard/agent-learning-compunder.git /tmp/alc
+git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
 /tmp/alc/install.sh --bootstrap-repo "$PWD" --verify
 ```
 
@@ -62,8 +54,8 @@ pip install -r agent-learning-compounder/requirements-optional.txt
 ## Install
 
 ```bash
-tar -xzf agent-learning-compounder-2026.05.24+review7-plus1.tar.gz
-cd agent-learning-compounder-2026.05.24+review7-plus1
+tar -xzf agent-learning-compounder-2026.05.26+review7-plus1.3.tar.gz
+cd agent-learning-compounder-2026.05.26+review7-plus1.3
 ./install.sh
 ```
 
@@ -98,7 +90,7 @@ To extract, install, and initialize a repo in one shell pipeline (set
 
 ```bash
 REPO_ROOT="$PWD" && \
-ARCHIVE="agent-learning-compounder-2026.05.24+review7-plus1.tar.gz" && \
+ARCHIVE="agent-learning-compounder-2026.05.26+review7-plus1.3.tar.gz" && \
 WORKDIR="$(mktemp -d)" && \
 tar -xzf "$ARCHIVE" -C "$WORKDIR" && \
 ( cd "$WORKDIR"/agent-learning-compounder-* && \

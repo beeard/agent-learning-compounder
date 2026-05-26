@@ -1,5 +1,11 @@
 # Gate System Review
 
+> **Internal backlog — May 2026.** Multi-reviewer audit findings (7 Critical,
+> 6 High) against the gate pipeline. Track resolution in commits / tests; this
+> document is the source list. Some items addressed by post-audit fixes
+> (e.g. `fix: address final-review findings before merge`); re-verify before
+> assuming any item is closed.
+
 Multi-reviewer audit of the gate pipeline in `agent-learning-compounder/`. Five specialized reviewers (correctness, adversarial, data-integrity, reliability, testing) each examined the in-scope code independently; findings below are deduplicated and ranked by severity. Findings flagged **[CONVERGED]** were independently surfaced by two or more reviewers.
 
 ## Scope

@@ -1,5 +1,10 @@
 # Follow-Up: Packaging, Docs, and Installer UX
 
+> **Frozen historical work order — May 2026.** T1–T6 below were addressed in
+> the `2026.05.26+review7-plus1.3` series. For active status see
+> [`CHANGES.md`](../../CHANGES.md). Gate-system findings live at
+> [`docs/dev/gate-system-review-2026-05.md`](../dev/gate-system-review-2026-05.md).
+
 Work order for the next agent. Addresses gaps surfaced in the 2026-05-24 packaging audit (see prior conversation transcript). **Out of scope:** the gate-system code-level findings in `GATE_SYSTEM_REVIEW.md` — those are tracked separately.
 
 ## Context

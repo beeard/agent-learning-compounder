@@ -16,7 +16,7 @@ Open a terminal **inside the project you want to set up**, then:
 
 ```bash
 # 1. Get the source somewhere (this stays out of your project).
-git clone https://github.com/beeard/agent-learning-compunder.git /tmp/alc
+git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
 
 # 2. Install it AND wire this project, all in one go.
 /tmp/alc/install.sh --bootstrap-repo "$PWD" --verify

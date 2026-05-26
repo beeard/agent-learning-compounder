@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is the **source tree of a portable skill package**, not an app. It builds and ships
 `agent-learning-compounder/` as a self-contained Codex/Claude skill that other repos install
-via `install.sh`. Production version string is `2026.05.24+review7-plus1`. When changing
-behavior, assume the consumer is a fresh repo that just unpacked the tarball and ran
-`./install.sh --codex --verify` — paths, imports, and entrypoints must work from the
-installed location, not just from this working tree.
+via `install.sh` (or, increasingly, `npx alc-install` / `curl … | sh` / `/plugin install`).
+Production version string is `2026.05.26+review7-plus1.3`. When changing behavior, assume the
+consumer is a fresh repo that just installed the package — paths, imports, and entrypoints
+must work from the installed location, not just from this working tree.
 
 ## Common commands
 
