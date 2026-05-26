@@ -1,5 +1,28 @@
 # Changes
 
+## 2026.05.26+review7-plus1.3
+
+Installer feature release. Adds a `--plugin` mode to `install.sh` so the
+skill package can be installed as a first-class Claude Code plugin
+instead of (or in addition to) a skills-root install.
+
+- `install.sh --plugin` installs the package under
+  `${CLAUDE_HOME:-$HOME/.claude}/plugins/agent-learning-compounder`.
+  Claude Code auto-discovers the plugin's agents, commands, hooks, and
+  skills via the existing
+  `agent-learning-compounder/.claude-plugin/plugin.json` manifest, so the
+  flag is the only entry-point change required for plugin install.
+  Implies `--runtime claude`; refuses to combine with `--bootstrap-repo`
+  (which is a per-repo init flow, not a user-global plugin install).
+- `.gitignore` gains `/.claude/scheduled_tasks.lock`, the Claude Code
+  per-session PID lock. Mirrors the existing pattern for
+  `/.claude/settings.local.json` — runtime state that should never enter
+  the source tree.
+
+No behavior change inside `agent-learning-compounder/` (the inner skill
+dir). `plus1.2` consumers do not need to upgrade unless they want the
+new `--plugin` install entry.
+
 ## 2026.05.25+review7-plus1.2
 
 Hygiene release. Ships the source-tree git history that backs `plus1.1` and
