@@ -1,0 +1,24 @@
+{
+  "artifacts": [
+    {
+      "id": "u12-invoke-dev-agent-archive",
+      "path_template": "repos/*/alc-agents/dev/*.md",
+      "producer": "alc_invoke",
+      "consumers": ["dashboard", "self"],
+      "surface_in_dashboard": false,
+      "format": "text",
+      "lifecycle": {
+        "create": "manual",
+        "read": "all",
+        "update": "manual",
+        "delete_or_retention": "data-contract-retention",
+        "owner": "repo_state",
+        "states": ["repo"],
+        "max_age": "30d",
+        "max_count": 512,
+        "cleanup_command": ""
+      },
+      "max_size": 4096
+    }
+  ]
+}
