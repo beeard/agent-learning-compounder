@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import collections
+import contextlib
 import datetime as dt
 import json
 import re
@@ -126,9 +127,17 @@ def _connect_readonly(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 
 
+@contextlib.contextmanager
 def _with_conn(target: StateHandle | Path):
+    # sqlite3.Connection's own context manager only commits/rolls back — it does
+    # NOT close. Without this contextmanager wrapper, every caller's `with _with_conn(...)`
+    # leaked a connection (the dashboard process opens 4-5 per /data.json request).
     path = target.events_sqlite if isinstance(target, StateHandle) else Path(target)
-    return _connect_readonly(path)
+    conn = _connect_readonly(path)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 def _query_as_dicts(conn: sqlite3.Connection, query: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:

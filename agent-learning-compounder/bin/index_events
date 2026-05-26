@@ -196,6 +196,7 @@ def run(state_dir: pathlib.Path) -> int:
             columns.append("session_id")
         insert_sql = f"INSERT INTO events ({','.join(columns)}) VALUES ({','.join(['?'] * len(columns))})"
 
+        skipped = 0
         with open(events_jsonl, "rb") as handle:
             handle.seek(start_offset)
             cursor = start_offset
@@ -206,11 +207,21 @@ def run(state_dir: pathlib.Path) -> int:
                 text = line.strip()
                 if not text:
                     continue
-                payload = json.loads(text.decode("utf-8"))
-                if not isinstance(payload, dict):
-                    raise ValueError("event row is not a JSON object")
-                event = _parse_event(payload)
+                # Quarantine bad rows: one corrupt line shouldn't block all future
+                # indexing. Log to stderr + advance cursor; never let a single bad
+                # row wedge the indexer (the prior behavior re-failed forever).
+                try:
+                    payload = json.loads(text.decode("utf-8"))
+                    if not isinstance(payload, dict):
+                        raise ValueError("event row is not a JSON object")
+                    event = _parse_event(payload)
+                except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as exc:
+                    print(f"warn.index_events_skipped offset={cursor} reason={exc!s}", file=sys.stderr)
+                    skipped += 1
+                    continue
                 rows.append(_event_to_row(event, _extract_session_id(payload)))
+        if skipped:
+            print(f"warn.index_events_total_skipped count={skipped}", file=sys.stderr)
 
         if rows:
             conn.executemany(insert_sql, rows)
