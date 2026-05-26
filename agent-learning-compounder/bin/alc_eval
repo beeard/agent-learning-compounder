@@ -35,8 +35,11 @@ VERDICTS = {"approve", "reject", "modify"}
 
 @contextlib.contextmanager
 def _event_writer_state(state: StateHandle):
+    # event_writer resolves AGENT_LEARNING_STATE_DIR → events.jsonl at <state_dir>/events.jsonl;
+    # StateHandle.events_jsonl == repo_state_dir/events.jsonl, so we point at repo_state_dir
+    # (not state_root) to land in the indexed surface alc_query/index_events read.
     previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.state_root)
+    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
     try:
         yield
     finally:
@@ -99,7 +102,7 @@ def _recent_recommendations(state: StateHandle, window: str, limit: int) -> list
 
 
 def _existing_event_ids(state: StateHandle) -> set[str]:
-    path = state.state_root / "events.jsonl"
+    path = state.events_jsonl
     if not path.is_file():
         return set()
     ids: set[str] = set()

@@ -216,20 +216,6 @@ def _coerce_row(raw_or_dataclass: Any, source: EventSource, auto_id_fallback: bo
     return bounded
 
 
-    try:
-        size = output.stat().st_size
-    except OSError:
-        return
-    if size <= MAX_EVENT_BYTES:
-        return
-    backup = output.with_name("events.jsonl.1")
-    os.replace(output, backup)
-    try:
-        os.chmod(backup, 0o600)
-    except OSError:
-        pass
-
-
 def write_event(
     raw_or_dataclass: Any,
     source: EventSource,

@@ -22,11 +22,20 @@ Fallback mode uses `samples.json` when `events.sqlite` is unavailable.
 
 ## Outcome weighting (score)
 
-Weights are derived from outcomes JSON when available:
+Weights are derived from `eval_verdict` events emitted by `bin/alc_eval` (see KTD-13).
+Per the plan, the canonical surface is `alc_query.get_outcomes(state)` reading from
+`events.sqlite`. The aggregation formula:
 
-`(1 + n_positive - n_negative) / (1 + n_positive + n_negative)`
+`(1 + n_positive - n_negative) / (1 + n_positive + n_negative)` per recommendation kind.
 
-Default is `1.0` when no outcomes are present.
+Default is `1.0` when no verdicts exist for a kind.
+
+**Implementation status:** `bin/analyst_score._load_outcome_weights` currently reads
+a legacy `outcomes.json` file that no producer writes. Migration to the
+`alc_query.get_outcomes` SQL-view path is pending: it requires extending the
+events.sqlite schema with a `payload_json` column (EventV4 dataclass currently omits
+payload) so the verdict + recommendation_kind can be queried. Until then,
+`outcome_weight` defaults to `1.0` in production.
 
 ## Scoring formula
 

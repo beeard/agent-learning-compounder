@@ -92,7 +92,7 @@ class AlcInvokeTests(unittest.TestCase):
 
     @property
     def events_path(self) -> pathlib.Path:
-        return self.state_root / "events.jsonl"
+        return self.handle.events_jsonl
 
     def _run(self, args: list[str], env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         command = [sys.executable, str(SCRIPT), *args]

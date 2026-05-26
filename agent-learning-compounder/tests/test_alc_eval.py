@@ -24,7 +24,7 @@ class AlcEvalTests(unittest.TestCase):
         (self.state.alc_agents_dirs["evals"] / "rec-quality-judge.md").write_text("---\nname: rec-quality-judge\n---\n", encoding="utf-8")
 
     def _events(self):
-        return [json.loads(line) for line in (self.state_root / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+        return [json.loads(line) for line in (self.state.events_jsonl).read_text(encoding="utf-8").splitlines()]
 
     def test_eval_emits_verdict_for_each_recommendation(self):
         recs = [
@@ -57,9 +57,9 @@ class AlcEvalTests(unittest.TestCase):
             alc_eval, "invoke", return_value={"output": '{"verdict":"approve","judge_reason":"ok"}'}
         ):
             self.assertEqual(alc_eval.run(repo=self.repo, window="7d", limit=20, judge="evals/rec-quality-judge"), (0, 1))
-            before = (self.state_root / "events.jsonl").read_text(encoding="utf-8")
+            before = (self.state.events_jsonl).read_text(encoding="utf-8")
             self.assertEqual(alc_eval.run(repo=self.repo, window="7d", limit=20, judge="evals/rec-quality-judge"), (0, 0))
-            after = (self.state_root / "events.jsonl").read_text(encoding="utf-8")
+            after = (self.state.events_jsonl).read_text(encoding="utf-8")
         self.assertEqual(before, after)
 
     def test_limit_zero_noop(self):

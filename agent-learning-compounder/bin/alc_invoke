@@ -58,8 +58,11 @@ class DispatchResult:
 
 @contextlib.contextmanager
 def _event_writer_state(state: StateHandle):
+    # event_writer resolves AGENT_LEARNING_STATE_DIR → events.jsonl at <state_dir>/events.jsonl;
+    # StateHandle.events_jsonl == repo_state_dir/events.jsonl, so we point at repo_state_dir
+    # (not state_root) to land in the indexed surface alc_query/index_events read.
     previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.state_root)
+    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
     try:
         yield
     finally:
