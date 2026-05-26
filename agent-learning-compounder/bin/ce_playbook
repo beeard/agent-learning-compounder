@@ -1,0 +1,223 @@
+#!/usr/bin/env python3
+"""Generate a compound-engineering playbook tailored to a host repo profile.
+
+CE is a soft dependency: if the plugin isn't installed, the playbook still
+renders as a workflow checklist (plus a top-of-file install hint). When CE is
+installed, the playbook names the right reviewer persona per language/framework
+so the operator can pair `/ce-plan` etc. with a domain-aware review pass.
+
+Usage:
+    ce_playbook --profile <alc_init.json>
+    ce_playbook --profile - --ce-installed no   # read profile from stdin
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pathlib
+import sys
+
+PERSONA_FOR_FRAMEWORK = {
+    "rails": "ce-dhh-rails-reviewer",
+    "django": "ce-kieran-python-reviewer",
+    "fastapi": "ce-kieran-python-reviewer",
+    "flask": "ce-kieran-python-reviewer",
+    "react": "ce-kieran-typescript-reviewer",
+    "nextjs": "ce-kieran-typescript-reviewer",
+    "vue": "ce-kieran-typescript-reviewer",
+    "sveltekit": "ce-kieran-typescript-reviewer",
+    "svelte": "ce-kieran-typescript-reviewer",
+    "cloudflare-workers": "ce-kieran-typescript-reviewer",
+    "hono": "ce-kieran-typescript-reviewer",
+    "fastify": "ce-kieran-typescript-reviewer",
+    "express": "ce-kieran-typescript-reviewer",
+}
+
+PERSONA_FOR_LANGUAGE = {
+    "ruby": "ce-dhh-rails-reviewer",
+    "python": "ce-kieran-python-reviewer",
+    "typescript": "ce-kieran-typescript-reviewer",
+    "javascript": "ce-kieran-typescript-reviewer",
+}
+
+
+def pick_persona(profile: dict) -> str | None:
+    for fw in profile.get("frameworks", []):
+        persona = PERSONA_FOR_FRAMEWORK.get(fw)
+        if persona:
+            return persona
+    langs = profile.get("languages") or {}
+    if langs:
+        top = max(langs.items(), key=lambda x: x[1])[0]
+        return PERSONA_FOR_LANGUAGE.get(top)
+    return None
+
+
+def top_language(profile: dict) -> str | None:
+    langs = profile.get("languages") or {}
+    if not langs:
+        return None
+    return max(langs.items(), key=lambda x: x[1])[0]
+
+
+def render(profile: dict, ce_installed: bool) -> str:
+    persona = pick_persona(profile)
+    top_lang = top_language(profile)
+    has_tests = bool(profile.get("has_tests"))
+    has_frontend = bool(profile.get("has_frontend"))
+    monorepo = bool(profile.get("monorepo"))
+    frameworks = list(profile.get("frameworks") or [])
+
+    parts: list[str] = []
+
+    if not ce_installed:
+        parts.append(
+            "> _Compound-engineering plugin not detected on this system._\n"
+            "> _Install via Claude Code:_\n"
+            "> `/plugin marketplace add EveryInc/compound-engineering-plugin`\n"
+            "> `/plugin install compound-engineering@compound-engineering-plugin`\n"
+            "> _The hints below stay useful as a workflow checklist regardless._\n"
+        )
+
+    parts.append(
+        "### `/ce-brainstorm` — when scope is fuzzy\n"
+        "\n"
+        "Reach for this when you have a vague feature request or aren't sure\n"
+        "what's actually worth building. Best for kickoff conversations, not\n"
+        "well-defined bugs. Outputs a right-sized requirements doc you can\n"
+        "hand to `/ce-plan` next.\n"
+    )
+
+    plan_extras: list[str] = []
+    if persona:
+        target = top_lang or "core"
+        plan_extras.append(
+            f"Pair with `{persona}` for the review pass when the plan touches "
+            f"{target} code."
+        )
+    if monorepo:
+        plan_extras.append(
+            "Monorepo: explicitly name the affected package(s) in the plan tree."
+        )
+    plan_extra = "" if not plan_extras else "\n\n" + "\n\n".join(plan_extras)
+    parts.append(
+        "### `/ce-plan` — multi-step work\n"
+        "\n"
+        "Use after `/ce-brainstorm` or when a task needs more than one PR."
+        f"{plan_extra}\n"
+    )
+
+    work_section = (
+        "### `/ce-work` — autonomous execution\n"
+        "\n"
+        "Hand off a fully-planned task and let it execute end-to-end (plan\n"
+        "→ implement → test → commit). Best when the plan is solid and\n"
+        "the changes are localized.\n"
+    )
+    if not has_tests:
+        work_section += (
+            "\n"
+            "_Heads-up: no top-level `tests/` directory detected. `/ce-work`\n"
+            "is stronger with a test suite to validate against — consider\n"
+            "seeding a minimal test scaffold first._\n"
+        )
+    parts.append(work_section)
+
+    simplify_extra = ""
+    if "rails" in frameworks:
+        simplify_extra = (
+            "\n\nGreat for fat-controller → service-object decomposition."
+        )
+    elif any(fw in frameworks for fw in ("react", "nextjs", "vue", "svelte", "sveltekit")):
+        simplify_extra = (
+            "\n\nGreat for hook extraction and component decomposition."
+        )
+    elif top_lang == "python":
+        simplify_extra = (
+            "\n\nGreat for class decomposition and type-hint backfill."
+        )
+    elif top_lang in {"go", "rust"}:
+        simplify_extra = (
+            "\n\nGreat for cleaning up interface boundaries and error-handling drift."
+        )
+    parts.append(
+        "### `/ce-simplify-code` — post-change cleanup\n"
+        "\n"
+        "Run on recently modified code (just merged a feature, just landed a\n"
+        "fix). Reviews the diff for clarity, reuse, and quality."
+        f"{simplify_extra}\n"
+    )
+
+    arch_extras: list[str] = []
+    if monorepo:
+        arch_extras.append("Especially valuable in monorepos where package boundaries drift.")
+    elif has_frontend:
+        arch_extras.append("Especially valuable when frontend/backend domain models drift.")
+    arch_extra = "" if not arch_extras else "\n\n" + "\n\n".join(arch_extras)
+    parts.append(
+        "### `/improve-codebase-architecture` — periodic deepening\n"
+        "\n"
+        "Run periodically (monthly?) to find refactoring opportunities,\n"
+        "consolidate tightly-coupled modules, and make the codebase more\n"
+        "AI-navigable. Reads `CONTEXT.md` and `docs/adr/` if present."
+        f"{arch_extra}\n"
+    )
+
+    return "\n".join(parts).rstrip() + "\n"
+
+
+def detect_ce_installed(home: pathlib.Path | None = None) -> bool:
+    """Return True if the compound-engineering plugin or skill appears installed."""
+    home = home or pathlib.Path.home()
+    plugin_candidates = [
+        home / ".claude" / "plugins" / "marketplaces" / "compound-engineering-plugin",
+        home / ".claude" / "plugins" / "cache" / "compound-engineering-plugin",
+        home / ".claude" / "plugins" / "agent-learning-compounder",  # not what we want; ignored below
+    ]
+    for path in plugin_candidates:
+        if path.is_dir() and "compound-engineering" in path.name:
+            return True
+    skill_candidates = [
+        home / ".agents" / "skills" / "compound-engineering",
+        home / ".codex" / "skills" / "compound-engineering",
+        home / ".claude" / "skills" / "compound-engineering",
+    ]
+    for path in skill_candidates:
+        if path.is_dir():
+            return True
+    return False
+
+
+def _load_profile(arg: str | None) -> dict:
+    if arg is None:
+        return {}
+    if arg == "-":
+        data = json.load(sys.stdin)
+    else:
+        data = json.loads(pathlib.Path(arg).expanduser().read_text(encoding="utf-8"))
+    # alc_init summary wraps the profile; bare profile also OK.
+    return data.get("profile", data) if isinstance(data, dict) else {}
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--profile", help="path to JSON profile (alc_init summary or bare profile), or - for stdin")
+    parser.add_argument("--ce-installed", choices=["auto", "yes", "no"], default="auto",
+                        help="override CE plugin detection (default: auto)")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    profile = _load_profile(args.profile)
+    if args.ce_installed == "auto":
+        ce_installed = detect_ce_installed()
+    else:
+        ce_installed = args.ce_installed == "yes"
+    sys.stdout.write(render(profile, ce_installed))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

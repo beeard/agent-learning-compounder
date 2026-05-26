@@ -70,6 +70,16 @@ class AlcInitTests(unittest.TestCase):
             self.assertIn("react", body)
             self.assertIn("`skipped`", body)
             self.assertIn("Compound-engineering playbook", body)
+            # CE playbook content (not the stub from Phase 3) is now present.
+            self.assertIn("`/ce-brainstorm`", body)
+            self.assertIn("`/ce-plan`", body)
+            self.assertIn("`/ce-work`", body)
+            self.assertIn("`/ce-simplify-code`", body)
+            self.assertIn("`/improve-codebase-architecture`", body)
+            # react → kieran-typescript persona pairing
+            self.assertIn("ce-kieran-typescript-reviewer", body)
+            # ce_plugin_installed appears in JSON summary
+            self.assertIn("ce_plugin_installed", proc.stdout)
 
     def test_idempotent_across_runs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

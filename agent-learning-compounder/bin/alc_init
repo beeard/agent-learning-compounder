@@ -27,6 +27,7 @@ import sys
 PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
 
+import ce_playbook  # noqa: E402
 from state_handle import StateHandle  # noqa: E402
 
 EXT_TO_LANG = {
@@ -259,13 +260,8 @@ def render_session_context(profile: dict, mcp_status: dict, playbook_md: str = "
     lines.append("")
     lines.append("## Compound-engineering playbook")
     lines.append("")
-    if playbook_md:
-        lines.append(playbook_md)
-    else:
-        lines.append("_CE playbook generation lands in a follow-up. Until then,_")
-        lines.append("_invoke `/ce-brainstorm`, `/ce-plan`, `/ce-work`,_")
-        lines.append("_`/ce-simplify-code`, or `/improve-codebase-architecture`_")
-        lines.append("_directly when the workflow fits._")
+    lines.append(playbook_md.rstrip() if playbook_md
+                 else "_No playbook generated._")
     lines.append("")
     return "\n".join(lines)
 
@@ -326,8 +322,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"alc_init: mcp_status={mcp_status['status']} "
               f"tools={len(mcp_status['tools'])}", file=sys.stderr)
 
+    ce_installed = ce_playbook.detect_ce_installed()
+    playbook_md = ce_playbook.render(profile, ce_installed)
+    if not args.quiet:
+        print(f"alc_init: ce_plugin_installed={ce_installed}", file=sys.stderr)
+
     repo_id = StateHandle.repo_id(repo)
-    body = render_session_context(profile, mcp_status)
+    body = render_session_context(profile, mcp_status, playbook_md)
     out = write_session_context(state_root, repo_id, body)
     if not args.quiet:
         print(f"alc_init: wrote {out}", file=sys.stderr)
@@ -339,6 +340,7 @@ def main(argv: list[str] | None = None) -> int:
         "profile": profile,
         "deps": deps_status,
         "mcp": mcp_status,
+        "ce_plugin_installed": ce_installed,
         "session_context": str(out),
     }
     print(json.dumps(summary, indent=2, sort_keys=True))

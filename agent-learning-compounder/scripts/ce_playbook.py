@@ -1,0 +1,1 @@
+../bin/ce_playbook
