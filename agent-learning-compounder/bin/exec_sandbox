@@ -10,8 +10,6 @@ import pathlib
 import shlex
 import re
 import signal
-import shutil
-import sqlite3
 import subprocess
 import sys
 import time
@@ -36,6 +34,11 @@ try:
     from exec_sandbox_profiles import SCOPES
 except ImportError:
     from bin.exec_sandbox_profiles import SCOPES
+
+try:
+    from sandbox_run_state import RunStateTracker, _cleanup_worktree
+except ImportError:
+    from bin.sandbox_run_state import RunStateTracker, _cleanup_worktree
 
 
 WORKER_MAX_DEPTH = 2
@@ -222,158 +225,15 @@ def _event_scrub(value: str) -> str:
     return _REDACTED_TOKEN_RE.sub("[REDACTED]", scrub(value))
 
 
-def _run_sqlite_conn(handle: StateHandle) -> sqlite3.Connection:
-    handle.events_sqlite.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(handle.events_sqlite)
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS exec_sandbox_runs (
-            exec_id TEXT PRIMARY KEY,
-            status TEXT NOT NULL,
-            worktree_dir TEXT NOT NULL,
-            pid INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL
-        )
-        """
-    )
-    return conn
-
-
-def _set_run_status(
-    conn: sqlite3.Connection,
-    *,
-    exec_id: str,
-    status: str,
-    worktree_dir: pathlib.Path,
-    pid: int,
-) -> None:
-    conn.execute(
-        """
-        INSERT INTO exec_sandbox_runs (exec_id, status, worktree_dir, pid, updated_at)
-        VALUES (?, ?, ?, ?, ?)
-        ON CONFLICT(exec_id) DO UPDATE SET
-            status = excluded.status,
-            worktree_dir = excluded.worktree_dir,
-            pid = excluded.pid,
-            updated_at = excluded.updated_at
-        """,
-        (
-            exec_id,
-            status,
-            str(worktree_dir),
-            pid,
-            int(time.time()),
-        ),
-    )
-    conn.commit()
-
-
-def _read_run_status(conn: sqlite3.Connection, exec_id: str) -> dict[str, str | None]:
-    row = conn.execute(
-        """
-        SELECT status, worktree_dir, pid
-        FROM exec_sandbox_runs
-        WHERE exec_id = ?
-        """,
-        (exec_id,),
-    ).fetchone()
-    if row is None:
-        return {"status": None, "worktree_dir": None, "pid": None}
-    return {
-        "status": str(row[0]),
-        "worktree_dir": str(row[1]),
-        "pid": str(row[2]) if row[2] is not None else None,
-    }
-
-
-def _delete_run_status(conn: sqlite3.Connection, exec_id: str) -> None:
-    conn.execute("DELETE FROM exec_sandbox_runs WHERE exec_id = ?", (exec_id,))
-    conn.commit()
-
-
-def _pid_alive(pid: int) -> bool:
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
-
-
-def _cleanup_worktree(repo: pathlib.Path, worktree: pathlib.Path) -> None:
-    try:
-        subprocess.run(
-            ["git", "-C", str(repo), "worktree", "remove", "--force", str(worktree)],
-            check=False,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    finally:
-        shutil.rmtree(worktree, ignore_errors=True)
-
-
-def _emit_recovered_event(*, exec_id: str, worktree_dir: pathlib.Path, actor: dict[str, str] | None = None) -> None:
-    payload = {
-        "exec_id": exec_id,
-        "worktree_dir": str(worktree_dir),
-        "reason": "recovered",
-    }
-    write_event(
-        {
-            "event": "exec_sandbox_recovered",
-            "actor": actor or {"kind": "eval_judge", "name": "recovery"},
-            "payload": payload,
-            "correlation_chain": [],
-        },
-        source="eval",
-        auto_id_fallback=True,
-    )
-
-
-def _recover_stale_worktrees(handle: StateHandle, actor: dict[str, str] | None = None) -> None:
-    sandbox_root = handle.repo_state_dir / "sandbox-worktrees"
-    if not sandbox_root.is_dir():
-        return
-
-    conn = _run_sqlite_conn(handle)
-    try:
-        for candidate in sandbox_root.iterdir():
-            if not candidate.is_dir():
-                continue
-            exec_id = candidate.name
-            status = _read_run_status(conn, exec_id)
-            stale = False
-            if status["status"] != "running":
-                stale = True
-            else:
-                raw_pid = status["pid"]
-                pid = int(raw_pid) if raw_pid and raw_pid.isdigit() else None
-                if pid is None or not _pid_alive(pid):
-                    stale = True
-            if not stale:
-                continue
-            _cleanup_worktree(handle.repo, candidate)
-            _delete_run_status(conn, exec_id)
-            _emit_recovered_event(exec_id=exec_id, worktree_dir=candidate, actor=actor)
-    finally:
-        conn.close()
-
-
-def _ensure_worktree_dir(handle: StateHandle, run_id: str) -> pathlib.Path:
-    base = handle.repo_state_dir / "sandbox-worktrees" / run_id
-    base.parent.mkdir(parents=True, exist_ok=True)
-    return base
-
-
 def _spawn_worktree(
     handle: StateHandle,
     run_id: str,
     base_ref: str | None,
-    conn: sqlite3.Connection,
+    tracker: RunStateTracker,
 ) -> pathlib.Path:
-    worktree_dir = _ensure_worktree_dir(handle, run_id)
-    _set_run_status(
-        conn,
-        exec_id=run_id,
+    worktree_dir = tracker.ensure_worktree_dir(run_id)
+    tracker.set_status(
+        run_id,
         status="running",
         worktree_dir=worktree_dir,
         pid=os.getpid(),
@@ -485,7 +345,9 @@ def run(
 
     handle = _stateful_handle(repo.resolve(), os.environ.get("AGENT_LEARNING_STATE_DIR"))
     actor_payload = _coerce_actor(actor)
-    _recover_stale_worktrees(handle, actor_payload)
+
+    tracker = RunStateTracker(handle)
+    tracker.recover_stale(actor_payload)
 
     run_id = _run_id()
     timeout = _resolve_timeout(scope, timeout_s)
@@ -501,7 +363,6 @@ def run(
     stderr_value = ""
     event_id = ""
 
-    conn = _run_sqlite_conn(handle) if use_worktree else None
     try:
         if scope == ExecScope.READ:
             if not _is_allowed_read_command(command_for_exec):
@@ -517,9 +378,7 @@ def run(
                 set_umask=True,
             )
         else:
-            if conn is None:
-                raise RuntimeError("internal state failure")
-            worktree_dir = _spawn_worktree(handle, run_id, base_ref, conn)
+            worktree_dir = _spawn_worktree(handle, run_id, base_ref, tracker)
             env = _sanitize_env_for_sandbox()
             exit_code, stdout_value, stderr_value, timed_out, _ = _run_in_shell(
                 command=command_for_exec,
@@ -540,17 +399,9 @@ def run(
         stdout_path, stderr_path = _write_outputs(run_dir, stdout=stdout_value, stderr=stderr_value, exit_code=exit_code)
 
         if use_worktree and worktree_dir is not None:
-            if conn is None:
-                raise RuntimeError("internal state failure")
-            _set_run_status(
-                conn,
-                exec_id=run_id,
-                status="finished",
-                worktree_dir=worktree_dir,
-                pid=0,
-            )
+            tracker.set_status(run_id, status="finished", worktree_dir=worktree_dir, pid=0)
             _cleanup_worktree(handle.repo, worktree_dir)
-            _delete_run_status(conn, run_id)
+            tracker.delete_status(run_id)
 
         payload = _build_event_payload(
             run_id=run_id,
@@ -587,8 +438,7 @@ def run(
             chain_payload["parent_event_id"] = parent_event_id
         event_id = write_event(chain_payload, source="eval")
 
-        if conn is not None:
-            conn.close()
+        tracker.close()
 
     return ExecResult(
         exit_code=exit_code,
