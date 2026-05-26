@@ -1,107 +1,188 @@
+<div align="center">
+
 # agent-learning-compounder
 
-> Durable, evidence-backed agent memory. Distills repo facts, session telemetry,
-> and skill-health signals into compact context future agents actually read.
+### **Compound agent memory. Sessions feed it. Sessions read it.**
 
-[![Release](https://img.shields.io/badge/release-2026.05.27+review7--plus2.2-blue)](CHANGES.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![MCP](https://img.shields.io/badge/MCP-stdio-orange)](agent-learning-compounder/.mcp.json)
+*Your repo gets sharper every time an agent works in it.*
 
-ALC turns the noisy ambient signals around your project — git baseline, session
-transcripts, hook events, recommendation outcomes — into two compact surfaces
-future agents read on every session:
+<br/>
 
-- `latest-approved-gates.md` — durable do/don't rules, scored by effectiveness
-- `latest-skill-context.md` — repo-specific skill routing hints
+[![Release](https://img.shields.io/badge/release-2026.05.27%2Breview7--plus2.2-2563eb?style=flat-square)](CHANGES.md)
+[![npm](https://img.shields.io/npm/v/agent-learning-compounder?label=npm&color=cb3837&style=flat-square)](https://www.npmjs.com/package/agent-learning-compounder)
+[![MCP](https://img.shields.io/badge/MCP-12_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
+[![License](https://img.shields.io/badge/license-MIT-15803d?style=flat-square)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-363_smoke_%2B_251_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
 
-It ships as a self-contained package that installs three ways: **npm/npx**,
-**curl one-liner**, or **Claude Code plugin** (marketplace or direct).
-After install, `alc init` profiles the host repo, smokes the MCP server,
-and writes a per-repo session context with compound-engineering playbook
-hints tailored to the detected stack.
-
-## Install
-
-| Path | Command | Best for |
-| --- | --- | --- |
-| **npm / npx** | `npx agent-learning-compounder` | Anyone with Node 18+. Zero-config: detects Codex/Claude runtime, installs to the right root, runs the test suite. |
-| **curl one-liner** | `curl -fsSL https://raw.githubusercontent.com/beeard/agent-learning-compounder/master/bootstrap.sh \| sh` | No Node. Fetches the master tarball, runs the same installer. |
-| **Claude Code plugin** | `/plugin marketplace add beeard/agent-learning-compounder` then `/plugin install agent-learning-compounder@agent-learning-compounder` | Claude Code users who want hooks + MCP + slash commands wired automatically. |
-| **Git clone** (legacy) | `git clone https://github.com/beeard/agent-learning-compounder.git && ./agent-learning-compounder/install.sh` | Full source for inspection or contribution. |
-
-All paths land the same artifacts and pass the same self-tests. Forward any
-`install.sh` flag through `npx` or the curl pipe — for example, to also
-bootstrap your current repo in one step:
+<br/>
 
 ```bash
 npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
 ```
 
-See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the beginner walk-through.
+</div>
 
-## What it does
+<br/>
 
-- **Repo baseline** — `bin/build_repo_baseline` snapshots structure, tests,
-  hot files, ownership signals into one JSON.
-- **Session distillation** — `bin/extract_sessions` + `bin/distill_learning`
-  turn recent transcripts into proposed gates and skill-routing facts (raw
-  transcripts are never persisted).
-- **Hook telemetry** — `bin/collect_hook_event` writes bounded, allowlisted
-  events to `hook-events.jsonl`. `bin/replay_hook_events` migrates old
-  schemas; `bin/queue_dedup` collapses near-duplicate proposals.
-- **Gate scoring & federation** — `bin/evaluate_gate_effectiveness`,
-  `bin/causal_probe`, `bin/gates_promote`, `bin/gates_inherit` give each
-  gate a stable 12-char id and a cross-repo lifecycle with provenance.
-- **MCP surface** — `alc_mcp/server.py` exposes `get_gates`,
-  `get_skill_context`, `get_recommendations`, `propose_gate`,
-  `report_outcome`, and 6 more tools over stdio. Auto-starts in Claude Code
-  via [`.mcp.json`](agent-learning-compounder/.mcp.json).
-- **Dashboard** — `bin/serve_dashboard` (FastAPI + HTMX) for operator
-  triage of pending recommendations.
+## The loop
 
-## Requirements
+```mermaid
+flowchart LR
+    S(("Session<br/>fixes · experiments · mistakes"))
+    H["Hook events<br/>+ transcripts<br/><small>allowlisted, scrubbed</small>"]
+    D["distill_learning<br/>score · dedup · federate"]
+    E[/"<b>Compact context</b><br/><br/>📄 latest-approved-gates.md<br/>📄 latest-skill-context.md<br/>📄 latest-session-context.md"/]
 
-- Python 3.10+
-- POSIX shell (macOS / Linux / WSL)
-- Optional: `mcp`, `fastapi`, `jinja2`, `uvicorn`, `httpx`,
-  `sentence-transformers` — install via
-  `pip install -r agent-learning-compounder/requirements-optional.txt` if you
-  want the MCP server, dashboard, or embedding-backed queue dedup.
+    S ==>|produces| H
+    H ==>|feeds| D
+    D ==>|writes| E
+    E -.->|auto-loads at start →| S
 
-## Safety model
+    style E fill:#fbbf24,stroke:#b45309,color:#1f2937,stroke-width:3px
+    style S fill:#0f172a,stroke:#94a3b8,color:#f1f5f9,stroke-width:2px
+    style H fill:#1e293b,stroke:#475569,color:#cbd5e1
+    style D fill:#1e293b,stroke:#475569,color:#cbd5e1
+```
 
-- **No raw prompts, tool output, transcript chunks, or secret markers are
-  persisted.** Telemetry has a bounded allowlist; the validator rejects
-  psychological/ability claims about the operator.
-- **Default to read-only.** `distill_learning.py` mutates durable memory only
-  with `--write` + `--personal` root.
-- **Installer never touches tracked files.** `.agent-learning.json` and
-  runtime hook configs (`.codex/hooks.json`,
-  `.claude/settings.local.json`) auto-`.gitignore` themselves; install
-  refuses to overwrite if already tracked.
-- **Runtime hook install is manifest-only by default.** Apply requires an
-  explicit `install_runtime_hooks.py --apply` after a dry-run.
+Three small files carry institutional memory between sessions. Nothing
+leaves your machine. The loop tightens every cycle.
+
+<br/>
+
+## Install — three first-class paths
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+**📦 npm / npx**
+
+```bash
+npx agent-learning-compounder \
+  --bootstrap-repo "$PWD" --verify
+```
+
+Anyone with Node 18+. Zero-config, auto-detects Codex vs Claude Code.
+
+</td>
+<td width="33%" valign="top">
+
+**🌐 curl one-liner**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com\
+/beeard/agent-learning-compounder\
+/master/bootstrap.sh \
+  | sh -s -- --bootstrap-repo "$PWD" --verify
+```
+
+No Node. Just `curl` + `tar`.
+
+</td>
+<td width="33%" valign="top">
+
+**🔌 Claude Code marketplace**
+
+```text
+/plugin marketplace add \
+  beeard/agent-learning-compounder
+
+/plugin install \
+  agent-learning-compounder@\
+  agent-learning-compounder
+```
+
+Hooks + MCP + slash commands wired automatically.
+
+</td>
+</tr>
+</table>
+
+All three pass the same end-to-end validation suite. See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the walk-through.
+
+<br/>
+
+## What an agent sees on session start
+
+```text
+## Repo profile
+- Languages: typescript (1247), python (305), shell (28)
+- Frameworks: nextjs, react, fastapi
+- Tests: yes · Frontend: yes · Monorepo: no
+
+## Runtime summary (last 7 days)
+- Activity: 47 events from 4 actors (3 agents, 1 hook source)
+- Patches: 3 applied, 1 reverted
+- Judge verdicts: 5 approved, 1 rejected
+- Awaiting review: 2 pending patches — triage via /alc-report
+
+## Documentation contract
+✓ STRATEGY.md  ✓ ARCHITECTURE.md  ✓ CONTEXT.md  ✓ docs/adr
+✗ docs/brainstorms — generate via /ce-brainstorm
+
+## Compound-engineering playbook
+### /ce-plan — multi-step work (4× tracked)
+Pair with `ce-kieran-typescript-reviewer` for the review pass.
+### /ce-simplify-code — post-change cleanup (12× tracked)
+Great for hook extraction and component decomposition.
+…
+```
+
+That single injection — synthesised on demand by [`alc_init`](agent-learning-compounder/bin/alc_init) and refreshed by hook telemetry — is the difference between an agent starting from scratch and an agent that knows what failed last week, which skills are stale, and which patches are pending review.
+
+<br/>
+
+## Ask it what's next
+
+The newest MCP tool, **`next_action`** (M11), computes the single best move
+from current state. Same synthesiser handles "what's next?", "where did I
+leave off?", "session end recap" — one source of truth, never drift.
+
+```text
+You:    What's next?
+
+Agent:  → mcp__alc__next_action(repo)
+        ← "2 pending patches, last apply 6h ago, /ce-plan stale —
+            suggest /ce-doc-review docs/plans/refactor-api.md"
+```
+
+12 MCP tools total — read surface (`get_gates`, `get_recommendations`,
+`get_skill_context`, …), propose surface (`propose_gate`, `report_outcome`),
+sandbox (`exec_sandbox`), and the new synthesiser. All auto-registered
+from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
+
+<br/>
+
+## Trust model — load-bearing
+
+| Rule | Why it matters |
+|---|---|
+| **No raw prompts, tool output, or transcript chunks ever land on disk** | The validator rejects psychological/ability claims about the operator. Telemetry has a bounded allowlist. Secrets get scrubbed. |
+| **Default to read-only** | Durable writes require explicit `--write --personal`. Hook install is manifest-only until `install_runtime_hooks --apply`. |
+| **The installer never touches tracked files** | `.agent-learning.json` and runtime hook configs auto-`.gitignore` themselves. Backups are timestamped. |
+
+<br/>
 
 ## Documentation
 
-- [`CHANGES.md`](CHANGES.md) — release notes
-- [`docs/QUICKSTART.md`](docs/QUICKSTART.md) — first-time install walk-through
-- [`docs/llm-install-prompt.md`](docs/llm-install-prompt.md) — paste-ready
-  prompts to delegate install to a coding agent
-- [`agent-learning-compounder/reference-lib/`](agent-learning-compounder/reference-lib/) —
-  per-subsystem references (architecture, threat-model, output-schema,
-  gate-registry, hook-telemetry, source-adapters, pressure-tests, …)
-- [`docs/dev/`](docs/dev/) — internal release artifacts (signoff, hardening
-  plans, gate-system backlog)
-- [`docs/history/`](docs/history/) — frozen historical work orders
+| | |
+|---|---|
+| [`STRATEGY.md`](STRATEGY.md) | Target problem · users · success signals · active tracks |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) | Five-minute mental model with diagrams |
+| [`CONTEXT.md`](CONTEXT.md) | For LLM agents landing in this repo |
+| [`CHANGES.md`](CHANGES.md) | Release notes (latest: `2026.05.27+review7-plus2.2`) |
+| [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | First-time install walk-through |
+| [`agent-learning-compounder/reference-lib/`](agent-learning-compounder/reference-lib/) | Per-subsystem deep dives (architecture, threat-model, output-schema, gate-registry, hook-telemetry, …) |
+
+<br/>
 
 ## Verify
 
 ```bash
 cd agent-learning-compounder
-python3 -m unittest discover -s fixtures/tests   # unit + integration
-python3 -m unittest discover -s tests            # post-install smoke
-python3 scripts/run_pressure_tests.py            # durable-write gate
+python3 -m unittest discover -s fixtures/tests   # 251 unit + integration
+python3 -m unittest discover -s tests            # 363 post-install smoke
+python3 scripts/run_pressure_tests.py            # 4 durable-write gates
 ```
 
 ## License
