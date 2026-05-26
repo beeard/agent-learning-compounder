@@ -33,7 +33,7 @@ python3 alc_mcp/server.py
 - `get_recommendations(repo) -> list[recommendation]`
 - `list_pending_patches(repo) -> list[patch]`
 - `get_dashboard_url(repo) -> str`
-- `propose_apply(repo, patch_id) -> {command, token}`
+- `propose_apply(repo, patch_id) -> {command}`
 - `propose_gate(repo, domain, category, gate, evidence?) -> {queue_id}`
 - `report_outcome(repo, recommendation_id, verdict, reason) -> {recorded, event_id}`
 - `report_agent_event(repo, kind, actor_name, telemetry?) -> {recorded, event_id}`

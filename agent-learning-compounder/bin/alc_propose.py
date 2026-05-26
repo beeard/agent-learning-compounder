@@ -170,10 +170,12 @@ def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evid
 def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
     patch_id = _require(patch_id, "patch_id", MAX_CATEGORY_LEN)
     # Command matches the actual alc_apply CLI surface (--patch + --write).
-    # Token validation in alc_apply is not yet implemented; the token is
-    # emitted in telemetry only so a future audit can correlate proposal
-    # → apply via event_id rather than via runtime trust.
-    token = secrets.token_urlsafe(16)
+    # An audit nonce is emitted only in the apply_proposed event payload so a
+    # future correlator can pair a proposal with the eventual apply via
+    # event_id chain — but it is NOT returned to MCP callers, because alc_apply
+    # has no token-validation surface and exposing a "token" would suggest a
+    # security guarantee that doesn't exist (see PR review round 2).
+    audit_nonce = secrets.token_urlsafe(16)
     command = f"bin/alc_apply --patch {patch_id} --write"
 
     event = {
@@ -182,13 +184,13 @@ def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
         "ts": _timestamp(),
         "payload": {
             "patch_id": patch_id,
-            "one_shot_token": token,
+            "audit_nonce": audit_nonce,
             "command": command,
         },
     }
     _emit(state, event, source="apply")
 
-    return {"command": command, "token": token}
+    return {"command": command}
 
 
 def report_outcome(state: StateHandle, recommendation_id: str, verdict: str, reason: str) -> str:

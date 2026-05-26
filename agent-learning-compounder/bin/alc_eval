@@ -108,9 +108,15 @@ def _existing_event_ids(state: StateHandle) -> set[str]:
     ids: set[str] = set()
     for line in path.read_text(encoding="utf-8").splitlines():
         try:
-            event_id = json.loads(line).get("event_id")
+            value = json.loads(line)
         except json.JSONDecodeError:
             continue
+        # JSONL rows are normally dicts, but a stray null/list/number/string
+        # line shouldn't crash dedup — without isinstance, .get on those raises
+        # AttributeError and the whole eval batch silently aborts.
+        if not isinstance(value, dict):
+            continue
+        event_id = value.get("event_id")
         if event_id:
             ids.add(str(event_id))
     return ids

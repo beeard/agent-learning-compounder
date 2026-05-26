@@ -111,7 +111,9 @@ function renderApplyLog(items) {
 function renderGatesAndInsights(payload) {
   const gates = safeText((payload || {}).gates_markdown || "No gates snapshot available.");
   const insights = safeText((payload || {}).insights_markdown || "No insight snapshot available.");
-  const summary = payload && payload.actor_summary ? JSON.stringify(payload.actor_summary) : "{}";
+  // JSON.stringify escapes " and \\ but NOT < or > — actor names from MCP callers
+  // can still inject <script> into innerHTML without an additional escape.
+  const summary = safeText(JSON.stringify((payload && payload.actor_summary) || {}));
   return `<article class="section-card score-high"><strong>Gates</strong><div class="preset">${gates}</div></article>` +
     `<article class="section-card score-mid"><strong>Insights</strong><div class="preset">${insights}</div></article>` +
     `<article class="section-card score-low"><strong>Actor summary</strong><div class="preset">${summary}</div></article>`;

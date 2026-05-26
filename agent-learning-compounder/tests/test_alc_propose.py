@@ -77,15 +77,15 @@ class AlcProposeTests(unittest.TestCase):
         self.assertIn("patch-1", result["command"])
         self.assertIn("--patch", result["command"])
         self.assertIn("--write", result["command"])
-        # Token is returned for telemetry correlation but NOT embedded in the
-        # command (alc_apply has no --approve-token flag; embedding it would
-        # produce an unrunnable command). Telemetry carries the token via the
-        # apply_proposed event payload.
-        self.assertNotIn(result["token"], result["command"])
-        self.assertTrue(result["token"])  # token still issued
-
+        # Token NOT returned to callers (alc_apply has no token-validation
+        # surface; exposing one would imply a security guarantee that does
+        # not exist). An audit nonce IS carried in the apply_proposed event
+        # payload for telemetry correlation only.
+        self.assertNotIn("token", result)
         events = self._event_rows()
         self.assertEqual(events[-1]["event"], "apply_proposed")
+        self.assertTrue(events[-1]["payload"].get("audit_nonce"))
+        self.assertNotIn(events[-1]["payload"]["audit_nonce"], result["command"])
 
     def test_report_outcome_emits_deterministic_event_id(self) -> None:
         first = alc_propose.report_outcome(self.state, "rec-1", "helpful", "passed all checks")

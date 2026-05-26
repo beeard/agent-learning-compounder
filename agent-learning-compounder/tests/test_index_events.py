@@ -110,6 +110,29 @@ class IndexEventsTests(unittest.TestCase):
         self.assertEqual(self._count("SELECT COUNT(*) FROM events"), 5)
         self.assertEqual(int((self.state / "events.sqlite.cursor").read_text(encoding="utf-8")), cursor)
 
+    def test_corrupt_row_is_quarantined_not_wedge(self) -> None:
+        # Locks the wedge-fix: a malformed line in events.jsonl must not
+        # block all future indexing. Prior behavior re-raised ValueError on
+        # bad rows, rolled back the txn, and never advanced the cursor.
+        good_a = self._event_row("good-a", session_id="session-q")
+        good_b = self._event_row("good-b", session_id="session-q")
+        with open(self.events_jsonl, "w", encoding="utf-8") as handle:
+            handle.write(json.dumps(good_a, sort_keys=True) + "\n")
+            handle.write("not-valid-json{}{}{\n")
+            handle.write(json.dumps(good_b, sort_keys=True) + "\n")
+
+        code, _stdout, stderr = self._run(["--state", str(self.state)])
+        self.assertEqual(code, 0)
+        # Both valid rows indexed; the bad row skipped, never wedges the indexer.
+        self.assertEqual(self._count("SELECT COUNT(*) FROM events"), 2)
+        self.assertIn("warn.index_events_skipped", stderr)
+        # Cursor must have advanced past the bad line so re-run is a true no-op.
+        cursor_after_first = int((self.state / "events.sqlite.cursor").read_text(encoding="utf-8"))
+        code2, _, _ = self._run(["--state", str(self.state)])
+        self.assertEqual(code2, 0)
+        self.assertEqual(self._count("SELECT COUNT(*) FROM events"), 2)
+        self.assertEqual(int((self.state / "events.sqlite.cursor").read_text(encoding="utf-8")), cursor_after_first)
+
     def test_query_by_session_id(self) -> None:
         self._write_events(
             [
