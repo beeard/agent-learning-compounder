@@ -3,7 +3,7 @@
 > Durable, evidence-backed agent memory. Distills repo facts, session telemetry,
 > and skill-health signals into compact context future agents actually read.
 
-[![Release](https://img.shields.io/badge/release-2026.05.27+review7--plus2.0-blue)](CHANGES.md)
+[![Release](https://img.shields.io/badge/release-2026.05.27+review7--plus2.1-blue)](CHANGES.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-orange)](agent-learning-compounder/.mcp.json)
 

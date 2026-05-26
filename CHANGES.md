@@ -1,5 +1,28 @@
 # Changes
 
+## 2026.05.27+review7-plus2.1
+
+Hotfix release — npm-distribution only. The 2.0 tarball published to npm
+was missing the 94 `.py` module aliases (e.g. `bin/ce_playbook.py`) that
+in the source tree are symlinks to the matching executables. npm dropped
+the symlinks on pack without materializing them as file copies, so
+`npx agent-learning-compounder --bootstrap-repo ...` blew up with
+`ModuleNotFoundError: No module named 'ce_playbook'` at `alc_init` import
+time.
+
+The curl-one-liner and Claude Code marketplace paths were unaffected —
+both consume the GitHub `archive/master.tar.gz` tarball, which preserves
+symlinks.
+
+Fix: `scripts/alc-install.mjs` (the npm `bin` entry) now materializes the
+missing `.py` aliases as file copies at install time, scoped to shebanged
+Python executables under `bin/`, `scripts/`, and `skills/alc-core/scripts/`.
+Idempotent — skipped when the alias is already present (curl/GitHub path).
+
+Anyone who installed `2026.5.27-review7.plus2.0` via `npx` should refresh
+to `plus2.1`. Other install paths can stay on 2.0; the version bump on
+MANIFEST.json / plugin.json / CLAUDE.md is for cross-channel sync only.
+
 ## 2026.05.27+review7-plus2.0
 
 Install-surface release. Brings the package up to three first-class install
