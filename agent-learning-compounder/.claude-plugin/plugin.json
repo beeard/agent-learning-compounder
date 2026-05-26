@@ -1,5 +1,21 @@
 {
   "name": "agent-learning-compounder",
   "version": "2026.05.26+review7-plus1.3",
-  "description": "Portable skill package that distills repo and session context into durable operational memory."
+  "description": "Distills repo facts, session telemetry, and skill-health signals into durable, evidence-backed agent memory.",
+  "author": {
+    "name": "Tom",
+    "url": "https://github.com/beeard"
+  },
+  "homepage": "https://github.com/beeard/agent-learning-compounder",
+  "repository": "https://github.com/beeard/agent-learning-compounder",
+  "keywords": [
+    "agent-learning",
+    "agent-memory",
+    "telemetry",
+    "mcp",
+    "codex",
+    "claude-code",
+    "skills",
+    "hooks"
+  ]
 }

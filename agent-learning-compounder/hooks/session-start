@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -u
 state_root="${AGENT_LEARNING_STATE_DIR:-$PWD/.agent-learning}"
-: "${ALC_PLUGIN_ROOT:?ALC_PLUGIN_ROOT is required}"
+plugin_root="${CLAUDE_PLUGIN_ROOT:-${ALC_PLUGIN_ROOT:-}}"
+if [ -z "$plugin_root" ]; then
+  echo "session-start: CLAUDE_PLUGIN_ROOT or ALC_PLUGIN_ROOT must be set" >&2
+  exit 1
+fi
 cat "$state_root"/repos/*/reports/latest-approved-gates.md 2>/dev/null || true
-cat "$state_root"/repos/*/reports/latest-skill-context.md "$ALC_PLUGIN_ROOT"/skills/alc-core/SKILL.md 2>/dev/null || true
+cat "$state_root"/repos/*/reports/latest-skill-context.md "$plugin_root"/skills/alc-core/SKILL.md 2>/dev/null || true

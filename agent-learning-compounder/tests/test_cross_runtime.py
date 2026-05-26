@@ -34,12 +34,21 @@ class TestCrossRuntimeEntryFiles(unittest.TestCase):
         manifest_path = ROOT / ".claude-plugin" / "plugin.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
-        self.assertIn("name", manifest)
-        self.assertIn("version", manifest)
-        self.assertIn("description", manifest)
-
-        for key in ("skills", "agents", "commands", "hooks"):
+        for key in ("name", "version", "description"):
             self.assertIn(key, manifest)
+
+        # Component-path arrays (skills/agents/commands/hooks) are NOT required:
+        # Claude Code auto-discovers them from the conventional directories at
+        # plugin root. They only need to be declared when overriding defaults.
+        # See plugin-dev:plugin-structure (Component Path Configuration).
+
+    def test_claude_plugin_components_auto_discoverable(self):
+        # Verify the canonical auto-discovery surfaces exist at plugin root.
+        self.assertTrue((ROOT / "agents").is_dir())
+        self.assertTrue((ROOT / "commands").is_dir())
+        self.assertTrue((ROOT / "hooks" / "hooks.json").is_file())
+        self.assertTrue((ROOT / "skills").is_dir())
+        self.assertTrue((ROOT / ".mcp.json").is_file())
 
     def test_claude_md_references_core_commands(self):
         claude_text = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")

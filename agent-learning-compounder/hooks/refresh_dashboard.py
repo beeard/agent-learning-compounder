@@ -11,7 +11,11 @@ import sys
 from importlib.machinery import SourceFileLoader
 
 
-PLUGIN_ROOT = pathlib.Path(os.environ.get("ALC_PLUGIN_ROOT", pathlib.Path(__file__).resolve().parents[1]))
+PLUGIN_ROOT = pathlib.Path(
+    os.environ.get("CLAUDE_PLUGIN_ROOT")
+    or os.environ.get("ALC_PLUGIN_ROOT")
+    or pathlib.Path(__file__).resolve().parents[1]
+)
 SERVER_SRC = PLUGIN_ROOT / "skills" / "alc-dashboard" / "server.py"
 
 

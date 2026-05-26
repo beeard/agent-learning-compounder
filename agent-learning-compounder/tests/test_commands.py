@@ -52,10 +52,13 @@ class AlcReportCommandTests(unittest.TestCase):
     def test_command_body_contains_exactly_one_bash_code_block(self) -> None:
         self.assertEqual(len(_bash_blocks(_read_command())), 1)
 
-    def test_bash_block_uses_alc_plugin_root_only(self) -> None:
+    def test_bash_block_uses_claude_plugin_root_with_alc_fallback(self) -> None:
+        # Slash commands run only in Claude Code. We expand to CLAUDE_PLUGIN_ROOT
+        # with an ALC_PLUGIN_ROOT fallback so the command is also safe to run from
+        # a Codex shell that has wired ALC_PLUGIN_ROOT manually.
         block = _bash_blocks(_read_command())[0]
-        self.assertIn("${ALC_PLUGIN_ROOT}", block)
-        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", block)
+        self.assertIn("${CLAUDE_PLUGIN_ROOT", block)
+        self.assertIn("ALC_PLUGIN_ROOT", block)
 
     def test_description_mentions_all_renderer_help_flags(self) -> None:
         description = _frontmatter(_read_command())["description"]

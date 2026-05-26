@@ -58,10 +58,13 @@ class HookTests(unittest.TestCase):
             self.assertIn("Agent Learning Dashboard", html)
             self.assertIn('"recommendations"', html)
 
-    def test_hooks_json_uses_alc_plugin_root_only(self) -> None:
+    def test_hooks_json_uses_claude_plugin_root(self) -> None:
+        # hooks.json is the Claude Code plugin manifest. Claude Code substitutes
+        # ${CLAUDE_PLUGIN_ROOT} at hook-fire time; ALC_PLUGIN_ROOT is the Codex
+        # fallback used inside the hook scripts themselves, never in this file.
         text = HOOKS_JSON.read_text(encoding="utf-8")
-        self.assertIn("${ALC_PLUGIN_ROOT}", text)
-        self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", text)
+        self.assertIn("${CLAUDE_PLUGIN_ROOT}", text)
+        self.assertNotIn("${ALC_PLUGIN_ROOT}", text)
 
     def test_session_start_empty_state_does_not_crash(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

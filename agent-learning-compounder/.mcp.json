@@ -1,0 +1,9 @@
+{
+  "alc": {
+    "command": "python3",
+    "args": ["${CLAUDE_PLUGIN_ROOT}/alc_mcp/server.py"],
+    "env": {
+      "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

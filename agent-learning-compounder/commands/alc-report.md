@@ -6,5 +6,5 @@ description: Run the unified ALC report; flags: --analyst-only, --recommend-only
 ```bash
 set -euo pipefail
 
-python3 "${ALC_PLUGIN_ROOT}/scripts/render_unified_report.py" $ARGUMENTS
+python3 "${CLAUDE_PLUGIN_ROOT:-${ALC_PLUGIN_ROOT}}/scripts/render_unified_report.py" $ARGUMENTS
 ```
