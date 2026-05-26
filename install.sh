@@ -7,7 +7,7 @@ Install agent-learning-compounder.
 
 Usage:
   ./install.sh                                            (zero-config: detect runtime, verify)
-  ./install.sh [--codex|--codex-home|--claude|--target DIR] [--runtime codex|claude|all|auto] [--verify]
+  ./install.sh [--codex|--codex-home|--claude|--plugin|--target DIR] [--runtime codex|claude|all|auto] [--verify]
   ./install.sh --bootstrap-repo DIR [--runtime codex|claude|all|auto] [--verify] [--apply-runtime-hooks]
 
 Zero-config behavior (when no runtime/target flag is passed and
@@ -24,6 +24,8 @@ Options:
   --codex                Install for Codex-compatible ~/.agents skills
   --codex-home           Install to ${CODEX_HOME:-$HOME/.codex}/skills
   --claude               Install to ${CLAUDE_HOME:-$HOME/.claude}/skills
+  --plugin               Install as a Claude Code plugin under ${CLAUDE_HOME:-$HOME/.claude}/plugins
+                         (agents/commands/hooks/skills all discovered together; implies --runtime claude)
   --target DIR           Install into an explicit skills root directory
   --runtime MODE         Codex/Claude runtime filter: codex|claude|all|auto
   --bootstrap-repo DIR    Install in project-local runtime roots and initialize the repo
@@ -52,6 +54,7 @@ bootstrap_repo=""
 apply_runtime_hooks=0
 verify=0
 target_root_explicit=0
+plugin_mode=0
 # Stays 1 while no runtime/target/bootstrap flag has been passed; the
 # zero-arg install path picks the runtime by filesystem detection and
 # turns on --verify only when this is still 1 after arg parsing.
@@ -201,6 +204,13 @@ while [ "$#" -gt 0 ]; do
       target_root="${CLAUDE_HOME:-$HOME/.claude}/skills"
       auto_detect=0
       ;;
+    --plugin)
+      plugin_mode=1
+      runtime="claude"
+      target_root="${CLAUDE_HOME:-$HOME/.claude}/plugins"
+      target_root_explicit=1
+      auto_detect=0
+      ;;
     --target)
       shift
       if [ "$#" -eq 0 ]; then
@@ -258,6 +268,16 @@ done
 
 if [ ! -f "$skill_src/SKILL.md" ] && [ ! -f "$skill_src/skills/alc-core/SKILL.md" ]; then
   echo "missing packaged skill at $skill_src" >&2
+  exit 1
+fi
+
+if [ "$plugin_mode" = 1 ] && [ -n "$bootstrap_repo" ]; then
+  echo "--plugin installs a user-global Claude Code plugin and cannot be combined with --bootstrap-repo" >&2
+  exit 2
+fi
+
+if [ "$plugin_mode" = 1 ] && [ ! -f "$skill_src/.claude-plugin/plugin.json" ]; then
+  echo "--plugin requires $skill_src/.claude-plugin/plugin.json (missing)" >&2
   exit 1
 fi
 
@@ -399,7 +419,19 @@ if [ "$verify" -eq 1 ]; then
   sanitize_skill_tree "$dest"
 fi
 
-cat <<EOF
+if [ "$plugin_mode" = 1 ]; then
+  cat <<EOF
+installed agent-learning-compounder as a Claude Code plugin to:
+  $dest
+
+Claude Code will auto-discover the plugin's agents, commands, hooks, and skills
+from $dest/.claude-plugin/plugin.json on its next launch.
+
+Per-repo init (optional, for the learning state under <repo>/.agent-learning/):
+  python3 "$dest/scripts/init_learning_system.py" --repo "\$PWD" --runtime claude --install-repo-integration --install-hooks --self-test
+EOF
+else
+  cat <<EOF
 installed agent-learning-compounder to:
   $dest
 
@@ -409,3 +441,4 @@ Initialize a repo:
 Optionally wire runtime hooks after reviewing the plan:
   python3 "$dest/scripts/install_runtime_hooks.py" --repo "\$PWD" --runtime "$runtime" --dry-run
 EOF
+fi
