@@ -76,6 +76,20 @@ class AlcInitTests(unittest.TestCase):
             self.assertIn("`/ce-work`", body)
             self.assertIn("`/ce-simplify-code`", body)
             self.assertIn("`/improve-codebase-architecture`", body)
+            # Phase 6 sections (alc_query integration + doc contract)
+            self.assertIn("## Runtime summary (synthesized from alc_query)", body)
+            self.assertIn("## Documentation contract", body)
+            self.assertIn("## CE-family skill usage", body)
+            # Fresh state-dir = no events.sqlite, so runtime + CE-usage fall back.
+            self.assertIn("_No durable runtime history yet", body)
+            self.assertIn("_No tracked invocations of compound-engineering", body)
+            # Doc contract: target repo is barely-seeded so most anchors missing.
+            self.assertIn("**Anchors:**", body)
+            self.assertIn("STRATEGY.md", body)
+            self.assertIn("missing", body)
+            # Summary key surface (Phase 6 additions)
+            self.assertIn("ce_skill_usage_tracked", proc.stdout)
+            self.assertIn("doc_contract_missing", proc.stdout)
             # react → kieran-typescript persona pairing
             self.assertIn("ce-kieran-typescript-reviewer", body)
             # ce_plugin_installed appears in JSON summary

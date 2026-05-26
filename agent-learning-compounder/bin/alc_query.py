@@ -355,6 +355,56 @@ def get_actor_summary(state: StateHandle, since: str = "7d") -> dict[str, Any]:
     }
 
 
+def get_skill_usage_summary(
+    state: StateHandle,
+    since: str | dt.datetime | int | float | None = None,
+    prefix_filter: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
+    """Aggregate actor_name counts in the indexed events.
+
+    Buckets by `actor_name` (the actor surface that closest tracks a "skill"
+    in our schema), filtered to actors whose name starts with any of the
+    optional prefixes. Returns rows sorted by count desc.
+
+    When events.sqlite is absent (fresh install), returns []. When the
+    `actor_name` column exists but holds no rows matching the filter,
+    returns []. Callers are expected to render "no data yet" rather than
+    error.
+
+    Output row shape: `{actor_name, count, last_used_ts}`.
+    """
+    path = state.events_sqlite
+    if not path.is_file():
+        return []
+
+    where: list[str] = ["actor_name IS NOT NULL", "actor_name != ''"]
+    params: list[Any] = []
+    cutoff = _parse_since(since)
+    if cutoff is not None:
+        where.append("ts >= ?")
+        params.append(cutoff)
+
+    sql = (
+        "SELECT actor_name, COUNT(*) AS count, MAX(ts) AS last_used_ts "
+        "FROM events WHERE " + " AND ".join(where) +
+        " GROUP BY actor_name ORDER BY count DESC, actor_name ASC"
+    )
+
+    with _with_conn(path) as conn:
+        rows = _query_as_dicts(conn, sql, tuple(params))
+
+    if prefix_filter:
+        prefixes = tuple(p for p in prefix_filter if isinstance(p, str) and p)
+        if prefixes:
+            rows = [r for r in rows if any(r["actor_name"].startswith(p) for p in prefixes)]
+
+    return [
+        {"actor_name": r["actor_name"], "count": int(r["count"]),
+         "last_used_ts": r["last_used_ts"]}
+        for r in rows
+    ]
+
+
 def get_skill_invocation_history(state: StateHandle, skill_name: str) -> list[dict[str, Any]]:
     path = state.events_sqlite
     if not path.is_file():

@@ -118,6 +118,44 @@ class AlcQueryTests(unittest.TestCase):
         rows = alc_query.get_apply_log(self.state, kind_filter=["patch_applied"])
         self.assertEqual([row["event_id"] for row in rows], ["a", "c"])
 
+    def test_skill_usage_summary_buckets_by_actor_name(self) -> None:
+        now = dt.datetime.now(dt.timezone.utc)
+        recent = now - dt.timedelta(hours=2)
+        old = now - dt.timedelta(days=20)
+        self._insert_rows([
+            {"event_id": "1", "event": "agent_dispatch", "ts": recent.isoformat(),
+             "actor_kind": "agent", "actor_name": "ce-brainstorm", "session_id": "s1"},
+            {"event_id": "2", "event": "agent_dispatch", "ts": recent.isoformat(),
+             "actor_kind": "agent", "actor_name": "ce-brainstorm", "session_id": "s2"},
+            {"event_id": "3", "event": "agent_dispatch", "ts": recent.isoformat(),
+             "actor_kind": "agent", "actor_name": "ce-plan", "session_id": "s2"},
+            {"event_id": "4", "event": "agent_dispatch", "ts": old.isoformat(),
+             "actor_kind": "agent", "actor_name": "ce-old", "session_id": "s3"},
+            {"event_id": "5", "event": "agent_dispatch", "ts": recent.isoformat(),
+             "actor_kind": "hook", "actor_name": "session-start", "session_id": "s1"},
+        ])
+        # No filter — see all actor_names recent
+        rows = alc_query.get_skill_usage_summary(self.state, since="7d")
+        actor_names = [r["actor_name"] for r in rows]
+        self.assertIn("ce-brainstorm", actor_names)
+        self.assertIn("ce-plan", actor_names)
+        self.assertIn("session-start", actor_names)
+        self.assertNotIn("ce-old", actor_names)  # outside the 7d window
+
+        # Counts respect order (ce-brainstorm should be first with 2 events)
+        first = rows[0]
+        self.assertEqual(first["actor_name"], "ce-brainstorm")
+        self.assertEqual(first["count"], 2)
+
+        # Prefix filter narrows to ce-*
+        ce_rows = alc_query.get_skill_usage_summary(self.state, since="7d", prefix_filter=["ce-"])
+        ce_names = {r["actor_name"] for r in ce_rows}
+        self.assertEqual(ce_names, {"ce-brainstorm", "ce-plan"})
+
+    def test_skill_usage_summary_missing_db_returns_empty(self) -> None:
+        # Fresh state, no db
+        self.assertEqual(alc_query.get_skill_usage_summary(self.state), [])
+
     def test_read_only_connection_rejects_write(self) -> None:
         self._insert_rows([{"event_id": "1", "event": "patch_applied", "ts": dt.datetime.now(dt.timezone.utc).isoformat(), "session_id": "s1"}])
         conn = sqlite3.connect(f"file:{self.state.events_sqlite}?mode=ro", uri=True)

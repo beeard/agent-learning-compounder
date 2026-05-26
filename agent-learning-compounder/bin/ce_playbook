@@ -61,7 +61,29 @@ def top_language(profile: dict) -> str | None:
     return max(langs.items(), key=lambda x: x[1])[0]
 
 
-def render(profile: dict, ce_installed: bool) -> str:
+def _usage_annotation(name: str, usage_counts: dict[str, int] | None) -> str:
+    """Return ' _(N× tracked)_' suffix if this skill has tracked invocations."""
+    if not usage_counts:
+        return ""
+    count = usage_counts.get(name) or 0
+    if count <= 0:
+        return ""
+    return f" _({count}× tracked)_"
+
+
+def _extra_ce_skills(usage_counts: dict[str, int] | None,
+                     headlined: tuple[str, ...]) -> list[tuple[str, int]]:
+    """Other CE-family skills with usage not already covered by the headlined sections."""
+    if not usage_counts:
+        return []
+    return sorted(
+        ((name, count) for name, count in usage_counts.items() if name not in headlined),
+        key=lambda x: (-x[1], x[0]),
+    )
+
+
+def render(profile: dict, ce_installed: bool,
+           usage_counts: dict[str, int] | None = None) -> str:
     persona = pick_persona(profile)
     top_lang = top_language(profile)
     has_tests = bool(profile.get("has_tests"))
@@ -81,7 +103,7 @@ def render(profile: dict, ce_installed: bool) -> str:
         )
 
     parts.append(
-        "### `/ce-brainstorm` — when scope is fuzzy\n"
+        f"### `/ce-brainstorm` — when scope is fuzzy{_usage_annotation('ce-brainstorm', usage_counts)}\n"
         "\n"
         "Reach for this when you have a vague feature request or aren't sure\n"
         "what's actually worth building. Best for kickoff conversations, not\n"
@@ -102,14 +124,14 @@ def render(profile: dict, ce_installed: bool) -> str:
         )
     plan_extra = "" if not plan_extras else "\n\n" + "\n\n".join(plan_extras)
     parts.append(
-        "### `/ce-plan` — multi-step work\n"
+        f"### `/ce-plan` — multi-step work{_usage_annotation('ce-plan', usage_counts)}\n"
         "\n"
         "Use after `/ce-brainstorm` or when a task needs more than one PR."
         f"{plan_extra}\n"
     )
 
     work_section = (
-        "### `/ce-work` — autonomous execution\n"
+        f"### `/ce-work` — autonomous execution{_usage_annotation('ce-work', usage_counts)}\n"
         "\n"
         "Hand off a fully-planned task and let it execute end-to-end (plan\n"
         "→ implement → test → commit). Best when the plan is solid and\n"
@@ -142,7 +164,7 @@ def render(profile: dict, ce_installed: bool) -> str:
             "\n\nGreat for cleaning up interface boundaries and error-handling drift."
         )
     parts.append(
-        "### `/ce-simplify-code` — post-change cleanup\n"
+        f"### `/ce-simplify-code` — post-change cleanup{_usage_annotation('ce-simplify-code', usage_counts)}\n"
         "\n"
         "Run on recently modified code (just merged a feature, just landed a\n"
         "fix). Reviews the diff for clarity, reuse, and quality."
@@ -156,13 +178,26 @@ def render(profile: dict, ce_installed: bool) -> str:
         arch_extras.append("Especially valuable when frontend/backend domain models drift.")
     arch_extra = "" if not arch_extras else "\n\n" + "\n\n".join(arch_extras)
     parts.append(
-        "### `/improve-codebase-architecture` — periodic deepening\n"
+        f"### `/improve-codebase-architecture` — periodic deepening{_usage_annotation('improve-codebase-architecture', usage_counts)}\n"
         "\n"
         "Run periodically (monthly?) to find refactoring opportunities,\n"
         "consolidate tightly-coupled modules, and make the codebase more\n"
         "AI-navigable. Reads `CONTEXT.md` and `docs/adr/` if present."
         f"{arch_extra}\n"
     )
+
+    # Surface other tracked CE-family skills that aren't headlined above so
+    # the user sees the full breadth of compound-engineering activity.
+    headlined = ("ce-brainstorm", "ce-plan", "ce-work", "ce-simplify-code",
+                 "improve-codebase-architecture")
+    extras = _extra_ce_skills(usage_counts, headlined)
+    if extras:
+        extras_lines = ["### Other tracked CE-family activity", ""]
+        for name, count in extras[:10]:
+            extras_lines.append(f"- `/{name}` — {count}× tracked")
+        if len(extras) > 10:
+            extras_lines.append(f"- _…and {len(extras) - 10} more_")
+        parts.append("\n".join(extras_lines) + "\n")
 
     return "\n".join(parts).rstrip() + "\n"
 

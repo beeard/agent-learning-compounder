@@ -95,6 +95,46 @@ class RenderTests(unittest.TestCase):
         self.assertIn("interface boundaries", body)
 
 
+class UsageCountsTests(unittest.TestCase):
+    def test_usage_counts_annotates_headlined_skills(self):
+        usage = {"ce-brainstorm": 4, "ce-plan": 2, "ce-work": 1}
+        body = ce_playbook.render(
+            {"frameworks": ["nextjs"], "languages": {"typescript": 100}},
+            ce_installed=True, usage_counts=usage,
+        )
+        self.assertIn("`/ce-brainstorm` — when scope is fuzzy _(4× tracked)_", body)
+        self.assertIn("`/ce-plan` — multi-step work _(2× tracked)_", body)
+        self.assertIn("`/ce-work` — autonomous execution _(1× tracked)_", body)
+
+    def test_usage_counts_zero_does_not_annotate(self):
+        usage = {"ce-brainstorm": 0}  # explicit zero shouldn't add annotation
+        body = ce_playbook.render({"frameworks": []}, ce_installed=True, usage_counts=usage)
+        self.assertNotIn("× tracked", body)
+
+    def test_extra_ce_skills_surface_in_other_section(self):
+        usage = {
+            "ce-brainstorm": 5,           # headlined
+            "ce-strategy": 3,             # extra
+            "ce-doc-review": 2,           # extra
+            "ce-commit-push-pr": 1,       # extra
+        }
+        body = ce_playbook.render({"frameworks": []}, ce_installed=True, usage_counts=usage)
+        self.assertIn("Other tracked CE-family activity", body)
+        self.assertIn("`/ce-strategy` — 3× tracked", body)
+        self.assertIn("`/ce-doc-review` — 2× tracked", body)
+        self.assertIn("`/ce-commit-push-pr` — 1× tracked", body)
+        # Headlined should NOT appear in extras section
+        # (this is implicit — appears in its own section but we check the extras heading bounds)
+
+    def test_no_usage_means_no_extras_section(self):
+        body = ce_playbook.render({"frameworks": []}, ce_installed=True, usage_counts=None)
+        self.assertNotIn("Other tracked CE-family activity", body)
+
+    def test_empty_usage_means_no_extras_section(self):
+        body = ce_playbook.render({"frameworks": []}, ce_installed=True, usage_counts={})
+        self.assertNotIn("Other tracked CE-family activity", body)
+
+
 class DetectCETests(unittest.TestCase):
     def test_detects_marketplace_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
