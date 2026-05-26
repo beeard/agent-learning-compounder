@@ -1,6 +1,6 @@
 {
   "name": "agent-learning-compounder",
-  "version": "2026.5.26-review7.plus1.3",
+  "version": "2026.5.27-review7.plus2.0",
   "description": "Distills repo facts, session telemetry, and skill-health signals into durable, evidence-backed agent memory. Installs as a Codex skill, a Claude Code plugin, or both.",
   "keywords": [
     "agent-learning",

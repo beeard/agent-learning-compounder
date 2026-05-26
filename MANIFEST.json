@@ -1,8 +1,8 @@
 {
   "name": "agent-learning-compounder",
-  "version": "2026.05.26+review7-plus1.3",
+  "version": "2026.05.27+review7-plus2.0",
   "schema_version": 1,
-  "created_date": "2026-05-26",
+  "created_date": "2026-05-27",
   "description": "Portable Codex/Claude skill for durable, evidence-backed agent learning and skill-health feedback.",
   "requirements": {
     "python": ">=3.10",
@@ -26,7 +26,9 @@
     "scripts/causal_probe.py",
     "scripts/gates_promote.py",
     "scripts/gates_inherit.py",
-    "scripts/serve_dashboard.py"
+    "scripts/serve_dashboard.py",
+    "scripts/alc_init.py",
+    "scripts/ce_playbook.py"
   ],
   "optional_extras": {
     "mcp": "alc_mcp/server.py — install: pip install mcp",

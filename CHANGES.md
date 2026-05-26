@@ -1,5 +1,107 @@
 # Changes
 
+## 2026.05.27+review7-plus2.0
+
+Install-surface release. Brings the package up to three first-class install
+paths, makes the Claude Code plugin self-contained, and adds an `alc_init`
+first-run flow that profiles the host repo, smokes the MCP server, and
+writes a per-repo session context with compound-engineering playbook
+hints tailored to the detected stack.
+
+### New install paths
+
+- **npm / npx.** `package.json` at repo root publishes the package as
+  `agent-learning-compounder` with bin `alc-install` (`scripts/alc-install.mjs`,
+  a thin Node wrapper around `install.sh`). Smoke-validated: `npm pack`
+  → 414 KB tarball → `npm install` → `alc-install --plugin` lands a
+  fully-wired plugin.
+- **curl one-liner.** `bootstrap.sh` at repo root fetches the master
+  tarball (overridable via `$ALC_REPO` / `$ALC_REF`) and exec's
+  `install.sh` with forwarded args. Depends only on `curl` and `tar`.
+- **Claude Code marketplace.** `.claude-plugin/marketplace.json` at repo
+  root declares this repo as a single-plugin marketplace pointing at the
+  inner `agent-learning-compounder/` directory. Enables
+  `/plugin marketplace add beeard/agent-learning-compounder` →
+  `/plugin install agent-learning-compounder@agent-learning-compounder`.
+
+### Claude Code plugin made self-contained
+
+- Adds `agent-learning-compounder/.mcp.json` declaring the `alc` stdio
+  MCP server. Claude Code auto-starts the server on plugin load; smoke
+  test (initialize + tools/list) returns 11 registered tools.
+- `hooks/hooks.json` switches from `${ALC_PLUGIN_ROOT}` to
+  `${CLAUDE_PLUGIN_ROOT}` (the variable Claude Code actually
+  substitutes). Hook scripts (`session-start`, `refresh_dashboard.py`)
+  and the `/alc-report` command resolve
+  `${CLAUDE_PLUGIN_ROOT:-${ALC_PLUGIN_ROOT}}` so they remain safe in
+  the Codex wrapper context.
+- `plugin.json` gains author, repository, homepage, keywords for a
+  professional marketplace presentation.
+
+### First-run flow (`alc_init`)
+
+- New `bin/alc_init` profiles the host repo (languages by extension,
+  frameworks via file-presence signals, has-tests / has-frontend /
+  monorepo / package-manager flags), checks for the `mcp` Python
+  package (optional `pip install --user` via `--install-deps`), smokes
+  `alc_mcp/server.py` over stdio, and writes a per-repo
+  `latest-session-context.md` to the state directory.
+- `install.sh --bootstrap-repo` auto-runs `alc_init` at the tail.
+- `hooks/session-start` now cats `latest-session-context.md`
+  alongside the gates and skill-context files at session start.
+- Idempotent: re-running with the same args produces a byte-identical
+  context file.
+
+### Compound-engineering as soft dependency
+
+- New `bin/ce_playbook` renders tailored hints for
+  `/ce-brainstorm`, `/ce-plan`, `/ce-work`, `/ce-simplify-code`,
+  `/improve-codebase-architecture`. Pairs detected frameworks with the
+  right reviewer persona (Rails → `ce-dhh-rails-reviewer`; React/Next/
+  Vue/Svelte/CF-Workers → `ce-kieran-typescript-reviewer`;
+  Django/FastAPI/Flask → `ce-kieran-python-reviewer`).
+- Detects whether the compound-engineering plugin is installed; if not,
+  the playbook prepends a short install banner but the hints render
+  unchanged so they remain useful as a workflow checklist.
+- Conditional hints: monorepo, has_tests=false, and framework family
+  each add or shape specific lines.
+
+### Repo hygiene
+
+- `FOLLOWUP.md` archived to `docs/history/FOLLOWUP-2026-05.md`
+  (T1–T6 all addressed in the plus1.3 series).
+- `GATE_SYSTEM_REVIEW.md` moved to
+  `docs/dev/gate-system-review-2026-05.md` with an internal-backlog
+  header. Open code-level review findings; not user-facing.
+- Version drift fixed: `MANIFEST.json`, inner
+  `agent-learning-compounder/.claude-plugin/plugin.json`, outer
+  `CLAUDE.md`, README, marketplace.json all carry the same string.
+- `README.md` rewritten — 342 → 106 lines. Pitch + three install paths
+  in a table + "what it does" + safety model + docs index. Internals
+  moved to `reference-lib/` and `docs/dev/`.
+- New `LICENSE` (MIT) at repo root — required for npm publish and
+  general open-source hygiene. Easy to swap.
+- Fixed `agent-learning-compunder` typo (missing 'o') in README +
+  QUICKSTART git-clone URLs.
+
+### Tests
+
+- 251 fixtures/tests/ (unit + integration) — all green.
+- 219 tests/ (smoke) — adds `test_alc_init.py` (4 tests),
+  `test_ce_playbook.py` (14 tests), updates `test_hooks.py`,
+  `test_commands.py`, `test_cross_runtime.py` to match new
+  env-var + plugin-shape conventions.
+- 4 pressure checks.
+- End-to-end validation suite (9 checks) covers every install path.
+
+### Migration
+
+`plus1.3` consumers should upgrade for the plugin shape fix (hooks
+were silently no-op'ing in Claude Code plugin install). Run
+`./install.sh --plugin` again or `npx agent-learning-compounder
+--plugin` to refresh. Repo-bootstrapped installs gain `alc_init` +
+session-context on next `--bootstrap-repo` run.
+
 ## 2026.05.26+review7-plus1.3
 
 Installer feature release. Adds a `--plugin` mode to `install.sh` so the

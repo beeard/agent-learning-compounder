@@ -3,7 +3,7 @@
 > Durable, evidence-backed agent memory. Distills repo facts, session telemetry,
 > and skill-health signals into compact context future agents actually read.
 
-[![Release](https://img.shields.io/badge/release-2026.05.26+review7--plus1.3-blue)](CHANGES.md)
+[![Release](https://img.shields.io/badge/release-2026.05.27+review7--plus2.0-blue)](CHANGES.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-stdio-orange)](agent-learning-compounder/.mcp.json)
 
@@ -16,6 +16,9 @@ future agents read on every session:
 
 It ships as a self-contained package that installs three ways: **npm/npx**,
 **curl one-liner**, or **Claude Code plugin** (marketplace or direct).
+After install, `alc init` profiles the host repo, smokes the MCP server,
+and writes a per-repo session context with compound-engineering playbook
+hints tailored to the detected stack.
 
 ## Install
 
