@@ -1,41 +1,63 @@
 # Quickstart
 
-Get `agent-learning-compounder` installed and wired into a project in **two
-commands**. No flags to think about. The installer figures out the rest.
+Get `agent-learning-compounder` installed and wired into a project in
+**one command**. The installer auto-detects your runtime (Codex / Claude
+Code) and runs `alc init` to profile your repo, smoke-test MCP, and write
+the first session-context.
 
 ## What you need (one-time check)
 
 - A POSIX shell. macOS Terminal, Linux, or WSL on Windows all work.
 - Python 3.10 or newer. Check with `python3 --version`.
-- A project directory you want to wire up. Anywhere with a `.git` folder is
-  fine.
+- A project directory you want to wire up (a `.git` folder helps but isn't required).
 
-## Install — two commands
+## Install — pick the path that fits
 
-Open a terminal **inside the project you want to set up**, then:
+Run from inside the project you want to wire up.
+
+### npm / npx (recommended)
 
 ```bash
-# 1. Get the source somewhere (this stays out of your project).
-git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
+npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
+```
 
-# 2. Install it AND wire this project, all in one go.
+### curl one-liner (no Node required)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/beeard/agent-learning-compounder/master/bootstrap.sh \
+  | sh -s -- --bootstrap-repo "$PWD" --verify
+```
+
+### Claude Code marketplace (in-app)
+
+Inside a Claude Code session:
+
+```
+/plugin marketplace add beeard/agent-learning-compounder
+/plugin install agent-learning-compounder@agent-learning-compounder
+```
+
+This installs the plugin for Claude Code; agents, commands, hooks, and the MCP
+server auto-discover. Per-repo init still needs the npm/curl path or
+`alc_init --repo "$PWD"` from inside the installed location.
+
+### From source (for inspection or contribution)
+
+```bash
+git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
 /tmp/alc/install.sh --bootstrap-repo "$PWD" --verify
 ```
 
-That's it. The second command:
+Any of the four paths above will:
 
-- Installs the skill into your project's runtime root. Defaults to **Codex**.
-  If you use Claude, prepend `AGENT_LEARNING_RUNTIME=claude` to the command:
-
-  ```bash
-  AGENT_LEARNING_RUNTIME=claude /tmp/alc/install.sh --bootstrap-repo "$PWD" --verify
-  ```
-
-- Runs the packaged test suite — about a minute. The `--verify` flag
-  guarantees you find out immediately if something is off.
-- Creates `.agent-learning.json` at your project root and `.agent-learning/`
+- Install the skill into the right runtime root (auto-detects `~/.agents/` vs
+  `~/.claude/`; pick explicitly with `--runtime codex|claude`).
+- Run the packaged test suite (`--verify`) — about a minute.
+- Create `.agent-learning.json` at your project root and `.agent-learning/`
   for local state.
-- Runs a self-test that confirms everything is wired correctly.
+- Run `alc_init` to profile the host repo (frameworks, languages, tests),
+  smoke the MCP server, check the doc contract, and write
+  `latest-session-context.md`.
 
 ## Did it work?
 

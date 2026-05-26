@@ -16,6 +16,7 @@
     "codex",
     "claude-code",
     "skills",
-    "hooks"
+    "hooks",
+    "plugin"
   ]
 }

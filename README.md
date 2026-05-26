@@ -99,8 +99,8 @@ See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the beginner walk-through.
 
 ```bash
 cd agent-learning-compounder
-python3 -m unittest discover -s fixtures/tests   # 251 tests
-python3 -m unittest discover -s tests            # 201 smoke
+python3 -m unittest discover -s fixtures/tests   # unit + integration
+python3 -m unittest discover -s tests            # post-install smoke
 python3 scripts/run_pressure_tests.py            # durable-write gate
 ```
 
