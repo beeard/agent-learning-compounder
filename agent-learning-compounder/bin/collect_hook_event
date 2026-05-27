@@ -70,10 +70,40 @@ def slug(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "unknown"
 
 
+_HASHED_SESSION_RE = re.compile(r"^s_[0-9a-f]{12}$")
+
+
 def safe_session(value: Any) -> str:
-    text = str(value or "session")
-    if UUID_RE.search(text):
+    """Stable, runtime-agnostic session token. Idempotent.
+
+    Cross-runtime: Claude Code passes ``session_id`` as a UUID; Codex
+    typically passes a UUID-shaped ``session_id`` or ``conversation_id``;
+    other runtimes may pass a slug. We want one canonical token that
+    (a) doesn't leak the raw UUID into telemetry (UUIDs can correlate
+    across systems beyond ALC), and (b) preserves session distinctiveness
+    so 7 sessions surface as 7 distinct ids rather than collapsing to one.
+
+    Behavior:
+      - empty / None → ``"session"`` (sentinel for "no id known")
+      - already-hashed (``s_<12 hex>``) → returned unchanged (idempotent;
+        important because replay_hook_events re-normalizes existing rows
+        and we don't want slug() to mangle the ``_`` into ``-`` on the
+        second pass)
+      - already the ``"session"`` sentinel → returned unchanged
+      - UUID-shaped → ``s_`` + first 12 chars of sha256(uuid). Same UUID
+        always hashes to the same token, so distinct sessions stay
+        distinct in events.sqlite without the raw UUID ever being written.
+      - anything else → slug([:80])
+    """
+    text = str(value or "").strip()
+    if not text:
         return "session"
+    if text == "session" or _HASHED_SESSION_RE.match(text):
+        return text
+    if UUID_RE.search(text):
+        import hashlib
+        digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+        return f"s_{digest}"
     return slug(text)[:80]
 
 
