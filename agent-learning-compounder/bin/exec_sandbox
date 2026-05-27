@@ -436,7 +436,7 @@ def run(
             chain_payload["payload"]["timeout"] = True
         if parent_event_id is not None:
             chain_payload["parent_event_id"] = parent_event_id
-        event_id = write_event(chain_payload, source="eval")
+        event_id = write_event(chain_payload, source="eval", repo=handle.repo)
 
         tracker.close()
 

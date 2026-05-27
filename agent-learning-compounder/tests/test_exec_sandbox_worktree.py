@@ -38,7 +38,8 @@ class ExecSandboxWorktreeTests(unittest.TestCase):
 
     @property
     def events_jsonl(self) -> pathlib.Path:
-        return pathlib.Path(self.state_root) / "events.jsonl"
+        # PR4/B3: writes land in <state_root>/repos/<repo-id>/events.jsonl.
+        return self._repo_state_dir / "events.jsonl"
 
     @property
     def events_sqlite(self) -> pathlib.Path:

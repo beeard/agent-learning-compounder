@@ -13,6 +13,8 @@ BIN_DIR = REPO_ROOT / "bin"
 if str(BIN_DIR) not in sys.path:
     sys.path.insert(0, str(BIN_DIR))
 
+import state_handle
+
 
 def _write_file(path: pathlib.Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -77,7 +79,13 @@ class ExecSandboxEvalTests(unittest.TestCase):
         return subprocess.run(args, check=False, env=self.env, text=True, capture_output=True)
 
     def _read_events(self) -> list[dict]:
-        events_path = self.state_root / "events.jsonl"
+        # PR4/B3: writes land in <state_root>/repos/<repo-id>/events.jsonl.
+        events_path = (
+            self.state_root
+            / "repos"
+            / state_handle.StateHandle.repo_id(self.repo)
+            / "events.jsonl"
+        )
         if not events_path.exists():
             return []
         rows: list[dict] = []

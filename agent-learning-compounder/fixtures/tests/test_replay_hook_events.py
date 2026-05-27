@@ -33,9 +33,7 @@ class ReplayHookEvents(unittest.TestCase):
     def test_v1_row_upgrades_to_latest_schema(self):
         self._write([{"ts": "2026-01-01T00:00:00Z", "event": "PreToolUse", "tool": "Bash"}])
         rows = self._run()
-        # Replay runs through normalize_event, which stamps the current
-        # collector SCHEMA_VERSION (4 since PR 4 / B1 fix).
-        self.assertEqual(rows[0]["schema_version"], 4)
+        self.assertEqual(rows[0]["schema_version"], 3)
         # normalize_event snake-cases event names (matches collector convention).
         self.assertEqual(rows[0]["event"], "pre_tool_use")
 
@@ -46,7 +44,7 @@ class ReplayHookEvents(unittest.TestCase):
         }])
         rows = self._run()
         self.assertEqual(rows[0]["correlation_id"], "c1")
-        self.assertEqual(rows[0]["schema_version"], 4)
+        self.assertEqual(rows[0]["schema_version"], 3)
         self.assertEqual(len(rows), 1)
 
     def test_malformed_row_skipped_not_crashed(self):

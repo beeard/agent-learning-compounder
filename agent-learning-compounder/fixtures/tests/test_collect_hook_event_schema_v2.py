@@ -32,12 +32,9 @@ class CollectHookEventSchemaV2(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         return [json.loads(line) for line in self.log_path.read_text().splitlines()]
 
-    def test_event_has_current_schema_version(self):
+    def test_event_has_schema_version_3(self):
         rows = self._emit({"event": "PreToolUse", "tool": "Bash"})
-        # SCHEMA_VERSION=4 since PR 4 (B1 fix); rows must carry the current
-        # collector schema so EventV4.upgrade_from accepts them without the
-        # legacy v3 `repo`-bears-/home/ workaround.
-        self.assertEqual(rows[-1]["schema_version"], 4)
+        self.assertEqual(rows[-1]["schema_version"], 3)
 
     def test_correlation_id_pass_through(self):
         rows = self._emit({"event": "PreToolUse", "tool": "Bash", "correlation_id": "abc-123"})
@@ -66,7 +63,7 @@ class CollectHookEventSchemaV2(unittest.TestCase):
             "correlation_id": "sk_live_" + "a" * 30,
         })
         self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[-1]["schema_version"], 4)
+        self.assertEqual(rows[-1]["schema_version"], 3)
         self.assertEqual(rows[-1].get("tool"), "Bash")
         self.assertNotIn("correlation_id", rows[-1])
 

@@ -260,11 +260,28 @@ def _load_existing_ids(path: pathlib.Path) -> set[str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", help="State root override")
+    parser.add_argument(
+        "--repo",
+        type=pathlib.Path,
+        default=None,
+        help="Repo root; binds writes to <state>/repos/<repo-id>/ (recommended)",
+    )
     args = parser.parse_args(argv)
 
-    state_root, _ = StateHandle.resolve_state_root(state_dir=args.state_dir)
-    state_root = pathlib.Path(state_root).expanduser().resolve()
-    events_path = state_root / STATE_EVENTS_FILE
+    if args.repo is not None:
+        state = StateHandle.for_repo(args.repo)
+        events_path = state.events_jsonl
+        write_repo: pathlib.Path | None = state.repo
+    else:
+        state_root, _ = StateHandle.resolve_state_root(state_dir=args.state_dir)
+        state_root = pathlib.Path(state_root).expanduser().resolve()
+        events_path = state_root / STATE_EVENTS_FILE
+        write_repo = None
+        # Preserve the read-and-write-same-place invariant: route writes to
+        # whatever state root we just read from rather than letting
+        # write_events_batch fall back to env-or-XDG resolution.
+        import os as _os
+        _os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_root)
 
     if not events_path.exists():
         print(f"warn.events_jsonl_missing path={events_path}", file=sys.stderr)
@@ -284,7 +301,12 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     if to_write:
-        write_events_batch(to_write, source=SOURCE, auto_id_fallback=False)
+        write_events_batch(
+            to_write,
+            source=SOURCE,
+            auto_id_fallback=False,
+            repo=write_repo,
+        )
 
     unmatched_starts = sum(len(queue) for queue in pending_tools.values()) + sum(len(queue) for queue in pending_subagents.values())
     if unmatched_starts:

@@ -40,7 +40,14 @@ class ExecSandboxReadTests(unittest.TestCase):
 
     @property
     def events_jsonl(self) -> pathlib.Path:
-        return pathlib.Path(self.state_root) / "events.jsonl"
+        # PR4/B3: event_writer now lands rows in <state_root>/repos/<id>/
+        # rather than at the state-root flat path.
+        return (
+            self.state_root
+            / "repos"
+            / state_handle.StateHandle.repo_id(self.repo)
+            / "events.jsonl"
+        )
 
     def _run(self, command: str, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
         args = [

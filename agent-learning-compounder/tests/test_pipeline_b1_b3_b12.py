@@ -29,6 +29,7 @@ if str(BIN_DIR) not in sys.path:
     sys.path.insert(0, str(BIN_DIR))
 
 import alc_query
+import collect_hook_event
 import event_writer
 import index_events
 from state_handle import StateHandle
@@ -125,6 +126,33 @@ class PipelineRoundTripTests(unittest.TestCase):
         }
         event = EventV4.upgrade_from(row)
         self.assertEqual(event.schema_version, 4)
+
+    def test_collect_hook_event_row_indexes_end_to_end(self) -> None:
+        # P1 regression: a row produced by the live collector must flow
+        # through the indexer into events.sqlite. Pre-fix this was broken
+        # in two ways: the stale absolute repo path (B1) tripped the
+        # boundary, and bumping SCHEMA_VERSION to 4 without emitting the
+        # nested v4 envelope routed flat collector rows to
+        # EventV4.from_dict (which requires actor) and quarantined every
+        # row. The fix keeps SCHEMA_VERSION=3 so the flat row keeps going
+        # through EventV4.upgrade_from, with `repo` hashed at the source.
+        state = self._state()
+        state.repo_state_dir.mkdir(parents=True, exist_ok=True)
+        row = collect_hook_event.normalize_event(
+            {"event": "PreToolUse", "tool": "Bash", "session_id": "sess"},
+            self.repo,
+        )
+        self.assertEqual(row["schema_version"], 3)
+        # `repo` must be the hashed token, not /home/... -- otherwise the
+        # upgrade-path boundary check would still quarantine the row.
+        self.assertNotIn("/", row["repo"])
+        state.events_jsonl.write_text(
+            json.dumps(row) + "\n", encoding="utf-8"
+        )
+        added = index_events.run(state.repo_state_dir)
+        self.assertEqual(added, 1)
+        summary = alc_query.get_actor_summary(state, since="30d")
+        self.assertEqual(summary["total"], 1)
 
     def test_b12_cursor_does_not_advance_on_all_quarantined_run(self) -> None:
         state = self._state()

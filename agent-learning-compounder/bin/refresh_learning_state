@@ -425,6 +425,7 @@ def refresh(
             kind="refresh_start",
             actor_name="refresh_learning_state",
             actor_kind="background_agent",
+            repo=repo,
         )
     except Exception:
         start_event_id = None
@@ -481,6 +482,7 @@ def refresh(
             actor_kind="background_agent",
             parent_event_id=start_event_id,
             payload={"telemetry": {"duration_ms": duration_ms}},
+            repo=repo,
         )
     except Exception:
         pass

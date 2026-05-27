@@ -40,7 +40,8 @@ class ExecSandboxSecurityTests(unittest.TestCase):
 
     @property
     def events_jsonl(self) -> pathlib.Path:
-        return self.state_root / "events.jsonl"
+        # PR4/B3: writes land in <state_root>/repos/<repo-id>/events.jsonl.
+        return self._repo_state_dir / "events.jsonl"
 
     @property
     def _repo_state_dir(self) -> pathlib.Path:

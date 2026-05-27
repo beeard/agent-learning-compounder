@@ -123,7 +123,12 @@ class RunStateTracker:
                 continue
             _cleanup_worktree(self._state.repo, candidate)
             self.delete_status(exec_id)
-            _emit_recovered_event(exec_id=exec_id, worktree_dir=candidate, actor=actor)
+            _emit_recovered_event(
+                exec_id=exec_id,
+                worktree_dir=candidate,
+                actor=actor,
+                repo=self._state.repo,
+            )
 
     def close(self) -> None:
         """Close the underlying SQLite connection."""
@@ -188,6 +193,7 @@ def _emit_recovered_event(
     exec_id: str,
     worktree_dir: pathlib.Path,
     actor: dict[str, str] | None = None,
+    repo: pathlib.Path | None = None,
 ) -> None:
     """Emit an ``exec_sandbox_recovered`` event for a cleaned-up worktree."""
     payload = {
@@ -204,4 +210,5 @@ def _emit_recovered_event(
         },
         source="eval",
         auto_id_fallback=True,
+        repo=repo,
     )
