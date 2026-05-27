@@ -64,11 +64,26 @@ export interface MetricsRow {
   prior_report?: string | null;
 }
 
+export interface ScopedGateRow {
+  domain: string;
+  gate_id: string;
+  category: string;
+  gate: string;
+  _source_scope: "user" | "project";
+}
+
+export interface ScopedGatesPayload {
+  rows: ScopedGateRow[];
+  summary: { total: number; user: number; project: number };
+  skill_context_md: string;
+}
+
 export interface DashboardData {
   generated_at: string;
   personal_root: string;
   latest: ReportPayload | null;
   history: MetricsRow[];
+  scoped_gates?: ScopedGatesPayload;
 }
 
 const placeholder: DashboardData = {

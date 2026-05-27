@@ -165,6 +165,44 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
         unmute_domain,
         unpromote_gate,
     )
+    import alc_query  # noqa: E402
+    from state_handle import StateHandle  # noqa: E402
+
+    repo_for_state = repo.resolve() if repo is not None else None
+
+    def _project_state() -> "StateHandle | None":
+        if repo_for_state is None:
+            return None
+        try:
+            return StateHandle.for_repo(repo_for_state)
+        except Exception:
+            return None
+
+    def _build_scoped_gates() -> dict:
+        # PR 3: surface user + project scope reads so the React SPA can
+        # render "this project" vs. "across all your work". When no repo
+        # was passed in, fall back to user-scope only.
+        state = _project_state()
+        user_root = pathlib.Path(personal)
+        try:
+            if state is not None:
+                rows = alc_query.get_gates(state, scope="both", user_root=user_root)
+                skill_context_md = alc_query.get_skill_context(state, scope="both", user_root=user_root)
+            else:
+                rows = alc_query.get_gates(scope="user", user_root=user_root)
+                skill_context_md = alc_query.get_skill_context(scope="user", user_root=user_root)
+        except Exception:
+            rows, skill_context_md = [], ""
+        summary = {
+            "total": len(rows),
+            "user": sum(1 for row in rows if row.get("_source_scope") == "user"),
+            "project": sum(1 for row in rows if row.get("_source_scope") == "project"),
+        }
+        return {
+            "rows": rows,
+            "summary": summary,
+            "skill_context_md": skill_context_md,
+        }
 
     jobs = JobRegistry()
 
@@ -193,6 +231,7 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
         from render_dashboard import build_dashboard_data  # type: ignore
         d = build_dashboard_data(personal, history_limit=180)
         d["actions"] = actions_summary(personal)
+        d["scoped_gates"] = _build_scoped_gates()
         return d
 
     @app.post("/api/actions/distill")

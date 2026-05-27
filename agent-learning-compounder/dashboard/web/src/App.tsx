@@ -4,6 +4,7 @@ import { KpiCards } from "@/components/KpiCards";
 import { TrendChart } from "@/components/TrendChart";
 import { DomainHeat } from "@/components/DomainHeat";
 import { GateStabilityTable } from "@/components/GateStabilityTable";
+import { ScopedGatesPanel } from "@/components/ScopedGatesPanel";
 import { SkillPanel } from "@/components/SkillPanel";
 import { RunHistory } from "@/components/RunHistory";
 import { ActionBar } from "@/components/ActionBar";
@@ -115,6 +116,11 @@ export default function App() {
           <GateStabilityTable data={data} online={connection.online} onChange={refreshData} />
           <RunHistory data={data} />
         </section>
+
+        <Separator className="my-8" />
+
+        {/* Approved gates split by user vs project scope */}
+        <ScopedGatesPanel data={data} />
 
         <Separator className="my-8" />
 

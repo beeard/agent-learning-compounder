@@ -89,6 +89,26 @@ class Dashboard(unittest.TestCase):
         self.assertEqual(r.status_code, 200)
         self.assertIn(b"No active probes", r.content)
 
+    def test_api_data_includes_scoped_gates(self):
+        # PR 3: /api/data must return scoped_gates with rows tagged _source_scope.
+        r = self.client.get("/api/data")
+        self.assertEqual(r.status_code, 200)
+        payload = r.json()
+        self.assertIn("scoped_gates", payload)
+        scoped = payload["scoped_gates"]
+        self.assertIn("rows", scoped)
+        self.assertIn("summary", scoped)
+        self.assertIn("skill_context_md", scoped)
+        for key in ("total", "user", "project"):
+            self.assertIn(key, scoped["summary"])
+        # The setUp seed writes a project-scope gate (abcdef012345); the row
+        # should carry _source_scope == "project".
+        project_rows = [row for row in scoped["rows"] if row.get("_source_scope") == "project"]
+        self.assertTrue(
+            any(row.get("gate_id") == "abcdef012345" for row in project_rows),
+            f"expected seeded project gate to surface; got rows={scoped['rows']}",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

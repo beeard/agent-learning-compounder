@@ -108,13 +108,49 @@ function renderApplyLog(items) {
   }).join("\n");
 }
 
+function scopeBadge(scope) {
+  if (scope === "user") return `<span class="badge ok">user</span>`;
+  if (scope === "project") return `<span class="badge warn">project</span>`;
+  return "";
+}
+
+function renderGatesList(payload) {
+  const rows = Array.isArray((payload || {}).gates_rows) ? payload.gates_rows : [];
+  if (rows.length === 0) {
+    const fallback = safeText((payload || {}).gates_markdown || "No gates snapshot available.");
+    return `<div class="preset">${fallback}</div>`;
+  }
+
+  const summary = (payload && payload.gates_summary) || { total: rows.length, user: 0, project: 0 };
+  const header = `<p class="gates-summary">` +
+    `<strong>${safeText(summary.total)}</strong> gates · ` +
+    `<strong>${safeText(summary.user)}</strong> user · ` +
+    `<strong>${safeText(summary.project)}</strong> project` +
+    `</p>`;
+
+  const items = rows.map((row) => {
+    const scope = scopeBadge(row && row._source_scope);
+    const domain = safeText((row && row.domain) || "");
+    const category = safeText((row && row.category) || "");
+    const gateId = safeText((row && row.gate_id) || "");
+    const gate = safeText((row && row.gate) || "");
+    return `<article class="section-card score-high">` +
+      `<strong>${domain}</strong> ${scope} ` +
+      `<span class="badge">${category}</span>` +
+      `<p>${gate}</p>` +
+      `<div class="preset">gate_id: ${gateId}</div>` +
+      `</article>`;
+  }).join("\n");
+
+  return header + items;
+}
+
 function renderGatesAndInsights(payload) {
-  const gates = safeText((payload || {}).gates_markdown || "No gates snapshot available.");
   const insights = safeText((payload || {}).insights_markdown || "No insight snapshot available.");
   // JSON.stringify escapes " and \\ but NOT < or > — actor names from MCP callers
   // can still inject <script> into innerHTML without an additional escape.
   const summary = safeText(JSON.stringify((payload && payload.actor_summary) || {}));
-  return `<article class="section-card score-high"><strong>Gates</strong><div class="preset">${gates}</div></article>` +
+  return `<article class="section-card score-high"><strong>Gates</strong>${renderGatesList(payload)}</article>` +
     `<article class="section-card score-mid"><strong>Insights</strong><div class="preset">${insights}</div></article>` +
     `<article class="section-card score-low"><strong>Actor summary</strong><div class="preset">${summary}</div></article>`;
 }

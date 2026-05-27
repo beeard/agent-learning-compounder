@@ -143,8 +143,19 @@ def _bucket_recommendations(rows: list[dict[str, Any]]) -> dict[str, list[dict[s
 def build_data_blob(state: StateHandle) -> dict[str, Any]:
     recommendations = alc_query.get_recommendations(state)
     rec_buckets = _bucket_recommendations(recommendations)
+
+    # PR 3: gates + skill context surface both state roots so the operator
+    # sees cross-repo learning (user scope) alongside this project's gates.
+    gates_rows = alc_query.get_gates(state, scope="both")
+    insights_markdown = alc_query.get_skill_context(state, scope="both")
+    # Keep gates_markdown for backwards compatibility (older payloads); the
+    # structured rows above are the canonical surface for new renderers.
     gates_markdown = _read_text(state.reports_dir / "latest-approved-gates.md")
-    insights_markdown = _read_text(state.reports_dir / "latest-skill-context.md")
+    gates_summary = {
+        "total": len(gates_rows),
+        "user": sum(1 for row in gates_rows if row.get("_source_scope") == "user"),
+        "project": sum(1 for row in gates_rows if row.get("_source_scope") == "project"),
+    }
 
     data = {
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -157,6 +168,8 @@ def build_data_blob(state: StateHandle) -> dict[str, Any]:
         "gates_and_insights": {
             "gates_markdown": gates_markdown,
             "insights_markdown": insights_markdown,
+            "gates_rows": gates_rows,
+            "gates_summary": gates_summary,
             "actor_summary": alc_query.get_actor_summary(state),
         },
         "suggestions": _read_suggestions(state),

@@ -173,6 +173,49 @@ class DashboardReadonlyTests(unittest.TestCase):
                 thread.join(timeout=2)
                 httpd.server_close()
 
+    def test_build_data_blob_surfaces_both_scopes(self) -> None:
+        # Project-scope gate.
+        (self.state.reports_dir / "latest-approved-gates.md").write_text(
+            "# Approved Agent Gates\n\n"
+            "- domain: validation\n"
+            "  gate_id: 111111111111\n"
+            "  gate_category: validation-check\n"
+            "  gate: Run pytest before claiming done.\n",
+            encoding="utf-8",
+        )
+        # User-scope gate, written under <user-root>/reports/agent-learning/.
+        user_root = pathlib.Path(self.temp.name) / "user"
+        user_reports = user_root / "reports" / "agent-learning"
+        user_reports.mkdir(parents=True, exist_ok=True)
+        (user_reports / "latest-approved-gates.md").write_text(
+            "# Approved Agent Gates\n\n"
+            "- domain: scope-drift\n"
+            "  gate_id: 222222222222\n"
+            "  gate_category: scope-gate\n"
+            "  gate: Restate active scope before editing.\n",
+            encoding="utf-8",
+        )
+
+        import os
+        previous = os.environ.get("AGENT_LEARNING_USER")
+        os.environ["AGENT_LEARNING_USER"] = str(user_root)
+        try:
+            blob = SERVER.build_data_blob(self.state)
+        finally:
+            if previous is None:
+                os.environ.pop("AGENT_LEARNING_USER", None)
+            else:
+                os.environ["AGENT_LEARNING_USER"] = previous
+
+        gi = blob["gates_and_insights"]
+        self.assertIn("gates_rows", gi)
+        self.assertIn("gates_summary", gi)
+        scopes = {row.get("_source_scope") for row in gi["gates_rows"]}
+        self.assertEqual(scopes, {"user", "project"})
+        self.assertEqual(gi["gates_summary"], {"total": 2, "user": 1, "project": 1})
+        # gates_markdown stays for backwards compatibility.
+        self.assertIn("validation", gi["gates_markdown"])
+
     def test_render_unified_report_launches_http_url(self) -> None:
         baseline = self.state.repo_state_dir / "seed" / "baseline.json"
         baseline.parent.mkdir(parents=True, exist_ok=True)
