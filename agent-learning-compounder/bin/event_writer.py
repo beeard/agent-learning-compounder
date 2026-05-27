@@ -25,6 +25,11 @@ except ImportError:
     from bin.state_paths import resolve_state_dir
 
 try:
+    from state_handle import StateHandle
+except ImportError:
+    from bin.state_handle import StateHandle
+
+try:
     from bin.event_schema import EventV4
 except ImportError:
     from event_schema import EventV4
@@ -57,7 +62,22 @@ _TRANSCRIPT_MARKERS = [
 _BASE64_BLOB = re.compile(r"[A-Za-z0-9+/=]{1024,}")
 
 
-def _state_root() -> pathlib.Path:
+def _state_root(repo: pathlib.Path | None = None) -> pathlib.Path:
+    """Resolve the directory that holds events.jsonl for this write.
+
+    When ``repo`` is supplied, the writer lands in
+    ``StateHandle.for_repo(repo).repo_state_dir`` — the same per-repo
+    directory every reader (index_events, alc_query, dashboard) looks
+    in. Without ``repo``, falls back to the legacy AGENT_LEARNING_STATE_DIR
+    / XDG resolution, which writes to the state ROOT (no /repos/<id>/
+    suffix) — leaving events.jsonl somewhere no project-scope reader
+    will ever find. Callers that know their repo SHOULD pass it; the
+    no-arg path is preserved only for current callers that already
+    point AGENT_LEARNING_STATE_DIR at repo_state_dir via a
+    contextmanager.
+    """
+    if repo is not None:
+        return StateHandle.for_repo(repo).repo_state_dir
     return resolve_state_dir().expanduser()
 
 
@@ -220,11 +240,18 @@ def write_event(
     raw_or_dataclass: Any,
     source: EventSource,
     auto_id_fallback: bool = True,
+    *,
+    repo: pathlib.Path | None = None,
 ) -> str:
     events = [
         _coerce_row(raw_or_dataclass, source, auto_id_fallback=auto_id_fallback),
     ]
-    ids = write_events_batch(events, source=source, auto_id_fallback=auto_id_fallback)
+    ids = write_events_batch(
+        events,
+        source=source,
+        auto_id_fallback=auto_id_fallback,
+        repo=repo,
+    )
     return ids[0]
 
 
@@ -232,9 +259,11 @@ def write_events_batch(
     rows: list[Any] | tuple[Any, ...],
     source: EventSource,
     auto_id_fallback: bool = True,
+    *,
+    repo: pathlib.Path | None = None,
 ) -> list[str]:
     events = [_coerce_row(row, source, auto_id_fallback=auto_id_fallback) for row in rows]
-    state = _state_root()
+    state = _state_root(repo=repo)
     lock_path = _state_lock_path(state)
     output = _events_path(state)
     state.mkdir(parents=True, exist_ok=True)

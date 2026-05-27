@@ -23,6 +23,7 @@ from evaluate_gate_effectiveness import load_sessions
 from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
 from extract_skill_usage import build_usage, read_events
+import index_events
 from map_active_skills import build_map
 from propose_domain_rules import parse_chunks, score_terms
 from queue_dedup import find_duplicates, order_by_keep
@@ -511,6 +512,17 @@ def _refresh_locked(
     except (OSError, json.JSONDecodeError):
         runtime = "auto"
 
+    # Drain events.jsonl into events.sqlite up front so the dashboard +
+    # alc_query reads on the project-scope surface see fresh rows on every
+    # refresh. The indexer is incremental + idempotent and a no-op when
+    # events.jsonl is absent; failures here are non-fatal -- a stale
+    # sqlite is preferable to refusing to refresh everything else.
+    indexed_events = 0
+    try:
+        indexed_events = index_events.run(repo_state)
+    except Exception as exc:  # noqa: BLE001
+        print(f"refresh: index_events skipped: {exc}", file=sys.stderr)
+
     baseline = build_baseline(repo, runtime=runtime)
     skill_map = build_map(repo, runtime=runtime)
     event_log = events or repo_state / "hook-events.jsonl"
@@ -599,6 +611,7 @@ def _refresh_locked(
         "repo_state_dir": str(repo_state),
         "event_log": str(event_log),
         "event_log_present": event_log_present,
+        "events_indexed": indexed_events,
         "queued_candidates": queued,
         "suppressed_needs_review": suppressed,
         "suppressed_redacted": suppressed_redacted,

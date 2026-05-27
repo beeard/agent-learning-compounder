@@ -61,7 +61,14 @@ def _collect_rows(path: pathlib.Path, source: str) -> list[dict]:
     return list(parse_codex_transcript(path))
 
 
-def backfill(since: str, *, claude_dir: str, codex_dir: str, state_dir: str | None) -> int:
+def backfill(
+    since: str,
+    *,
+    claude_dir: str,
+    codex_dir: str,
+    state_dir: str | None,
+    repo: pathlib.Path | None = None,
+) -> int:
     root = dt.datetime.now(dt.timezone.utc)
     cutoff = root - _parse_since(since)
 
@@ -90,7 +97,7 @@ def backfill(since: str, *, claude_dir: str, codex_dir: str, state_dir: str | No
 
     if not rows:
         return 0
-    event_writer.write_events_batch(rows, source="transcript")
+    event_writer.write_events_batch(rows, source="transcript", repo=repo)
     return len(rows)
 
 
@@ -100,6 +107,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--claude-dir", default=os.path.expanduser("~/.claude/projects"))
     parser.add_argument("--codex-dir", default=os.path.expanduser("~/.codex/sessions"))
     parser.add_argument("--state-dir", default=None, help="Override AGENT_LEARNING_STATE_DIR")
+    parser.add_argument(
+        "--repo",
+        default=None,
+        help="Repo root to bind writes to <state>/repos/<repo-id>/ (recommended)",
+    )
     return parser.parse_args(argv)
 
 
@@ -117,8 +129,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     os.environ["AGENT_LEARNING_STATE_DIR"] = str(state)
 
+    repo = pathlib.Path(args.repo).expanduser().resolve() if args.repo else None
     try:
-        count = backfill(args.since, claude_dir=args.claude_dir, codex_dir=args.codex_dir, state_dir=args.state_dir)
+        count = backfill(
+            args.since,
+            claude_dir=args.claude_dir,
+            codex_dir=args.codex_dir,
+            state_dir=args.state_dir,
+            repo=repo,
+        )
         print(f"wrote {count} events")
         return 0
     except Exception as exc:  # noqa: BLE001

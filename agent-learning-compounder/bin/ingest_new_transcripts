@@ -79,7 +79,13 @@ def _collect_rows(path: pathlib.Path, source: str) -> list[dict]:
     return list(parse_codex_transcript(path))
 
 
-def ingest(*, claude_dir: str, codex_dir: str, state_dir: str | None) -> tuple[int, dt.datetime | None]:
+def ingest(
+    *,
+    claude_dir: str,
+    codex_dir: str,
+    state_dir: str | None,
+    repo: pathlib.Path | None = None,
+) -> tuple[int, dt.datetime | None]:
     state = _state_root(state_dir)
     os.environ["AGENT_LEARNING_STATE_DIR"] = str(state)
     cursor = _read_cursor(_cursor_path(state))
@@ -91,7 +97,7 @@ def ingest(*, claude_dir: str, codex_dir: str, state_dir: str | None) -> tuple[i
             parsed = _extract_ts(row)
             if cursor is not None and parsed <= cursor:
                 continue
-            event_writer.write_event(row, source="transcript")
+            event_writer.write_event(row, source="transcript", repo=repo)
             written += 1
             if newest is None or parsed > newest:
                 newest = parsed
@@ -101,7 +107,7 @@ def ingest(*, claude_dir: str, codex_dir: str, state_dir: str | None) -> tuple[i
             parsed = _extract_ts(row)
             if cursor is not None and parsed <= cursor:
                 continue
-            event_writer.write_event(row, source="transcript")
+            event_writer.write_event(row, source="transcript", repo=repo)
             written += 1
             if newest is None or parsed > newest:
                 newest = parsed
@@ -116,13 +122,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--claude-dir", default=os.path.expanduser("~/.claude/projects"))
     parser.add_argument("--codex-dir", default=os.path.expanduser("~/.codex/sessions"))
     parser.add_argument("--state-dir", default=None, help="Override AGENT_LEARNING_STATE_DIR")
+    parser.add_argument(
+        "--repo",
+        default=None,
+        help="Repo root to bind writes to <state>/repos/<repo-id>/ (recommended)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    repo = pathlib.Path(args.repo).expanduser().resolve() if args.repo else None
     try:
-        written, cursor = ingest(claude_dir=args.claude_dir, codex_dir=args.codex_dir, state_dir=args.state_dir)
+        written, cursor = ingest(
+            claude_dir=args.claude_dir,
+            codex_dir=args.codex_dir,
+            state_dir=args.state_dir,
+            repo=repo,
+        )
     except Exception as exc:  # noqa: BLE001
         print(f"ingest_new_transcripts failed: {exc}", file=sys.stderr)
         return 1

@@ -229,7 +229,14 @@ def run(state_dir: pathlib.Path) -> int:
         if rows:
             conn.executemany(insert_sql, rows)
 
-        _write_cursor(cursor_path, cursor)
+        # B12 guard: do NOT advance the cursor when every line in this slice
+        # was quarantined. Pre-fix, an all-skipped run wrote cursor=EOF and
+        # subsequent runs were no-ops -- meaning a transient schema bug (e.g.
+        # B1) could permanently strand `events.jsonl` even after the bug
+        # was fixed. With the guard, the operator can fix the cause and
+        # re-run the indexer to backfill the same offset range.
+        if rows or skipped == 0:
+            _write_cursor(cursor_path, cursor)
         conn.commit()
         return len(rows)
     finally:

@@ -358,7 +358,17 @@ class EventV4:
     def upgrade_from(cls, v3_row: dict[str, Any]) -> "EventV4":
         if not isinstance(v3_row, dict):
             raise ValueError("v3 row must be object")
-        _enforce_boundary(v3_row)
+
+        # Defensive reorder: enforce the boundary on a copy of v3_row that
+        # drops the known abs-path-bearing field (`repo`). v3 collect_hook_event
+        # set `repo` to the absolute repo path; the boundary check would
+        # quarantine every row collected before SCHEMA_VERSION=4. `repo` is
+        # not mapped into the v4 envelope, so dropping it from the
+        # enforcement view is safe -- the secret/transcript/base64 checks on
+        # all other v3 fields (including drop-only fields like `payload`
+        # that downstream consumers may still inspect) still run.
+        v3_for_check = {k: v for k, v in v3_row.items() if k != "repo"}
+        _enforce_boundary(v3_for_check)
 
         payload = {
             "ts": v3_row.get("ts"),

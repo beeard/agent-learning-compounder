@@ -23,16 +23,17 @@ from agent_dispatch import (
     telemetry_config_from_payload,
 )
 from scrub_secrets import scrub
-from state_paths import repo_state_dir, resolve_state_dir
+from state_paths import repo_id, repo_state_dir, resolve_state_dir
 
 
 DEFAULT_MAX_HOOK_EVENT_BYTES = 5_000_000
 MAX_HOOK_EVENT_BACKUPS = 3
 
-# Bumped when bounded optional fields are added. Phase 2B (gate effectiveness)
-# and Phase 3B (causal probe) depend on the discriminator; downstream consumers
-# branch on schema_version.
-SCHEMA_VERSION = 3
+# Schema 4 hashes the `repo` field instead of writing the absolute path,
+# so rows survive the `_enforce_boundary` check in event_schema when they
+# are upgraded into the v4 envelope. (Schema 3 leaked /home/... which made
+# the boundary check quarantine every row at the v3→v4 seam.)
+SCHEMA_VERSION = 4
 
 # Caps for the list-valued passthrough fields. Tight bounds keep telemetry
 # bounded even under accidental fan-out. Per-member cap drops (not truncates)
@@ -123,7 +124,7 @@ def normalize_event(
         "ts": dt.datetime.now(dt.timezone.utc).isoformat(),
         "event": snake(str(raw.get("event") or raw.get("type") or raw.get("hook_event") or "unknown")),
         "runtime": slug(str(raw.get("runtime") or raw.get("source") or "unknown")),
-        "repo": str(repo.resolve()) if repo else None,
+        "repo": repo_id(repo) if repo else None,
         "session_id": safe_session(raw.get("session_id") or raw.get("session") or raw.get("conversation_id")),
     }
     skill = bounded(raw.get("skill") or raw.get("skill_name")) or skill_from_path(path)
