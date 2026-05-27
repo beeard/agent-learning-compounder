@@ -240,6 +240,40 @@ def adapter_command(repo: pathlib.Path, runtime: str, event: str) -> str:
     return " ".join(shlex.quote(part) for part in parts)
 
 
+def warm_loop_command(repo: pathlib.Path) -> str:
+    """Command that warms events.sqlite from hook-events.jsonl.
+
+    Installed alongside the collector adapter on the Stop event so every
+    session-end advances the indexer cursor. Same code path the Claude
+    plugin's hooks.json invokes via the warm_loop_index.py wrapper — the
+    wrapper exists so the plugin Stop list can chain in an additional
+    command without re-implementing argument plumbing here.
+    """
+    script = pathlib.Path(__file__).resolve().parent / "alc_bootstrap_pipeline"
+    parts = [
+        sys.executable,
+        str(script),
+        "--repo",
+        str(repo),
+        "--quiet",
+    ]
+    return " ".join(shlex.quote(part) for part in parts)
+
+
+def is_stop_event(runtime: str, event: str, event_sources: list[dict[str, str]]) -> bool:
+    """True when ``event`` resolves to the Stop hook in ``runtime``.
+
+    Compares the runtime-specific event name against the row in
+    event-sources.json whose normalized key is ``stop``. Keeps Codex's
+    ``Stop`` and any future runtime rename (e.g. ``OnSessionStop``) in
+    sync via the same data source the rest of the installer uses.
+    """
+    for row in event_sources:
+        if row["runtime"] == runtime and row["normalized"] == "stop":
+            return event == row["name"]
+    return False
+
+
 def command_exists(rows: list[Any], command: str) -> bool:
     # Compare both as raw strings and as shlex-split token lists so equivalent
     # commands written with different quoting (e.g. by hand vs. via shlex.quote)
@@ -350,6 +384,7 @@ def merge_runtime_hooks(
     scope: str,
     events: list[str],
     apply: bool,
+    event_sources: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     path = runtime_config_path(repo, runtime, scope)
     data = load_json(path)
@@ -359,6 +394,9 @@ def merge_runtime_hooks(
 
     added: list[str] = []
     already_present: list[str] = []
+    warm_loop_added: list[str] = []
+    warm_loop_already_present: list[str] = []
+    warm_loop_cmd = warm_loop_command(repo)
     for event in events:
         command = adapter_command(repo, runtime, event)
         rows = hooks.setdefault(event, [])
@@ -366,15 +404,28 @@ def merge_runtime_hooks(
             raise ValueError(f"{path} hooks.{event} must be a list")
         if command_exists(rows, command):
             already_present.append(event)
-            continue
-        added.append(event)
-        if apply:
-            rows.append(hook_entry(command))
+        else:
+            added.append(event)
+            if apply:
+                rows.append(hook_entry(command))
+        # PR 5: also wire the warm-loop indexer onto the Stop event so the
+        # sqlite stays current across sessions in both runtimes. Skipped
+        # when the canonical event-sources mapping is unavailable (caller
+        # path doesn't reach the loader) — adapter-only behaviour is the
+        # pre-PR5 baseline.
+        if event_sources is not None and is_stop_event(runtime, event, event_sources):
+            if command_exists(rows, warm_loop_cmd):
+                warm_loop_already_present.append(event)
+            else:
+                warm_loop_added.append(event)
+                if apply:
+                    rows.append(hook_entry(warm_loop_cmd))
 
     backup = None
     gitignore_report: dict[str, Any] | None = None
     tracking_report: dict[str, Any] | None = None
-    if apply and added:
+    any_added = bool(added or warm_loop_added)
+    if apply and any_added:
         if scope == "repo":
             tracking_report = ensure_repo_hook_config_untracked(repo, path)
         if path.exists():
@@ -392,6 +443,8 @@ def merge_runtime_hooks(
         "applied": apply,
         "added": added,
         "already_present": already_present,
+        "warm_loop_added": warm_loop_added,
+        "warm_loop_already_present": warm_loop_already_present,
         "backup": str(backup) if backup else None,
         "gitignore": gitignore_report,
         "tracking": tracking_report,
@@ -561,7 +614,7 @@ def main(argv: list[str] | None = None) -> int:
         reports = []
         for runtime in runtimes:
             runtime_events = events_for_runtime(runtime, event_sources, args.event)
-            reports.append(merge_runtime_hooks(repo, runtime, args.scope, runtime_events, args.apply))
+            reports.append(merge_runtime_hooks(repo, runtime, args.scope, runtime_events, args.apply, event_sources))
     except ValueError as error:
         print(str(error), file=sys.stderr)
         return 1

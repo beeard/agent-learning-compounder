@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""Warm-loop seam: replay_hook_events → index_events for a repo.
+
+Owns the chain that bridges ``hook-events.jsonl`` (written by
+``collect_hook_event`` adapters) and ``events.sqlite`` (read by
+``alc_query``, the dashboard, MCP, and the report pipeline). Same code path
+is called from both ``install.sh --bootstrap-repo`` and the runtime Stop
+hook so a fresh install lands warm and stays warm without operator action.
+
+Idempotent: replay is full each run (deterministic for collector rows that
+already carry ``ts``); ``index_events`` advances a byte cursor on
+``events.jsonl`` and only inserts rows past the cursor.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import pathlib
+import subprocess
+import sys
+
+BIN_DIR = pathlib.Path(__file__).resolve().parent
+if str(BIN_DIR) not in sys.path:
+    sys.path.insert(0, str(BIN_DIR))
+
+import index_events  # noqa: E402  (path-insert before import is intentional)
+from state_handle import StateHandle  # noqa: E402
+
+
+REPLAY_SCRIPT = BIN_DIR / "replay_hook_events"
+
+
+def _run_replay(hook_events: pathlib.Path, events_jsonl: pathlib.Path) -> int:
+    """Invoke ``replay_hook_events`` as a subprocess.
+
+    Subprocess (not in-process import + sys.argv munge) so the replay's
+    CLI argument parsing, output-write boundary checks, and exit code
+    behavior stay isolated from the orchestrator's process state.
+    """
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPLAY_SCRIPT),
+            "--input", str(hook_events),
+            "--output", str(events_jsonl),
+            "--skip-malformed",
+        ],
+        cwd=str(events_jsonl.parent),
+        check=False,
+    )
+    return result.returncode
+
+
+def run(repo: pathlib.Path, *, skip_replay: bool = False, quiet: bool = False) -> int:
+    state = StateHandle.for_repo(repo)
+    state.repo_state_dir.mkdir(parents=True, exist_ok=True)
+
+    hook_events = state.repo_state_dir / "hook-events.jsonl"
+    events_jsonl = state.events_jsonl
+
+    if not skip_replay and hook_events.is_file() and hook_events.stat().st_size > 0:
+        rc = _run_replay(hook_events, events_jsonl)
+        if rc != 0:
+            # Indexer can still run against whatever events.jsonl already
+            # holds; surface the warning but don't unwind the chain.
+            print(
+                f"warn.alc_bootstrap_pipeline_replay_failed code={rc}",
+                file=sys.stderr,
+            )
+
+    added = index_events.run(state.repo_state_dir)
+    if added and not quiet:
+        print(f"alc_bootstrap_pipeline indexed {added} events")
+    return 0
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", required=True, type=pathlib.Path,
+                        help="Repo root whose .agent-learning state to warm.")
+    parser.add_argument("--skip-replay", action="store_true",
+                        help="Skip replay; just run the indexer over events.jsonl as-is.")
+    parser.add_argument("--quiet", action="store_true",
+                        help="Suppress the indexed-count line on stdout.")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    return run(args.repo, skip_replay=args.skip_replay, quiet=args.quiet)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

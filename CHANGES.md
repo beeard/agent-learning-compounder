@@ -1,5 +1,44 @@
 # Changes
 
+## Unreleased — PR 5 — Install-time warm loop
+
+Close the warm-loop seam — `replay_hook_events` → `index_events` — into
+the install bootstrap and the Stop hook. A fresh install lands with a
+populated `events.sqlite` and stays populated without operator action.
+
+- New `bin/alc_bootstrap_pipeline` — single orchestrator for the chain.
+  Called from `install.sh --bootstrap-repo` (after `alc_init`) and from
+  the runtime Stop hook. Idempotent: replay is full each run, the
+  indexer is cursor-driven and only inserts rows past the cursor.
+- `install.sh` — runs the orchestrator at the end of `--bootstrap-repo`
+  (best-effort). Opt out via `--no-first-run-index` or `ALC_FIRST_RUN_INDEX=0`.
+- `hooks/hooks.json` — adds `hooks/warm_loop_index.py` to the Stop list
+  before `refresh_dashboard.py` so the dashboard re-render reads a fresh
+  sqlite.
+- `bin/install_runtime_hooks` — appends the same warm-loop command to
+  the Stop hook in `.codex/hooks.json` and `.claude/settings.local.json`,
+  giving Codex parity with the Claude plugin path.
+- `tests/test_pr5_install_warm_loop.py` — dual-path regression. Exercises
+  both a legacy schema-3 flat row (carrying `repo` as an absolute path)
+  and a fresh `collect_hook_event.normalize_event(...)` row through the
+  bootstrap chain into `events.sqlite`. The same end-to-end gate
+  PR 4's `feedback-schema-version-bumps.md` requires.
+
+### Operator upgrade from pre-PR4
+
+If you installed before PR 4 fixed the schema-stamp mismatch and your
+`events.sqlite` cursor advanced past quarantined rows, drop the cursor
+and re-run the orchestrator. PR 5's bootstrap path does this for fresh
+installs; existing installs need one manual reset:
+
+```sh
+state=<repo>/.agent-learning/repos/<repo-id>
+rm -f "$state/events.sqlite.cursor"
+python3 <skill-root>/bin/alc_bootstrap_pipeline --repo <repo>
+```
+
+See `docs/dev/operator-upgrade-pr4.md` for the longer form.
+
 ## 2026.05.27+review7-plus2.2
 
 Session-lifecycle synthesiser + self-dog-food doc contract.

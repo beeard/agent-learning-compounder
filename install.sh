@@ -30,6 +30,8 @@ Options:
   --runtime MODE         Codex/Claude runtime filter: codex|claude|all|auto
   --bootstrap-repo DIR    Install in project-local runtime roots and initialize the repo
   --apply-runtime-hooks  Apply runtime hooks during bootstrap (default is dry-run)
+  --no-first-run-index   Skip the post-bootstrap warm-loop (replay → index_events).
+                         Default-on; also disabled by ALC_FIRST_RUN_INDEX=0.
   --verify               Run the packaged unittest suite after install
   -h, --help             Show this help
 
@@ -55,6 +57,11 @@ apply_runtime_hooks=0
 verify=0
 target_root_explicit=0
 plugin_mode=0
+# Default-on warm-loop seam at end of --bootstrap-repo: replay hook events
+# into events.jsonl then index into events.sqlite so a fresh install lands
+# with a populated sqlite for alc_query/dashboard/MCP. Opt out via the
+# --no-first-run-index flag or ALC_FIRST_RUN_INDEX=0 env var.
+first_run_index="${ALC_FIRST_RUN_INDEX:-1}"
 # Stays 1 while no runtime/target/bootstrap flag has been passed; the
 # zero-arg install path picks the runtime by filesystem detection and
 # turns on --verify only when this is still 1 after arg parsing.
@@ -287,6 +294,9 @@ while [ "$#" -gt 0 ]; do
     --apply-runtime-hooks)
       apply_runtime_hooks=1
       ;;
+    --no-first-run-index)
+      first_run_index=0
+      ;;
     --verify)
       verify=1
       ;;
@@ -414,6 +424,18 @@ if [ -n "$bootstrap_repo" ]; then
   # Best-effort — failures here don't unwind the bootstrap.
   if ! python3 "$bootstrap_dest/bin/alc_init" --repo "$repo_root" >/dev/null; then
     echo "note: alc_init reported an issue (often just \"mcp not installed\"); install agent-learning-compounder/requirements-optional.txt to get the full first-run flow." >&2
+  fi
+
+  # Warm-loop seam (PR 5): replay any accumulated hook events into
+  # events.jsonl then advance the indexer cursor into events.sqlite. On a
+  # truly fresh install hook-events.jsonl is empty and both steps no-op;
+  # on a repo that already had a pre-bootstrap collector running this
+  # backfills the sqlite the report pipeline, dashboard, and MCP read.
+  # Best-effort — operator can re-run by hand if this trips.
+  if [ "$first_run_index" -eq 1 ]; then
+    if ! python3 "$bootstrap_dest/bin/alc_bootstrap_pipeline" --repo "$repo_root"; then
+      echo "note: alc_bootstrap_pipeline reported an issue; re-run with: python3 $bootstrap_dest/bin/alc_bootstrap_pipeline --repo $repo_root" >&2
+    fi
   fi
 
   printf 'bootstrapped agent-learning-compounder into: %s\n' "$repo_root"
