@@ -11,6 +11,31 @@ Production version string is `2026.05.27+review7-plus2.2`. When changing behavio
 consumer is a fresh repo that just installed the package — paths, imports, and entrypoints
 must work from the installed location, not just from this working tree.
 
+## Starting a dev session in this repo
+
+Plugin-level hooks (warm-loop on Stop, understand-anything auto-update on
+git commit, the inner skill's session-report renderer) don't reliably
+merge into the active Claude session via the plugin loader. Result: a
+fresh `claude` here would NOT fire the warm-loop, NOT auto-refresh the
+knowledge graph, NOT regenerate the dashboard on session end. **Run this
+once before starting work** (idempotent — safe to re-run):
+
+```bash
+bash scripts/dev-session-setup.sh
+```
+
+It rewrites `<repo>/.claude/settings.local.json` so `claude` (started
+from the repo root) picks up the full hook stack — collector adapter,
+warm-loop, dashboard refresh, session-report, auto-update. Then:
+
+```bash
+cd /home/tth/work/active/agent-learning-compounder
+claude
+```
+
+Re-run the setup script after pulling, after a plugin update, or any
+time `scripts/dev-session-setup.sh --verify` reports a missing hook.
+
 ## Common commands
 
 All test/dev commands run from inside `agent-learning-compounder/` (the inner skill dir),
