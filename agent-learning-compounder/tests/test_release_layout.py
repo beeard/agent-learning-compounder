@@ -66,6 +66,10 @@ class ReleaseLayoutTests(unittest.TestCase):
                 target = root / "nested" / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("cache", encoding="utf-8")
+            survivor_dir = root / "nested" / "source-data"
+            survivor_dir.mkdir(parents=True, exist_ok=True)
+            survivor_file = survivor_dir / "keep.txt"
+            survivor_file.write_text("keep", encoding="utf-8")
 
             command = (
                 f". {REPO_ROOT / 'scripts' / 'sanitize_skill_tree.sh'} && "
@@ -85,6 +89,7 @@ class ReleaseLayoutTests(unittest.TestCase):
                 if release_layout.is_sanitizer_excluded(path.relative_to(root))
             ]
             self.assertEqual(leaked, [])
+            self.assertTrue(survivor_file.exists())
 
     def test_package_and_manifest_policy_match_layout_module(self) -> None:
         package = _json(REPO_ROOT / "package.json")
