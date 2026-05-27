@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "c221cf236ff8d6c7f6475a18c96584e23adcd379",
-  "generatedAt": "2026-05-27T07:54:26.000Z",
+  "gitCommitHash": "ed49da427f3043ecbec7ac011b992672eba48907",
+  "generatedAt": "2026-05-27T09:20:10.478Z",
   "files": {
     ".claude-plugin/marketplace.json": {
       "filePath": ".claude-plugin/marketplace.json",
@@ -6091,456 +6091,271 @@
     },
     "agent-learning-compounder/bin/event_schema.py": {
       "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "contentHash": "4c3d55be2a5b7651b53bb808e1f613b88ec9cac1345861c71f45fcc24f509753",
+      "contentHash": "25c14759887fd2d541b7f24d4f041ab791da3abdda1fa946868098ab0f1ce133",
       "functions": [
         {
-          "name": "_coerce_str",
-          "params": [
-            "value",
-            "max_len"
-          ],
-          "returnType": "str | None",
-          "exported": true,
-          "lineCount": 7
+          "name": "_coerce_str"
         },
         {
-          "name": "_coerce_optional_int",
-          "params": [
-            "value"
-          ],
-          "returnType": "int | None",
-          "exported": true,
-          "lineCount": 10
+          "name": "_coerce_optional_int"
         },
         {
-          "name": "_coerce_optional_float",
-          "params": [
-            "value"
-          ],
-          "returnType": "float | None",
-          "exported": true,
-          "lineCount": 11
+          "name": "_coerce_optional_float"
         },
         {
-          "name": "_coerce_optional_bool",
-          "params": [
-            "value"
-          ],
-          "returnType": "bool | None",
-          "exported": true,
-          "lineCount": 10
+          "name": "_coerce_optional_bool"
         },
         {
-          "name": "_ensure_iso8601",
-          "params": [
-            "value"
-          ],
-          "returnType": "str",
-          "exported": true,
-          "lineCount": 7
+          "name": "_ensure_iso8601"
         },
         {
-          "name": "_iter_string_values",
-          "params": [
-            "payload"
-          ],
-          "exported": true,
-          "lineCount": 9
+          "name": "_iter_string_values"
         },
         {
-          "name": "_looks_like_base64",
-          "params": [
-            "value"
-          ],
-          "returnType": "bool",
-          "exported": true,
-          "lineCount": 3
+          "name": "_looks_like_base64"
         },
         {
-          "name": "_enforce_boundary",
-          "params": [
-            "payload",
-            "allow_patch_payload"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 16
+          "name": "_enforce_boundary"
         },
         {
-          "name": "_json_type_for_type",
-          "params": [
-            "annotation"
-          ],
-          "returnType": "dict[str, Any]",
-          "exported": true,
-          "lineCount": 45
+          "name": "_json_type_for_type"
         },
         {
-          "name": "_json_schema_for_dataclass",
-          "params": [
-            "model"
-          ],
-          "returnType": "dict[str, Any]",
-          "exported": true,
-          "lineCount": 13
+          "name": "_json_schema_for_dataclass"
+        },
+        {
+          "name": "deterministic_id"
+        },
+        {
+          "name": "sqlite_ddl"
+        },
+        {
+          "name": "jsonschema"
+        },
+        {
+          "name": "from_dict"
+        },
+        {
+          "name": "upgrade_from"
+        },
+        {
+          "name": "to_dict"
+        },
+        {
+          "name": "_auto_event_id"
+        },
+        {
+          "name": "_normalize_actor_kind"
+        },
+        {
+          "name": "_parse_actor"
+        },
+        {
+          "name": "_parse_telemetry"
+        },
+        {
+          "name": "_parse_chain_link"
         }
       ],
       "classes": [
         {
-          "name": "ActorInfo",
-          "methods": [],
-          "properties": [
-            "kind",
-            "name",
-            "model",
-            "parent_actor_id"
-          ],
-          "exported": true,
-          "lineCount": 5
+          "name": "ActorInfo"
         },
         {
-          "name": "Telemetry",
-          "methods": [],
-          "properties": [
-            "duration_ms",
-            "tokens_in",
-            "tokens_out",
-            "cache_read_tokens",
-            "cache_creation_tokens",
-            "cost_usd",
-            "interrupted"
-          ],
-          "exported": true,
-          "lineCount": 8
+          "name": "Telemetry"
         },
         {
-          "name": "ChainLink",
-          "methods": [],
-          "properties": [
-            "role",
-            "id"
-          ],
-          "exported": true,
-          "lineCount": 3
+          "name": "ChainLink"
         },
         {
-          "name": "EventV4",
-          "methods": [
-            "deterministic_id",
-            "sqlite_ddl",
-            "jsonschema",
-            "from_dict",
-            "upgrade_from",
-            "to_dict",
-            "_auto_event_id",
-            "_normalize_actor_kind",
-            "_parse_actor",
-            "_parse_telemetry",
-            "_parse_chain_link"
-          ],
-          "properties": [
-            "event_id",
-            "ts",
-            "event",
-            "schema_version",
-            "actor",
-            "telemetry",
-            "correlation_chain",
-            "parent_event_id",
-            "tool_server",
-            "error_class"
-          ],
-          "exported": true,
-          "lineCount": 244
+          "name": "EventV4"
         }
       ],
       "imports": [
         {
-          "source": "datetime",
+          "source": "__future__",
           "specifiers": [
-            "dt"
-          ]
-        },
-        {
-          "source": "hashlib",
-          "specifiers": [
-            "hashlib"
-          ]
-        },
-        {
-          "source": "json",
-          "specifiers": [
-            "json"
-          ]
-        },
-        {
-          "source": "re",
-          "specifiers": [
-            "re"
-          ]
-        },
-        {
-          "source": "dataclasses",
-          "specifiers": [
-            "MISSING",
+            "annotations\n\nimport datetime as dt\nimport hashlib\nimport json\nimport re\nfrom dataclasses import MISSING",
             "dataclass",
             "field",
             "fields",
-            "asdict"
-          ]
-        },
-        {
-          "source": "types",
-          "specifiers": [
-            "UnionType"
-          ]
-        },
-        {
-          "source": "typing",
-          "specifiers": [
-            "Any",
+            "asdict\nfrom types import UnionType\nfrom typing import Any",
             "get_args",
+            "get_origin\n\nMAX_LINE_LEN"
+          ]
+        },
+        {
+          "source": "datetime as dt\nimport hashlib\nimport json\nimport re\nfrom dataclasses import MISSING",
+          "specifiers": [
+            "datetime as dt\nimport hashlib\nimport json\nimport re\nfrom dataclasses import MISSING"
+          ]
+        },
+        {
+          "source": "dataclass",
+          "specifiers": [
+            "dataclass"
+          ]
+        },
+        {
+          "source": "field",
+          "specifiers": [
+            "field"
+          ]
+        },
+        {
+          "source": "fields",
+          "specifiers": [
+            "fields"
+          ]
+        },
+        {
+          "source": "asdict\nfrom types import UnionType\nfrom typing import Any",
+          "specifiers": [
+            "asdict\nfrom types import UnionType\nfrom typing import Any"
+          ]
+        },
+        {
+          "source": "get_args",
+          "specifiers": [
+            "get_args"
+          ]
+        },
+        {
+          "source": "get_origin",
+          "specifiers": [
             "get_origin"
           ]
         }
       ],
-      "exports": [
-        "_coerce_str",
-        "_coerce_optional_int",
-        "_coerce_optional_float",
-        "_coerce_optional_bool",
-        "_ensure_iso8601",
-        "_iter_string_values",
-        "_looks_like_base64",
-        "_enforce_boundary",
-        "_json_type_for_type",
-        "_json_schema_for_dataclass",
-        "ActorInfo",
-        "Telemetry",
-        "ChainLink",
-        "EventV4"
-      ],
-      "totalLines": 462,
+      "exports": [],
+      "totalLines": 472,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/bin/event_writer.py": {
       "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "contentHash": "2905d79b22e0aa779f6dd379eb17279a82b196401dfeac1742a70922f93e5781",
+      "contentHash": "f9b53d09724dc207f66927c95d98c883296138636f07e6daccf81c21a12da973",
       "functions": [
         {
-          "name": "_state_root",
-          "params": [],
-          "returnType": "pathlib.Path",
-          "exported": true,
-          "lineCount": 2
+          "name": "_state_root"
         },
         {
-          "name": "_state_lock_path",
-          "params": [
-            "state"
-          ],
-          "returnType": "pathlib.Path",
-          "exported": true,
-          "lineCount": 2
+          "name": "_state_lock_path"
         },
         {
-          "name": "_events_path",
-          "params": [
-            "state"
-          ],
-          "returnType": "pathlib.Path",
-          "exported": true,
-          "lineCount": 2
+          "name": "_events_path"
         },
         {
-          "name": "_acquire_state_lock",
-          "params": [
-            "lock_path"
-          ],
-          "exported": true,
-          "lineCount": 11
+          "name": "_acquire_state_lock"
         },
         {
-          "name": "_assert_regular_file",
-          "params": [
-            "path",
-            "label"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 9
+          "name": "_assert_regular_file"
         },
         {
-          "name": "_looks_like_blob_key",
-          "params": [
-            "path"
-          ],
-          "returnType": "bool",
-          "exported": true,
-          "lineCount": 3
+          "name": "_looks_like_blob_key"
         },
         {
-          "name": "_iter_string_fields",
-          "params": [
-            "node",
-            "prefix"
-          ],
-          "returnType": "list[tuple[str, str]]",
-          "exported": true,
-          "lineCount": 15
+          "name": "_iter_string_fields"
         },
         {
-          "name": "_scrub_strings",
-          "params": [
-            "value"
-          ],
-          "returnType": "Any",
-          "exported": true,
-          "lineCount": 13
+          "name": "_scrub_strings"
         },
         {
-          "name": "_bound_text",
-          "params": [
-            "value"
-          ],
-          "returnType": "Any",
-          "exported": true,
-          "lineCount": 11
+          "name": "_bound_text"
         },
         {
-          "name": "_boundary_checks",
-          "params": [
-            "event",
-            "source"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 13
+          "name": "_boundary_checks"
         },
         {
-          "name": "_coerce_row",
-          "params": [
-            "raw_or_dataclass",
-            "source",
-            "auto_id_fallback"
-          ],
-          "returnType": "dict[str, Any]",
-          "exported": true,
-          "lineCount": 45
+          "name": "_coerce_row"
         },
         {
-          "name": "write_event",
-          "params": [
-            "raw_or_dataclass",
-            "source",
-            "auto_id_fallback"
-          ],
-          "returnType": "str",
-          "exported": true,
-          "lineCount": 10
+          "name": "write_event"
         },
         {
-          "name": "write_events_batch",
-          "params": [
-            "rows",
-            "source",
-            "auto_id_fallback"
-          ],
-          "returnType": "list[str]",
-          "exported": true,
-          "lineCount": 24
+          "name": "write_events_batch"
         },
         {
-          "name": "_rotate_if_needed",
-          "params": [
-            "output"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 13
+          "name": "_rotate_if_needed"
         }
       ],
       "classes": [],
       "imports": [
         {
-          "source": "contextlib",
+          "source": "__future__",
           "specifiers": [
-            "contextlib"
+            "annotations\n\nimport contextlib\nimport datetime as dt\nimport fcntl\nimport json\nimport os\nimport pathlib\nimport re\nimport stat\nfrom typing import Any",
+            "Literal\n\nfrom collections"
           ]
         },
         {
-          "source": "datetime",
+          "source": "scrub_secrets",
           "specifiers": [
-            "dt"
+            "scrub\nexcept ImportError"
           ]
         },
         {
-          "source": "fcntl",
+          "source": "bin.scrub_secrets",
           "specifiers": [
-            "fcntl"
+            "scrub\n\ntry"
           ]
         },
         {
-          "source": "json",
+          "source": "state_paths",
           "specifiers": [
-            "json"
+            "resolve_state_dir\nexcept ImportError"
           ]
         },
         {
-          "source": "os",
+          "source": "bin.state_paths",
           "specifiers": [
-            "os"
+            "resolve_state_dir\n\ntry"
           ]
         },
         {
-          "source": "pathlib",
+          "source": "state_handle",
           "specifiers": [
-            "pathlib"
+            "StateHandle\nexcept ImportError"
           ]
         },
         {
-          "source": "re",
+          "source": "bin.state_handle",
           "specifiers": [
-            "re"
+            "StateHandle\n\ntry"
           ]
         },
         {
-          "source": "stat",
+          "source": "bin.event_schema",
           "specifiers": [
-            "stat"
+            "EventV4\nexcept ImportError"
           ]
         },
         {
-          "source": "typing",
+          "source": "event_schema",
           "specifiers": [
-            "Any",
-            "Literal"
+            "EventV4\n\n\nMAX_LINE_LEN"
           ]
         },
         {
-          "source": "collections.abc",
+          "source": "contextlib\nimport datetime as dt\nimport fcntl\nimport json\nimport os\nimport pathlib\nimport re\nimport stat\nfrom typing import Any",
           "specifiers": [
-            "Mapping"
+            "contextlib\nimport datetime as dt\nimport fcntl\nimport json\nimport os\nimport pathlib\nimport re\nimport stat\nfrom typing import Any"
+          ]
+        },
+        {
+          "source": "Literal\n\nfrom collections.abc import Mapping",
+          "specifiers": [
+            "Literal\n\nfrom collections.abc import Mapping"
+          ]
+        },
+        {
+          "source": "secrets as _secrets",
+          "specifiers": [
+            "secrets as _secrets"
           ]
         }
       ],
-      "exports": [
-        "_state_root",
-        "_state_lock_path",
-        "_events_path",
-        "_acquire_state_lock",
-        "_assert_regular_file",
-        "_looks_like_blob_key",
-        "_iter_string_fields",
-        "_scrub_strings",
-        "_bound_text",
-        "_boundary_checks",
-        "_coerce_row",
-        "write_event",
-        "write_events_batch",
-        "_rotate_if_needed"
-      ],
-      "totalLines": 270,
+      "exports": [],
+      "totalLines": 299,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/bin/exec_sandbox": {
@@ -11444,114 +11259,75 @@
     },
     "agent-learning-compounder/bin/sandbox_run_state.py": {
       "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
-      "contentHash": "5c7c33aab88b82ac24739bc29c56381879e3fd62534067c48612f5f0982ad2f8",
+      "contentHash": "cdd67f6eb81e4f71963f8b435f966c0a6803fcff11e1eb598412a168bf7ec07c",
       "functions": [
         {
-          "name": "_pid_alive",
-          "params": [
-            "pid"
-          ],
-          "returnType": "bool",
-          "exported": true,
-          "lineCount": 7
+          "name": "__init__"
         },
         {
-          "name": "_cleanup_worktree",
-          "params": [
-            "repo",
-            "worktree"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 11
+          "name": "set_status"
         },
         {
-          "name": "_emit_recovered_event",
-          "params": [
-            "exec_id",
-            "worktree_dir",
-            "actor"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 22
+          "name": "read_status"
+        },
+        {
+          "name": "delete_status"
+        },
+        {
+          "name": "recover_stale"
+        },
+        {
+          "name": "close"
+        },
+        {
+          "name": "ensure_worktree_dir"
+        },
+        {
+          "name": "_open_conn"
+        },
+        {
+          "name": "_pid_alive"
+        },
+        {
+          "name": "_cleanup_worktree"
+        },
+        {
+          "name": "_emit_recovered_event"
         }
       ],
       "classes": [
         {
-          "name": "RunStateTracker",
-          "methods": [
-            "__init__",
-            "set_status",
-            "read_status",
-            "delete_status",
-            "recover_stale",
-            "close",
-            "ensure_worktree_dir",
-            "_open_conn"
-          ],
-          "properties": [],
-          "exported": true,
-          "lineCount": 129
+          "name": "RunStateTracker"
         }
       ],
       "imports": [
         {
-          "source": "os",
+          "source": "__future__",
           "specifiers": [
-            "os"
+            "annotations\n\nimport os\nimport pathlib\nimport shutil\nimport sqlite3\nimport subprocess\nimport time\nfrom typing import TYPE_CHECKING\n\nfrom event_writer import write_event\n\ntry"
           ]
         },
         {
-          "source": "pathlib",
+          "source": "state_handle",
           "specifiers": [
-            "pathlib"
+            "StateHandle\nexcept ImportError"
           ]
         },
         {
-          "source": "shutil",
+          "source": "bin.state_handle",
           "specifiers": [
-            "shutil"
+            "StateHandle\n\n\nclass RunStateTracker"
           ]
         },
         {
-          "source": "sqlite3",
+          "source": "os\nimport pathlib\nimport shutil\nimport sqlite3\nimport subprocess\nimport time\nfrom typing import TYPE_CHECKING\n\nfrom event_writer import write_event",
           "specifiers": [
-            "sqlite3"
-          ]
-        },
-        {
-          "source": "subprocess",
-          "specifiers": [
-            "subprocess"
-          ]
-        },
-        {
-          "source": "time",
-          "specifiers": [
-            "time"
-          ]
-        },
-        {
-          "source": "typing",
-          "specifiers": [
-            "TYPE_CHECKING"
-          ]
-        },
-        {
-          "source": "event_writer",
-          "specifiers": [
-            "write_event"
+            "os\nimport pathlib\nimport shutil\nimport sqlite3\nimport subprocess\nimport time\nfrom typing import TYPE_CHECKING\n\nfrom event_writer import write_event"
           ]
         }
       ],
-      "exports": [
-        "RunStateTracker",
-        "_pid_alive",
-        "_cleanup_worktree",
-        "_emit_recovered_event"
-      ],
-      "totalLines": 208,
+      "exports": [],
+      "totalLines": 215,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/bin/scrub_secrets": {
@@ -30182,169 +29958,122 @@
     },
     "agent-learning-compounder/tests/test_exec_sandbox_eval.py": {
       "filePath": "agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-      "contentHash": "d853771b8d939290baf73f7e993c0c886b7c9c591846dcb3fc99d53d2b88c89a",
+      "contentHash": "f6b888b93de95e9f252bee4b9a23d8c8232e6a6649480e3b86e682c02bddf2b0",
       "functions": [
         {
-          "name": "_write_file",
-          "params": [
-            "path",
-            "content"
-          ],
-          "returnType": "None",
-          "exported": true,
-          "lineCount": 3
+          "name": "_write_file"
+        },
+        {
+          "name": "setUp"
+        },
+        {
+          "name": "tearDown"
+        },
+        {
+          "name": "_run"
+        },
+        {
+          "name": "_read_events"
+        },
+        {
+          "name": "test_eval_scope_runs_with_mocked_alc_invoke"
+        },
+        {
+          "name": "test_eval_supports_parent_event_chain"
+        },
+        {
+          "name": "test_eval_disallows_recursive_depth_guard"
         }
       ],
       "classes": [
         {
-          "name": "ExecSandboxEvalTests",
-          "methods": [
-            "setUp",
-            "tearDown",
-            "_run",
-            "_read_events",
-            "test_eval_scope_runs_with_mocked_alc_invoke",
-            "test_eval_supports_parent_event_chain",
-            "test_eval_disallows_recursive_depth_guard"
-          ],
-          "properties": [],
-          "exported": true,
-          "lineCount": 97
+          "name": "ExecSandboxEvalTests"
         }
       ],
       "imports": [
         {
-          "source": "json",
+          "source": "__future__",
           "specifiers": [
-            "json"
+            "annotations\n\nimport json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport unittest\n\nREPO_ROOT"
           ]
         },
         {
-          "source": "os",
+          "source": "json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport unittest",
           "specifiers": [
-            "os"
+            "json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport unittest"
           ]
         },
         {
-          "source": "pathlib",
+          "source": "state_handle",
           "specifiers": [
-            "pathlib"
-          ]
-        },
-        {
-          "source": "subprocess",
-          "specifiers": [
-            "subprocess"
-          ]
-        },
-        {
-          "source": "sys",
-          "specifiers": [
-            "sys"
-          ]
-        },
-        {
-          "source": "tempfile",
-          "specifiers": [
-            "tempfile"
-          ]
-        },
-        {
-          "source": "unittest",
-          "specifiers": [
-            "unittest"
+            "state_handle"
           ]
         }
       ],
-      "exports": [
-        "_write_file",
-        "ExecSandboxEvalTests"
-      ],
-      "totalLines": 123,
+      "exports": [],
+      "totalLines": 131,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/tests/test_exec_sandbox_read.py": {
       "filePath": "agent-learning-compounder/tests/test_exec_sandbox_read.py",
-      "contentHash": "be9afa74501aeb3c3369e6fbfb7c1822a8aae577d7c61cffc5be44bd38099300",
-      "functions": [],
+      "contentHash": "3432d28f5434378d74e7697c1c4e3162130ca3f3ff91e56dedcc4f8937270e4e",
+      "functions": [
+        {
+          "name": "setUp"
+        },
+        {
+          "name": "tearDown"
+        },
+        {
+          "name": "events_jsonl"
+        },
+        {
+          "name": "_run"
+        },
+        {
+          "name": "_read_events"
+        },
+        {
+          "name": "test_allowlisted_read_command_executes_and_emits_event"
+        },
+        {
+          "name": "test_forbidden_read_command_returns_3_and_is_blocked"
+        },
+        {
+          "name": "test_timeout_exit_code_124"
+        },
+        {
+          "name": "test_sleep"
+        },
+        {
+          "name": "test_network_flag_is_present_for_allowed_python_command"
+        },
+        {
+          "name": "test_has_flag"
+        }
+      ],
       "classes": [
         {
-          "name": "ExecSandboxReadTests",
-          "methods": [
-            "setUp",
-            "tearDown",
-            "events_jsonl",
-            "_run",
-            "_read_events",
-            "test_allowlisted_read_command_executes_and_emits_event",
-            "test_forbidden_read_command_returns_3_and_is_blocked",
-            "test_timeout_exit_code_124",
-            "test_network_flag_is_present_for_allowed_python_command"
-          ],
-          "properties": [],
-          "exported": true,
-          "lineCount": 122
+          "name": "ExecSandboxReadTests"
+        },
+        {
+          "name": "Slow"
+        },
+        {
+          "name": "NoNetwork"
         }
       ],
       "imports": [
         {
-          "source": "json",
+          "source": "__future__",
           "specifiers": [
-            "json"
+            "annotations\n\nimport json\nimport os\nimport pathlib\nimport shlex\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport time\nimport unittest\n\nREPO_ROOT"
           ]
         },
         {
-          "source": "os",
+          "source": "json\nimport os\nimport pathlib\nimport shlex\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport time\nimport unittest",
           "specifiers": [
-            "os"
-          ]
-        },
-        {
-          "source": "pathlib",
-          "specifiers": [
-            "pathlib"
-          ]
-        },
-        {
-          "source": "shlex",
-          "specifiers": [
-            "shlex"
-          ]
-        },
-        {
-          "source": "subprocess",
-          "specifiers": [
-            "subprocess"
-          ]
-        },
-        {
-          "source": "sys",
-          "specifiers": [
-            "sys"
-          ]
-        },
-        {
-          "source": "tempfile",
-          "specifiers": [
-            "tempfile"
-          ]
-        },
-        {
-          "source": "textwrap",
-          "specifiers": [
-            "textwrap"
-          ]
-        },
-        {
-          "source": "time",
-          "specifiers": [
-            "time"
-          ]
-        },
-        {
-          "source": "unittest",
-          "specifiers": [
-            "unittest"
+            "json\nimport os\nimport pathlib\nimport shlex\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport time\nimport unittest"
           ]
         },
         {
@@ -30352,87 +30081,87 @@
           "specifiers": [
             "state_handle"
           ]
+        },
+        {
+          "source": "time\n                import unittest",
+          "specifiers": [
+            "time\n                import unittest"
+          ]
+        },
+        {
+          "source": "os\n                import unittest",
+          "specifiers": [
+            "os\n                import unittest"
+          ]
         }
       ],
-      "exports": [
-        "ExecSandboxReadTests"
-      ],
-      "totalLines": 148,
+      "exports": [],
+      "totalLines": 155,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/tests/test_exec_sandbox_security.py": {
       "filePath": "agent-learning-compounder/tests/test_exec_sandbox_security.py",
-      "contentHash": "2e95b724e857eb5b89ff49bce2a340ca82805f7bf4219418ebf29bedf95ba54f",
-      "functions": [],
+      "contentHash": "25fb88bd68282e45ba2e0709d4139cde1eaf84be7391f3d97c69caee6d076be1",
+      "functions": [
+        {
+          "name": "setUp"
+        },
+        {
+          "name": "tearDown"
+        },
+        {
+          "name": "events_jsonl"
+        },
+        {
+          "name": "_repo_state_dir"
+        },
+        {
+          "name": "_run"
+        },
+        {
+          "name": "_read_events"
+        },
+        {
+          "name": "test_read_sanitizes_network_env_and_enables_no_network"
+        },
+        {
+          "name": "test_flags"
+        },
+        {
+          "name": "test_read_blocks_write_outside_repo_scope"
+        },
+        {
+          "name": "test_read_path_traversal_is_blocked"
+        },
+        {
+          "name": "test_read_rejects_shell_metacharacter_bypasses"
+        },
+        {
+          "name": "test_secret_is_scrubbed_in_event_payload_command"
+        },
+        {
+          "name": "test_stdout_payload_truncated_to_100kb"
+        }
+      ],
       "classes": [
         {
-          "name": "ExecSandboxSecurityTests",
-          "methods": [
-            "setUp",
-            "tearDown",
-            "events_jsonl",
-            "_repo_state_dir",
-            "_run",
-            "_read_events",
-            "test_read_sanitizes_network_env_and_enables_no_network",
-            "test_read_blocks_write_outside_repo_scope",
-            "test_read_path_traversal_is_blocked",
-            "test_read_rejects_shell_metacharacter_bypasses",
-            "test_secret_is_scrubbed_in_event_payload_command",
-            "test_stdout_payload_truncated_to_100kb"
-          ],
-          "properties": [],
-          "exported": true,
-          "lineCount": 144
+          "name": "ExecSandboxSecurityTests"
+        },
+        {
+          "name": "NetworkEnv"
         }
       ],
       "imports": [
         {
-          "source": "json",
+          "source": "__future__",
           "specifiers": [
-            "json"
+            "annotations\n\nimport json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport unittest\n\nREPO_ROOT"
           ]
         },
         {
-          "source": "os",
+          "source": "json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport unittest",
           "specifiers": [
-            "os"
-          ]
-        },
-        {
-          "source": "pathlib",
-          "specifiers": [
-            "pathlib"
-          ]
-        },
-        {
-          "source": "subprocess",
-          "specifiers": [
-            "subprocess"
-          ]
-        },
-        {
-          "source": "sys",
-          "specifiers": [
-            "sys"
-          ]
-        },
-        {
-          "source": "tempfile",
-          "specifiers": [
-            "tempfile"
-          ]
-        },
-        {
-          "source": "textwrap",
-          "specifiers": [
-            "textwrap"
-          ]
-        },
-        {
-          "source": "unittest",
-          "specifiers": [
-            "unittest"
+            "json\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport tempfile\nimport textwrap\nimport unittest"
           ]
         },
         {
@@ -30440,93 +30169,78 @@
           "specifiers": [
             "state_handle"
           ]
+        },
+        {
+          "source": "os\n                import unittest",
+          "specifiers": [
+            "os\n                import unittest"
+          ]
         }
       ],
-      "exports": [
-        "ExecSandboxSecurityTests"
-      ],
-      "totalLines": 168,
+      "exports": [],
+      "totalLines": 169,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/tests/test_exec_sandbox_worktree.py": {
       "filePath": "agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-      "contentHash": "812fc6e560d4e0337d47c59ec7e3523f98263080a0bcc00cc5268140b1954e02",
-      "functions": [],
+      "contentHash": "e6a7a8300fe3e3431248a1bf80235dc88d1888ab4f409f9de3463b81d6a72697",
+      "functions": [
+        {
+          "name": "setUp"
+        },
+        {
+          "name": "tearDown"
+        },
+        {
+          "name": "events_jsonl"
+        },
+        {
+          "name": "events_sqlite"
+        },
+        {
+          "name": "_repo_state_dir"
+        },
+        {
+          "name": "_run"
+        },
+        {
+          "name": "_read_events"
+        },
+        {
+          "name": "_state_handle"
+        },
+        {
+          "name": "test_worktree_command_writes_and_cleans"
+        },
+        {
+          "name": "test_concurrent_worktree_runs_are_isolated"
+        },
+        {
+          "name": "worker"
+        },
+        {
+          "name": "test_timeout_command_still_cleans_worktree"
+        },
+        {
+          "name": "test_worktree_scope_cleans_stale_recovery_run"
+        }
+      ],
       "classes": [
         {
-          "name": "ExecSandboxWorktreeTests",
-          "methods": [
-            "setUp",
-            "tearDown",
-            "events_jsonl",
-            "events_sqlite",
-            "_repo_state_dir",
-            "_run",
-            "_read_events",
-            "_state_handle",
-            "test_worktree_command_writes_and_cleans",
-            "test_concurrent_worktree_runs_are_isolated",
-            "test_timeout_command_still_cleans_worktree",
-            "test_worktree_scope_cleans_stale_recovery_run"
-          ],
-          "properties": [],
-          "exported": true,
-          "lineCount": 172
+          "name": "ExecSandboxWorktreeTests"
         }
       ],
       "imports": [
         {
-          "source": "concurrent.futures",
+          "source": "__future__",
           "specifiers": [
-            "concurrent.futures"
+            "annotations\n\nimport concurrent"
           ]
         },
         {
-          "source": "json",
+          "source": "concurrent.futures\nimport json\nimport os\nimport pathlib\nimport sqlite3\nimport subprocess\nimport sys\nimport tempfile\nimport unittest",
           "specifiers": [
-            "json"
-          ]
-        },
-        {
-          "source": "os",
-          "specifiers": [
-            "os"
-          ]
-        },
-        {
-          "source": "pathlib",
-          "specifiers": [
-            "pathlib"
-          ]
-        },
-        {
-          "source": "sqlite3",
-          "specifiers": [
-            "sqlite3"
-          ]
-        },
-        {
-          "source": "subprocess",
-          "specifiers": [
-            "subprocess"
-          ]
-        },
-        {
-          "source": "sys",
-          "specifiers": [
-            "sys"
-          ]
-        },
-        {
-          "source": "tempfile",
-          "specifiers": [
-            "tempfile"
-          ]
-        },
-        {
-          "source": "unittest",
-          "specifiers": [
-            "unittest"
+            "concurrent.futures\nimport json\nimport os\nimport pathlib\nimport sqlite3\nimport subprocess\nimport sys\nimport tempfile\nimport unittest"
           ]
         },
         {
@@ -30536,10 +30250,8 @@
           ]
         }
       ],
-      "exports": [
-        "ExecSandboxWorktreeTests"
-      ],
-      "totalLines": 197,
+      "exports": [],
+      "totalLines": 198,
       "hasStructuralAnalysis": true
     },
     "agent-learning-compounder/tests/test_hooks.py": {
@@ -32331,6 +32043,85 @@
       "exports": [
         "ScopedGatesPanel"
       ]
+    },
+    "agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py": {
+      "filePath": "agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "contentHash": "b5bcf319b97dafe285cfbe73d8bdd81d5d8cd3c370ff8eb10f09fe0ea97d7add",
+      "functions": [
+        {
+          "name": "setUp"
+        },
+        {
+          "name": "tearDown"
+        },
+        {
+          "name": "_state"
+        },
+        {
+          "name": "test_event_writer_repo_arg_lands_in_repo_state_dir"
+        },
+        {
+          "name": "test_b1_b3_round_trip_event_visible_via_alc_query"
+        },
+        {
+          "name": "test_b1_hashed_repo_field_passes_upgrade_from"
+        },
+        {
+          "name": "test_b1_legacy_v3_row_with_abs_repo_now_upgrades"
+        },
+        {
+          "name": "test_collect_hook_event_row_indexes_end_to_end"
+        },
+        {
+          "name": "test_b12_cursor_does_not_advance_on_all_quarantined_run"
+        }
+      ],
+      "classes": [
+        {
+          "name": "PipelineRoundTripTests"
+        }
+      ],
+      "imports": [
+        {
+          "source": "__future__",
+          "specifiers": [
+            "annotations\n\nimport json\nimport os\nimport pathlib\nimport sys\nimport tempfile\nimport unittest\n\nREPO_ROOT"
+          ]
+        },
+        {
+          "source": "state_handle",
+          "specifiers": [
+            "StateHandle\n\n\nclass PipelineRoundTripTests"
+          ]
+        },
+        {
+          "source": "event_schema",
+          "specifiers": [
+            "EventV4\n        from state_paths import repo_id\n\n        row"
+          ]
+        },
+        {
+          "source": "event_schema",
+          "specifiers": [
+            "EventV4\n\n        row"
+          ]
+        },
+        {
+          "source": "json\nimport os\nimport pathlib\nimport sys\nimport tempfile\nimport unittest",
+          "specifiers": [
+            "json\nimport os\nimport pathlib\nimport sys\nimport tempfile\nimport unittest"
+          ]
+        },
+        {
+          "source": "alc_query\nimport collect_hook_event\nimport event_writer\nimport index_events\nfrom state_handle import StateHandle",
+          "specifiers": [
+            "alc_query\nimport collect_hook_event\nimport event_writer\nimport index_events\nfrom state_handle import StateHandle"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 199,
+      "hasStructuralAnalysis": true
     }
   }
 }

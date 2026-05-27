@@ -23,8 +23,8 @@
       "Uvicorn"
     ],
     "description": "",
-    "analyzedAt": "2026-05-26T20:36:49.345Z",
-    "gitCommitHash": "4c12fd9ffdfdb1973b3cc33dd0ac0fd6ac181174"
+    "analyzedAt": "2026-05-27T09:20:10.467Z",
+    "gitCommitHash": "ed49da427f3043ecbec7ac011b992672eba48907"
   },
   "nodes": [
     {
@@ -3107,7 +3107,7 @@
         97,
         117
       ],
-      "summary": "Q1: per-skill longest invocations \u2014 surfaces skills whose calls run unusually long compared to their typical duration.",
+      "summary": "Q1: per-skill longest invocations — surfaces skills whose calls run unusually long compared to their typical duration.",
       "tags": [
         "query",
         "duration",
@@ -3124,7 +3124,7 @@
         120,
         147
       ],
-      "summary": "Q2: model-overkill \u2014 flags calls that used a heavyweight model on a task whose downstream verdict says a lighter model would have sufficed.",
+      "summary": "Q2: model-overkill — flags calls that used a heavyweight model on a task whose downstream verdict says a lighter model would have sufficed.",
       "tags": [
         "query",
         "model",
@@ -3141,7 +3141,7 @@
         150,
         170
       ],
-      "summary": "Q3: DAG sub-agent cost rollup \u2014 sums duration/cost across a session's parent/child agent tree.",
+      "summary": "Q3: DAG sub-agent cost rollup — sums duration/cost across a session's parent/child agent tree.",
       "tags": [
         "query",
         "dag",
@@ -3158,7 +3158,7 @@
         173,
         191
       ],
-      "summary": "Q4: background-task failure rate \u2014 flags tasks that ran in background mode and finished with non-success verdicts.",
+      "summary": "Q4: background-task failure rate — flags tasks that ran in background mode and finished with non-success verdicts.",
       "tags": [
         "query",
         "background",
@@ -3175,7 +3175,7 @@
         194,
         235
       ],
-      "summary": "Q5: per-gate effectiveness \u2014 joins gate evaluations with subsequent outcomes to produce correlation-only signals per stable 12-char gate_id.",
+      "summary": "Q5: per-gate effectiveness — joins gate evaluations with subsequent outcomes to produce correlation-only signals per stable 12-char gate_id.",
       "tags": [
         "query",
         "gate",
@@ -3192,7 +3192,7 @@
         238,
         265
       ],
-      "summary": "Q6: time-of-day session profile \u2014 buckets sessions by hour-of-day to surface working-rhythm patterns.",
+      "summary": "Q6: time-of-day session profile — buckets sessions by hour-of-day to surface working-rhythm patterns.",
       "tags": [
         "query",
         "time-of-day",
@@ -3209,7 +3209,7 @@
         268,
         285
       ],
-      "summary": "Q7: tool/server bottlenecks \u2014 ranks MCP servers by total invocation duration to surface latency hot-spots.",
+      "summary": "Q7: tool/server bottlenecks — ranks MCP servers by total invocation duration to surface latency hot-spots.",
       "tags": [
         "query",
         "mcp",
@@ -3226,7 +3226,7 @@
         288,
         313
       ],
-      "summary": "Q8: frustration pairs \u2014 mines event pairs immediately preceding negative-verdict outcomes as proxy frustration signals.",
+      "summary": "Q8: frustration pairs — mines event pairs immediately preceding negative-verdict outcomes as proxy frustration signals.",
       "tags": [
         "query",
         "frustration",
@@ -3243,7 +3243,7 @@
         316,
         348
       ],
-      "summary": "Q9: drift \u2014 compares recent skill performance against a baseline window to detect regression or improvement.",
+      "summary": "Q9: drift — compares recent skill performance against a baseline window to detect regression or improvement.",
       "tags": [
         "query",
         "drift",
@@ -3260,7 +3260,7 @@
         351,
         367
       ],
-      "summary": "Q10: eval-verdict ROI \u2014 aggregates judge verdicts to estimate the return-on-investment of running the eval pipeline.",
+      "summary": "Q10: eval-verdict ROI — aggregates judge verdicts to estimate the return-on-investment of running the eval pipeline.",
       "tags": [
         "query",
         "roi",
@@ -3369,7 +3369,7 @@
       "type": "file",
       "name": "ce_playbook.py",
       "filePath": "agent-learning-compounder/bin/ce_playbook.py",
-      "summary": "Renders a Claude-Engine playbook section for session-context.md \u2014 picks a persona, annotates skill usage, and decorates with extra CE skills if CE is installed locally.",
+      "summary": "Renders a Claude-Engine playbook section for session-context.md — picks a persona, annotates skill usage, and decorates with extra CE skills if CE is installed locally.",
       "tags": [
         "session-context",
         "playbook",
@@ -3451,7 +3451,7 @@
         182,
         216
       ],
-      "summary": "Fallback scoring path used when no events DB exists yet \u2014 emits a minimal contract-compliant artifact based on recommendations only.",
+      "summary": "Fallback scoring path used when no events DB exists yet — emits a minimal contract-compliant artifact based on recommendations only.",
       "tags": [
         "scoring",
         "fallback",
@@ -3665,7 +3665,7 @@
         85,
         202
       ],
-      "summary": "Main playbook renderer \u2014 assembles the persona block, skill-usage annotations, optional extra CE skills, and returns the final markdown for session-context.md.",
+      "summary": "Main playbook renderer — assembles the persona block, skill-usage annotations, optional extra CE skills, and returns the final markdown for session-context.md.",
       "tags": [
         "render",
         "markdown",
@@ -4007,7 +4007,7 @@
         218,
         270
       ],
-      "summary": "CLI entrypoint that runs all validation checks and exits non-zero on any failure \u2014 used by the durable-write pressure-test gate.",
+      "summary": "CLI entrypoint that runs all validation checks and exits non-zero on any failure — used by the durable-write pressure-test gate.",
       "tags": [
         "entry-point",
         "cli",
@@ -5915,7 +5915,7 @@
       "type": "file",
       "name": "render_html_report.py",
       "filePath": "agent-learning-compounder/bin/render_html_report.py",
-      "summary": "Renders the full editorial-style HTML learning report \u2014 wraps gate cards, skill charts, baseline sections, story blocks, and embedded styles into a single durable HTML file.",
+      "summary": "Renders the full editorial-style HTML learning report — wraps gate cards, skill charts, baseline sections, story blocks, and embedded styles into a single durable HTML file.",
       "tags": [
         "rendering",
         "html",
@@ -6143,7 +6143,7 @@
       "type": "file",
       "name": "scrub_secrets.py",
       "filePath": "agent-learning-compounder/bin/scrub_secrets.py",
-      "summary": "Detects and replaces secret-like substrings (tokens, keys, paths, email addresses) in arbitrary text \u2014 the single chokepoint used by every writer before persistence.",
+      "summary": "Detects and replaces secret-like substrings (tokens, keys, paths, email addresses) in arbitrary text — the single chokepoint used by every writer before persistence.",
       "tags": [
         "security",
         "scrubbing",
@@ -6642,7 +6642,7 @@
       "type": "file",
       "name": "build_repo_baseline.py",
       "filePath": "agent-learning-compounder/bin/build_repo_baseline.py",
-      "summary": "Builds the per-repo baseline JSON \u2014 extracts purpose, stack, entrypoints, CI files, packaging commands, instruction rules, and skill-map evidence from the working tree.",
+      "summary": "Builds the per-repo baseline JSON — extracts purpose, stack, entrypoints, CI files, packaging commands, instruction rules, and skill-map evidence from the working tree.",
       "tags": [
         "baseline",
         "ingestion",
@@ -6836,7 +6836,7 @@
         826,
         970
       ],
-      "summary": "CLI entry point that orchestrates the full distill pipeline \u2014 load corpus, classify events, render report, optionally write durable personal updates and metrics.",
+      "summary": "CLI entry point that orchestrates the full distill pipeline — load corpus, classify events, render report, optionally write durable personal updates and metrics.",
       "tags": [
         "cli",
         "entry-point",
@@ -7041,7 +7041,7 @@
       "type": "file",
       "name": "export_gates.py",
       "filePath": "agent-learning-compounder/bin/export_gates.py",
-      "summary": "Renders latest-approved-gates.md from the gate registry \u2014 parses gate blocks, applies probes, and preserves inherited blocks from the shared registry.",
+      "summary": "Renders latest-approved-gates.md from the gate registry — parses gate blocks, applies probes, and preserves inherited blocks from the shared registry.",
       "tags": [
         "export",
         "gates",
@@ -7218,7 +7218,7 @@
       "type": "file",
       "name": "export_skill_context.py",
       "filePath": "agent-learning-compounder/bin/export_skill_context.py",
-      "summary": "Renders latest-skill-context.md \u2014 the compact skill-routing surface that future agents load instead of the raw skill map.",
+      "summary": "Renders latest-skill-context.md — the compact skill-routing surface that future agents load instead of the raw skill map.",
       "tags": [
         "export",
         "skill-routing",
@@ -7453,7 +7453,7 @@
       "type": "file",
       "name": "init_learning_system.py",
       "filePath": "agent-learning-compounder/bin/init_learning_system.py",
-      "summary": "Per-repo bootstrap entry point \u2014 writes the integration manifest, scaffolds state directories, installs initial gate registry and domain rules, and optionally wires runtime hooks.",
+      "summary": "Per-repo bootstrap entry point — writes the integration manifest, scaffolds state directories, installs initial gate registry and domain rules, and optionally wires runtime hooks.",
       "tags": [
         "entry-point",
         "bootstrap",
@@ -7790,7 +7790,7 @@
       "type": "file",
       "name": "event_emit.py",
       "filePath": "agent-learning-compounder/bin/event_emit.py",
-      "summary": "Thin CLI wrapper that lets external runtimes emit a single schema-v4 event by passing kind, actor metadata, and an optional JSON payload \u2014 used as the durable event-injection seam for hooks and shell scripts.",
+      "summary": "Thin CLI wrapper that lets external runtimes emit a single schema-v4 event by passing kind, actor metadata, and an optional JSON payload — used as the durable event-injection seam for hooks and shell scripts.",
       "tags": [
         "script",
         "entry-point",
@@ -7798,37 +7798,6 @@
         "cli-adapter"
       ],
       "complexity": "simple"
-    },
-    {
-      "id": "file:agent-learning-compounder/bin/event_schema.py",
-      "type": "file",
-      "name": "event_schema.py",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "summary": "Canonical event-v4 schema module defining ActorInfo, Telemetry, ChainLink, and the EventV4 dataclass with deterministic IDs, boundary scrubbing, JSON-schema and SQLite-DDL emission, and v3-to-v4 upgrade logic.",
-      "tags": [
-        "data-model",
-        "schema-definition",
-        "type-definition",
-        "validation",
-        "serialization"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Dataclass-driven schema with introspective JSON-schema emission, hand-rolled type-origin walking for Optional/Union, and a frozen deterministic_id derivation."
-    },
-    {
-      "id": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "file",
-      "name": "event_writer.py",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "summary": "Durable JSONL event-log writer enforcing trust boundaries \u2014 flock-based state lock, regular-file-only writes, secret scrubbing, length bounding, payload coercion, and atomic rotation \u2014 used by every ALC producer.",
-      "tags": [
-        "data-pipeline",
-        "validation",
-        "serialization",
-        "io",
-        "trust-boundary"
-      ],
-      "complexity": "complex"
     },
     {
       "id": "file:agent-learning-compounder/bin/exec_sandbox.py",
@@ -7862,25 +7831,11 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "type": "file",
-      "name": "sandbox_run_state.py",
-      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
-      "summary": "Per-run state tracker for the exec sandbox that records active runs to disk, detects orphaned worktrees from dead PIDs, cleans them up, and emits recovered-run events so crashes do not leak state.",
-      "tags": [
-        "sandbox",
-        "state-management",
-        "recovery",
-        "trust-boundary"
-      ],
-      "complexity": "complex"
-    },
-    {
       "id": "file:agent-learning-compounder/bin/transcript_parser.py",
       "type": "file",
       "name": "transcript_parser.py",
       "filePath": "agent-learning-compounder/bin/transcript_parser.py",
-      "summary": "Runtime-agnostic transcript parser that normalises Claude and Codex JSONL session files into a common row shape \u2014 extracting event type, timestamps, session/event/parent IDs, paths, correlation chains, and bounded payloads.",
+      "summary": "Runtime-agnostic transcript parser that normalises Claude and Codex JSONL session files into a common row shape — extracting event type, timestamps, session/event/parent IDs, paths, correlation chains, and bounded payloads.",
       "tags": [
         "data-pipeline",
         "parser",
@@ -7966,7 +7921,7 @@
         112,
         134
       ],
-      "summary": "Combines a start and end event's telemetry into a single rolled-up record \u2014 computing duration_ms from timestamps and summing optional int/float fields like tokens and cost.",
+      "summary": "Combines a start and end event's telemetry into a single rolled-up record — computing duration_ms from timestamps and summing optional int/float fields like tokens and cost.",
       "tags": [
         "telemetry",
         "aggregation",
@@ -8059,226 +8014,6 @@
       "complexity": "simple"
     },
     {
-      "id": "function:agent-learning-compounder/bin/event_schema.py:_enforce_boundary",
-      "type": "function",
-      "name": "_enforce_boundary",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        112,
-        127
-      ],
-      "summary": "Scans an event payload for forbidden content \u2014 absolute paths, secret patterns, transcript chunks, oversized blobs, base64 blobs \u2014 and raises ValueError if the trust boundary would be violated.",
-      "tags": [
-        "validation",
-        "security",
-        "trust-boundary"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_schema.py:_json_type_for_type",
-      "type": "function",
-      "name": "_json_type_for_type",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        130,
-        174
-      ],
-      "summary": "Maps a Python type annotation (including Optional, Union, List, and nested dataclasses) to a JSON-schema fragment, recursively descending into generic args.",
-      "tags": [
-        "schema-definition",
-        "introspection",
-        "utility"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
-      "type": "class",
-      "name": "ActorInfo",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        193,
-        197
-      ],
-      "summary": "Frozen dataclass capturing the actor that produced an event: kind, display name, model, and optional parent actor id.",
-      "tags": [
-        "data-model",
-        "schema-definition"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
-      "type": "class",
-      "name": "Telemetry",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        201,
-        208
-      ],
-      "summary": "Frozen dataclass holding optional telemetry for an event: duration_ms, token counts, cache stats, cost, and interrupted flag.",
-      "tags": [
-        "data-model",
-        "telemetry"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
-      "type": "class",
-      "name": "ChainLink",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        212,
-        214
-      ],
-      "summary": "Frozen dataclass representing a single hop in an event's correlation chain \u2014 a role string and the corresponding id.",
-      "tags": [
-        "data-model",
-        "correlation"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
-      "type": "class",
-      "name": "EventV4",
-      "filePath": "agent-learning-compounder/bin/event_schema.py",
-      "lineRange": [
-        218,
-        461
-      ],
-      "summary": "Authoritative event-v4 model providing deterministic ID derivation, JSON-schema and SQLite-DDL emission, v3-to-v4 upgrade, and a strict `from_dict` parser that enforces trust-boundary checks during ingestion.",
-      "tags": [
-        "data-model",
-        "schema-definition",
-        "validation",
-        "serialization"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:_acquire_state_lock",
-      "type": "function",
-      "name": "_acquire_state_lock",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        73,
-        83
-      ],
-      "summary": "Acquires an `flock`-based advisory lock on the state lock file so concurrent writers serialize their appends to the JSONL event log.",
-      "tags": [
-        "concurrency",
-        "io",
-        "trust-boundary"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:_scrub_strings",
-      "type": "function",
-      "name": "_scrub_strings",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        119,
-        131
-      ],
-      "summary": "Walks every string field in an event payload through the shared secret scrubber so credentials never reach the durable log.",
-      "tags": [
-        "security",
-        "validation",
-        "trust-boundary"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:_boundary_checks",
-      "type": "function",
-      "name": "_boundary_checks",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        147,
-        159
-      ],
-      "summary": "Validates an outgoing event row against the trust boundary \u2014 payload size, base64 blob keys, transcript-chunk markers \u2014 rejecting forbidden writes.",
-      "tags": [
-        "validation",
-        "trust-boundary",
-        "security"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:_coerce_row",
-      "type": "function",
-      "name": "_coerce_row",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        172,
-        216
-      ],
-      "summary": "Normalises a heterogeneous input dict into a canonical EventV4-shaped row, coercing types, bounding strings, and ensuring required fields are present.",
-      "tags": [
-        "validation",
-        "serialization",
-        "normalization"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:write_event",
-      "type": "function",
-      "name": "write_event",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        219,
-        228
-      ],
-      "summary": "Public single-row write API \u2014 coerces the row, runs boundary and scrubber checks, then appends it to the durable JSONL event log under the state lock.",
-      "tags": [
-        "api",
-        "io",
-        "event-emitter"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "function",
-      "name": "write_events_batch",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        231,
-        254
-      ],
-      "summary": "Public bulk write API that validates a list of rows in a single locked section, deduplicates against existing IDs, and atomically appends survivors to the event log with rotation.",
-      "tags": [
-        "api",
-        "io",
-        "event-emitter",
-        "batch"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/event_writer.py:_rotate_if_needed",
-      "type": "function",
-      "name": "_rotate_if_needed",
-      "filePath": "agent-learning-compounder/bin/event_writer.py",
-      "lineRange": [
-        257,
-        269
-      ],
-      "summary": "Rotates the JSONL event log to a timestamped archive file once it grows past the configured size cap, preventing unbounded growth on long-running repos.",
-      "tags": [
-        "io",
-        "rotation",
-        "maintenance"
-      ],
-      "complexity": "simple"
-    },
-    {
       "id": "class:agent-learning-compounder/bin/exec_sandbox.py:ExecScope",
       "type": "class",
       "name": "ExecScope",
@@ -8287,7 +8022,7 @@
         66,
         69
       ],
-      "summary": "String-backed Enum naming the three sandbox tiers \u2014 read, worktree, eval \u2014 that gate which commands and paths are allowed.",
+      "summary": "String-backed Enum naming the three sandbox tiers — read, worktree, eval — that gate which commands and paths are allowed.",
       "tags": [
         "type-definition",
         "sandbox"
@@ -8303,7 +8038,7 @@
         73,
         81
       ],
-      "summary": "Frozen dataclass carrying the outcome of a sandboxed command \u2014 exit code, captured stdout/stderr paths, duration, event id, optional worktree dir, and timed_out flag.",
+      "summary": "Frozen dataclass carrying the outcome of a sandboxed command — exit code, captured stdout/stderr paths, duration, event id, optional worktree dir, and timed_out flag.",
       "tags": [
         "data-model",
         "sandbox"
@@ -8387,7 +8122,7 @@
         292,
         318
       ],
-      "summary": "Assembles the durable EventV4 payload that describes a sandbox run \u2014 scope, exit code, truncated outputs, run id \u2014 within the event payload byte cap.",
+      "summary": "Assembles the durable EventV4 payload that describes a sandbox run — scope, exit code, truncated outputs, run id — within the event payload byte cap.",
       "tags": [
         "event-emitter",
         "sandbox",
@@ -8422,7 +8157,7 @@
         469,
         502
       ],
-      "summary": "CLI entrypoint for `exec_sandbox` \u2014 parses args, builds an ExecScope and actor record, invokes `run`, and surfaces the structured result to the caller.",
+      "summary": "CLI entrypoint for `exec_sandbox` — parses args, builds an ExecScope and actor record, invokes `run`, and surfaces the structured result to the caller.",
       "tags": [
         "entry-point",
         "cli",
@@ -8496,57 +8231,6 @@
         "cli"
       ],
       "complexity": "simple"
-    },
-    {
-      "id": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
-      "type": "class",
-      "name": "RunStateTracker",
-      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
-      "lineRange": [
-        28,
-        156
-      ],
-      "summary": "Persistent tracker for in-flight sandbox runs that registers a run, marks completion, lists active runs from disk, and surfaces orphans whose PIDs are dead so callers can recover cleanly.",
-      "tags": [
-        "state-management",
-        "sandbox",
-        "recovery"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/sandbox_run_state.py:_cleanup_worktree",
-      "type": "function",
-      "name": "_cleanup_worktree",
-      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
-      "lineRange": [
-        173,
-        183
-      ],
-      "summary": "Removes an orphaned sandbox worktree directory, falling back gracefully when the worktree has already been pruned or never created.",
-      "tags": [
-        "sandbox",
-        "recovery",
-        "filesystem"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
-      "type": "function",
-      "name": "_emit_recovered_event",
-      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
-      "lineRange": [
-        186,
-        207
-      ],
-      "summary": "Writes a durable EventV4 row recording that a previously orphaned sandbox run was detected and reaped, so the audit trail stays complete across crashes.",
-      "tags": [
-        "event-emitter",
-        "recovery",
-        "sandbox"
-      ],
-      "complexity": "moderate"
     },
     {
       "id": "function:agent-learning-compounder/bin/transcript_parser.py:iter_transcript_jsonl",
@@ -8659,7 +8343,7 @@
         321,
         349
       ],
-      "summary": "Combines all per-record extractors into a single normalized row ready for the event writer \u2014 id, ts, kind, actor, payload, parent, and correlation chain.",
+      "summary": "Combines all per-record extractors into a single normalized row ready for the event writer — id, ts, kind, actor, payload, parent, and correlation chain.",
       "tags": [
         "parser",
         "normalization",
@@ -8819,7 +8503,7 @@
         "architecture-invariant"
       ],
       "complexity": "moderate",
-      "languageNotes": "Uses ast.parse to statically inspect imports \u2014 a deliberate guardrail against backsliding into ad-hoc SQLite/JSONL reads."
+      "languageNotes": "Uses ast.parse to statically inspect imports — a deliberate guardrail against backsliding into ad-hoc SQLite/JSONL reads."
     },
     {
       "id": "file:agent-learning-compounder/tests/test_mcp_registry.py",
@@ -9305,7 +8989,7 @@
       "type": "file",
       "name": "test_alc_apply_agent_validator.py",
       "filePath": "agent-learning-compounder/tests/test_alc_apply_agent_validator.py",
-      "summary": "Post-install smoke tests covering validate_agent_frontmatter \u2014 exercises a matrix of invalid agent docs and one valid baseline to confirm the contract module rejects/accepts as designed.",
+      "summary": "Post-install smoke tests covering validate_agent_frontmatter — exercises a matrix of invalid agent docs and one valid baseline to confirm the contract module rejects/accepts as designed.",
       "tags": [
         "test",
         "validation",
@@ -9397,7 +9081,7 @@
       "type": "document",
       "name": "CLAUDE.md",
       "filePath": "CLAUDE.md",
-      "summary": "Project instructions for Claude Code agents working in the repo \u2014 explains that this is a portable skill package source tree, common test commands, layered architecture, dual-name layout, and the trust-model invariants to preserve.",
+      "summary": "Project instructions for Claude Code agents working in the repo — explains that this is a portable skill package source tree, common test commands, layered architecture, dual-name layout, and the trust-model invariants to preserve.",
       "tags": [
         "documentation",
         "agent-instructions",
@@ -9730,7 +9414,7 @@
         "safety"
       ],
       "complexity": "moderate",
-      "languageNotes": "Markdown with YAML frontmatter declaring agent name, description (with usage examples), model inheritance, and color \u2014 the canonical Claude Code subagent persona format."
+      "languageNotes": "Markdown with YAML frontmatter declaring agent name, description (with usage examples), model inheritance, and color — the canonical Claude Code subagent persona format."
     },
     {
       "id": "config:agent-learning-compounder/agents/claude.yaml",
@@ -9837,7 +9521,7 @@
         "dashboard"
       ],
       "complexity": "simple",
-      "languageNotes": "The empty `<script id=\"alc-payload\" type=\"application/json\">` is a Vite-friendly server-injection slot \u2014 the placeholder JSON is rewritten by the Python dashboard server before serving the bundled HTML."
+      "languageNotes": "The empty `<script id=\"alc-payload\" type=\"application/json\">` is a Vite-friendly server-injection slot — the placeholder JSON is rewritten by the Python dashboard server before serving the bundled HTML."
     },
     {
       "id": "config:agent-learning-compounder/dashboard/web/package.json",
@@ -9853,7 +9537,7 @@
         "vite"
       ],
       "complexity": "simple",
-      "languageNotes": "`vite-plugin-singlefile` is the key signal that the dashboard ships as one inlined HTML file consumed by the Python server \u2014 no separate JS/CSS asset routes."
+      "languageNotes": "`vite-plugin-singlefile` is the key signal that the dashboard ships as one inlined HTML file consumed by the Python server — no separate JS/CSS asset routes."
     },
     {
       "id": "config:agent-learning-compounder/dashboard/web/tsconfig.json",
@@ -9883,14 +9567,14 @@
         "strict-mode"
       ],
       "complexity": "simple",
-      "languageNotes": "`allowImportingTsExtensions` plus `noEmit` is the modern Vite + TS pattern \u2014 type-check only, let the bundler do the work."
+      "languageNotes": "`allowImportingTsExtensions` plus `noEmit` is the modern Vite + TS pattern — type-check only, let the bundler do the work."
     },
     {
       "id": "config:agent-learning-compounder/dashboard/web/tsconfig.node.json",
       "type": "config",
       "name": "tsconfig.node.json",
       "filePath": "agent-learning-compounder/dashboard/web/tsconfig.node.json",
-      "summary": "TypeScript compiler config scoped to the Node-side build tooling \u2014 currently just `vite.config.ts` \u2014 with ES2023 lib, `node` types, and `noEmit`.",
+      "summary": "TypeScript compiler config scoped to the Node-side build tooling — currently just `vite.config.ts` — with ES2023 lib, `node` types, and `noEmit`.",
       "tags": [
         "configuration",
         "typescript",
@@ -9944,14 +9628,14 @@
         "judge-agent"
       ],
       "complexity": "moderate",
-      "languageNotes": "Embeds an inline JSON Schema for the eval_verdict payload (required verdict, judge_reason \u2264200 chars, recommendation_kind) \u2014 the only manifest in this batch carrying an inline payload schema."
+      "languageNotes": "Embeds an inline JSON Schema for the eval_verdict payload (required verdict, judge_reason ≤200 chars, recommendation_kind) — the only manifest in this batch carrying an inline payload schema."
     },
     {
       "id": "schema:agent-learning-compounder/data-contracts/manifests/u8-analyst.json",
       "type": "schema",
       "name": "u8-analyst.json",
       "filePath": "agent-learning-compounder/data-contracts/manifests/u8-analyst.json",
-      "summary": "Data contract for the U8 analyst stage declaring four JSON artifacts \u2014 patterns, anomalies, correlations, and recommendations \u2014 each capped at 1 MiB and surfaced in the dashboard.",
+      "summary": "Data contract for the U8 analyst stage declaring four JSON artifacts — patterns, anomalies, correlations, and recommendations — each capped at 1 MiB and surfaced in the dashboard.",
       "tags": [
         "schema-definition",
         "data-contract",
@@ -10030,7 +9714,7 @@
       "type": "file",
       "name": "spike_validate_schema.sh",
       "filePath": "agent-learning-compounder/scripts/spike/spike_validate_schema.sh",
-      "summary": "G0.5.3 schema-discovery script that locates existing hook-events.jsonl telemetry streams and verifies the {id, cost, tokens, duration_s} contract is recoverable, confirming whether the U5.5 v3\u2192v4 migration has a real corpus to target.",
+      "summary": "G0.5.3 schema-discovery script that locates existing hook-events.jsonl telemetry streams and verifies the {id, cost, tokens, duration_s} contract is recoverable, confirming whether the U5.5 v3→v4 migration has a real corpus to target.",
       "tags": [
         "spike",
         "validation",
@@ -10105,7 +9789,7 @@
       "type": "document",
       "name": "baseline-repo.md",
       "filePath": "agent-learning-compounder/skills/alc-core/references/baseline-repo.md",
-      "summary": "Mode 1 reference documenting the baseline-repo workflow \u2014 what to capture, read order, read-only discipline, capture format, and how to distinguish repo facts from memory facts.",
+      "summary": "Mode 1 reference documenting the baseline-repo workflow — what to capture, read order, read-only discipline, capture format, and how to distinguish repo facts from memory facts.",
       "tags": [
         "documentation",
         "baseline",
@@ -10178,7 +9862,7 @@
       "type": "document",
       "name": "distill-sessions.md",
       "filePath": "agent-learning-compounder/skills/alc-core/references/distill-sessions.md",
-      "summary": "Mode 2 reference for the distill-sessions workflow \u2014 evidence rules, where to look, time-bounding, mandatory scrub discipline, what to look for, and cross-session aggregation.",
+      "summary": "Mode 2 reference for the distill-sessions workflow — evidence rules, where to look, time-bounding, mandatory scrub discipline, what to look for, and cross-session aggregation.",
       "tags": [
         "documentation",
         "distill",
@@ -10193,7 +9877,7 @@
       "type": "document",
       "name": "domain-rules-learning.md",
       "filePath": "agent-learning-compounder/skills/alc-core/references/domain-rules-learning.md",
-      "summary": "Specification for the propose_domain_rules add-on \u2014 n-gram mining for correction-correlated rules with scoring, approval workflow, tunables, and corpus format.",
+      "summary": "Specification for the propose_domain_rules add-on — n-gram mining for correction-correlated rules with scoring, approval workflow, tunables, and corpus format.",
       "tags": [
         "documentation",
         "domain-rules",
@@ -10501,7 +10185,7 @@
       "type": "document",
       "name": "dashboard-audit-2026-05-27.md",
       "filePath": "docs/dev/dashboard-audit-2026-05-27.md",
-      "summary": "Compares the three dashboard surfaces (FastAPI, React SPA, stdlib alc-dashboard) and explains why the React variant shows ~1% data \u2014 empty events.sqlite, wrong state root, narrow payload schema, and hide-instead-of-explain empty states.",
+      "summary": "Compares the three dashboard surfaces (FastAPI, React SPA, stdlib alc-dashboard) and explains why the React variant shows ~1% data — empty events.sqlite, wrong state root, narrow payload schema, and hide-instead-of-explain empty states.",
       "tags": [
         "documentation",
         "audit",
@@ -10516,7 +10200,7 @@
       "type": "document",
       "name": "gate-system-review-2026-05.md",
       "filePath": "docs/dev/gate-system-review-2026-05.md",
-      "summary": "Severity-ranked review of the gate system enumerating 7 critical, 6 high, 6 medium, and lower risks across export, federation, scoring, and parsing \u2014 with a recommended fix order.",
+      "summary": "Severity-ranked review of the gate system enumerating 7 critical, 6 high, 6 medium, and lower risks across export, federation, scoring, and parsing — with a recommended fix order.",
       "tags": [
         "documentation",
         "review",
@@ -10653,14 +10337,14 @@
         "test"
       ],
       "complexity": "simple",
-      "languageNotes": "Python package barrel \u2014 present so unittest can discover sibling test modules."
+      "languageNotes": "Python package barrel — present so unittest can discover sibling test modules."
     },
     {
       "id": "file:agent-learning-compounder/alc_mcp/tests/test_server.py",
       "type": "file",
       "name": "test_server.py",
       "filePath": "agent-learning-compounder/alc_mcp/tests/test_server.py",
-      "summary": "Unit and hardening tests for the ALC MCP server handlers \u2014 verifies get_gates/get_skill_context return shapes, that propose_gate appends bounded improvement-queue rows, and that report_outcome/report_agent_event write JSONL events safely across multi-repo state roots.",
+      "summary": "Unit and hardening tests for the ALC MCP server handlers — verifies get_gates/get_skill_context return shapes, that propose_gate appends bounded improvement-queue rows, and that report_outcome/report_agent_event write JSONL events safely across multi-repo state roots.",
       "tags": [
         "test",
         "mcp-server",
@@ -10696,7 +10380,7 @@
         157,
         289
       ],
-      "summary": "Adversarial TestCase asserting handler robustness \u2014 multi-repo state-root routing, newline-in-outcome JSONL safety, and descriptive errors when proposing gates against uninitialized repos.",
+      "summary": "Adversarial TestCase asserting handler robustness — multi-repo state-root routing, newline-in-outcome JSONL safety, and descriptive errors when proposing gates against uninitialized repos.",
       "tags": [
         "test",
         "hardening",
@@ -10750,14 +10434,14 @@
         "scaffold"
       ],
       "complexity": "moderate",
-      "languageNotes": "Extensionless canonical file paired with the report-template.md symlink \u2014 edits go here, not the .md alias."
+      "languageNotes": "Extensionless canonical file paired with the report-template.md symlink — edits go here, not the .md alias."
     },
     {
       "id": "document:agent-learning-compounder/assets/report-template.md",
       "type": "document",
       "name": "report-template.md",
       "filePath": "agent-learning-compounder/assets/report-template.md",
-      "summary": "Markdown-suffixed symlink to assets/report-template \u2014 the presentation alias that downstream tools open when they expect a .md extension.",
+      "summary": "Markdown-suffixed symlink to assets/report-template — the presentation alias that downstream tools open when they expect a .md extension.",
       "tags": [
         "template",
         "report",
@@ -10771,7 +10455,7 @@
       "type": "file",
       "name": "alc_apply",
       "filePath": "agent-learning-compounder/bin/alc_apply",
-      "summary": "Canonical executable CLI that applies a queued patch by id \u2014 validates the patch id, loads the operation from disk, and delegates to the dispatch executor under an apply lock.",
+      "summary": "Canonical executable CLI that applies a queued patch by id — validates the patch id, loads the operation from disk, and delegates to the dispatch executor under an apply lock.",
       "tags": [
         "cli",
         "entry-point",
@@ -10834,7 +10518,7 @@
       "type": "file",
       "name": "alc_apply_dispatch.py",
       "filePath": "agent-learning-compounder/bin/alc_apply_dispatch.py",
-      "summary": "Core apply/revert executor \u2014 symlink-aware target resolution, sha256 preflight checks, atomic write with fsync+os.replace, flock-guarded apply lock, and JSONL event emission for both apply and revert.",
+      "summary": "Core apply/revert executor — symlink-aware target resolution, sha256 preflight checks, atomic write with fsync+os.replace, flock-guarded apply lock, and JSONL event emission for both apply and revert.",
       "tags": [
         "apply",
         "executor",
@@ -10871,7 +10555,7 @@
         91,
         106
       ],
-      "summary": "Pure byte-level transform \u2014 supports replace (text-encoded), write (raw bytes from b64 or content), and single-anchor swap operations, raising ApplyError on ambiguity.",
+      "summary": "Pure byte-level transform — supports replace (text-encoded), write (raw bytes from b64 or content), and single-anchor swap operations, raising ApplyError on ambiguity.",
       "tags": [
         "utility",
         "transform",
@@ -10995,7 +10679,7 @@
       "type": "file",
       "name": "alc_invoke.py",
       "filePath": "agent-learning-compounder/bin/alc_invoke.py",
-      "summary": "Python-importable symlink to bin/alc_invoke \u2014 the same dispatch CLI exposed under a .py extension so other scripts can import its functions.",
+      "summary": "Python-importable symlink to bin/alc_invoke — the same dispatch CLI exposed under a .py extension so other scripts can import its functions.",
       "tags": [
         "cli",
         "symlink-alias",
@@ -11013,7 +10697,7 @@
         50,
         56
       ],
-      "summary": "Dataclass holding the result of a subagent dispatch \u2014 backend identity, model, outcome, telemetry summary, and any captured output path.",
+      "summary": "Dataclass holding the result of a subagent dispatch — backend identity, model, outcome, telemetry summary, and any captured output path.",
       "tags": [
         "data-model",
         "dispatch",
@@ -11030,7 +10714,7 @@
         394,
         504
       ],
-      "summary": "Main library entry \u2014 resolves the agent ref to a concrete agent file, emits a hashed start event, dispatches via sandbox/mock backend with optional depth, then emits an end event with bounded telemetry.",
+      "summary": "Main library entry — resolves the agent ref to a concrete agent file, emits a hashed start event, dispatches via sandbox/mock backend with optional depth, then emits an end event with bounded telemetry.",
       "tags": [
         "api",
         "dispatch",
@@ -11047,7 +10731,7 @@
         523,
         547
       ],
-      "summary": "CLI wrapper that parses args, resolves the state handle, and calls invoke() \u2014 printing the DispatchResult as JSON for downstream consumers.",
+      "summary": "CLI wrapper that parses args, resolves the state handle, and calls invoke() — printing the DispatchResult as JSON for downstream consumers.",
       "tags": [
         "entry-point",
         "cli",
@@ -11115,7 +10799,7 @@
         182,
         205
       ],
-      "summary": "Writes a v4 dispatch-start event with the agent path, hashed task prompt, and actor \u2014 returning the event id for the matching _emit_end correlation.",
+      "summary": "Writes a v4 dispatch-start event with the agent path, hashed task prompt, and actor — returning the event id for the matching _emit_end correlation.",
       "tags": [
         "events",
         "telemetry",
@@ -11273,7 +10957,7 @@
       "type": "file",
       "name": "causal_probe",
       "filePath": "agent-learning-compounder/bin/causal_probe",
-      "summary": "Runs deterministic A/B skip cohorts per gate to measure causal effect on correction rates \u2014 produces causal-effectiveness signals consumed by gate scoring.",
+      "summary": "Runs deterministic A/B skip cohorts per gate to measure causal effect on correction rates — produces causal-effectiveness signals consumed by gate scoring.",
       "tags": [
         "cli",
         "causal-inference",
@@ -11287,7 +10971,7 @@
       "type": "file",
       "name": "ce_playbook",
       "filePath": "agent-learning-compounder/bin/ce_playbook",
-      "summary": "Renders the Compound Engineering playbook view \u2014 surfaces gate inventory, recommendation backlog, and the operator's next-step playbook from current ALC state.",
+      "summary": "Renders the Compound Engineering playbook view — surfaces gate inventory, recommendation backlog, and the operator's next-step playbook from current ALC state.",
       "tags": [
         "cli",
         "playbook",
@@ -12089,7 +11773,7 @@
         130,
         292
       ],
-      "summary": "Assembles the full dictionary payload the HTML template consumes \u2014 gates, queue, baseline, skill health, sessions, and editorial narratives.",
+      "summary": "Assembles the full dictionary payload the HTML template consumes — gates, queue, baseline, skill health, sessions, and editorial narratives.",
       "tags": [
         "payload-assembly",
         "renderer",
@@ -12206,7 +11890,7 @@
         591,
         617
       ],
-      "summary": "Renders the abstract strip at the top of the report \u2014 counts, deltas, and headline indicators.",
+      "summary": "Renders the abstract strip at the top of the report — counts, deltas, and headline indicators.",
       "tags": [
         "renderer",
         "abstract",
@@ -12418,7 +12102,7 @@
       "type": "file",
       "name": "actions.py",
       "filePath": "agent-learning-compounder/dashboard/actions.py",
-      "summary": "Operator action store backing the dashboard \u2014 atomically reads and writes promoted-gate and muted-domain rows under the personal state directory.",
+      "summary": "Operator action store backing the dashboard — atomically reads and writes promoted-gate and muted-domain rows under the personal state directory.",
       "tags": [
         "state-write",
         "atomic-io",
@@ -12436,7 +12120,7 @@
         29,
         42
       ],
-      "summary": "Atomic-write primitive used by every action mutation \u2014 writes to a tempfile, then replaces the destination.",
+      "summary": "Atomic-write primitive used by every action mutation — writes to a tempfile, then replaces the destination.",
       "tags": [
         "atomic-io",
         "filesystem"
@@ -12575,7 +12259,7 @@
       "type": "file",
       "name": "ActionBar.tsx",
       "filePath": "agent-learning-compounder/dashboard/web/src/components/ActionBar.tsx",
-      "summary": "Operator action bar \u2014 triggers a distill job, copies command snippets, toggles the theme, opens the latest report, and shows the connection badge.",
+      "summary": "Operator action bar — triggers a distill job, copies command snippets, toggles the theme, opens the latest report, and shows the connection badge.",
       "tags": [
         "component",
         "react",
@@ -12654,7 +12338,7 @@
       "type": "file",
       "name": "render_state_surface",
       "filePath": "agent-learning-compounder/bin/render_state_surface",
-      "summary": "Unified hook surface that renders the durable ALC state in a requested format \u2014 markdown, HTML, session report, or JSON \u2014 and rotates older session reports.",
+      "summary": "Unified hook surface that renders the durable ALC state in a requested format — markdown, HTML, session report, or JSON — and rotates older session reports.",
       "tags": [
         "renderer",
         "hook-surface",
@@ -13644,7 +13328,7 @@
       "type": "file",
       "name": "state_paths",
       "filePath": "agent-learning-compounder/bin/state_paths",
-      "summary": "Portable state-path helpers \u2014 repo slugging, state-dir resolution with documented precedence, and atomic write primitives shared across the pipeline.",
+      "summary": "Portable state-path helpers — repo slugging, state-dir resolution with documented precedence, and atomic write primitives shared across the pipeline.",
       "tags": [
         "utility",
         "state-paths",
@@ -14040,7 +13724,7 @@
       "type": "file",
       "name": "validate_outputs",
       "filePath": "agent-learning-compounder/bin/validate_outputs",
-      "summary": "Pre-write validator for agent-learning reports \u2014 enforces bucket structure, evidence shape, and the rule banning psychological claims about the operator.",
+      "summary": "Pre-write validator for agent-learning reports — enforces bucket structure, evidence shape, and the rule banning psychological claims about the operator.",
       "tags": [
         "validation",
         "reports",
@@ -15074,7 +14758,7 @@
         20,
         144
       ],
-      "summary": "Asserts producer/consumer pairs in the pipeline (hook collector \u2192 distill \u2192 export) agree on field names and types.",
+      "summary": "Asserts producer/consumer pairs in the pipeline (hook collector → distill → export) agree on field names and types.",
       "tags": [
         "test",
         "contract-test"
@@ -15879,7 +15563,7 @@
       "type": "file",
       "name": "test_probe_wiring.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_probe_wiring.py",
-      "summary": "Tests the causal probe wiring \u2014 verifies export_gates emits probe_status when registered and collect_hook_event passes through or drops probe_decisions based on validity.",
+      "summary": "Tests the causal probe wiring — verifies export_gates emits probe_status when registered and collect_hook_event passes through or drops probe_decisions based on validity.",
       "tags": [
         "test",
         "causal-probe",
@@ -15929,7 +15613,7 @@
       "type": "file",
       "name": "test_propose_domain_rules.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_propose_domain_rules.py",
-      "summary": "Tests the n-gram domain-rule proposer \u2014 high-score terms surface, stop-words drop, top-K limits apply, empty corpus yields empty proposals, and refresh wires the proposer into the improvement queue.",
+      "summary": "Tests the n-gram domain-rule proposer — high-score terms surface, stop-words drop, top-K limits apply, empty corpus yields empty proposals, and refresh wires the proposer into the improvement queue.",
       "tags": [
         "test",
         "domain-rules",
@@ -15981,7 +15665,7 @@
       "type": "file",
       "name": "test_queue_dedup.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_queue_dedup.py",
-      "summary": "Tests the improvement-queue near-duplicate collapser \u2014 dedups near-identical rows, preserves semantically distinct ones and oldest IDs, honors bucket boundaries (domain/skill), refuses symlinked queues, and wires through refresh.",
+      "summary": "Tests the improvement-queue near-duplicate collapser — dedups near-identical rows, preserves semantically distinct ones and oldest IDs, honors bucket boundaries (domain/skill), refuses symlinked queues, and wires through refresh.",
       "tags": [
         "test",
         "queue-dedup",
@@ -16032,7 +15716,7 @@
       "type": "file",
       "name": "test_refresh_retirement_filter.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_refresh_retirement_filter.py",
-      "summary": "Hardening tests for refresh's gate-retirement filter \u2014 stable row IDs across re-runs, causal-signal gating before queueing, malformed-inherited-gate demotion (not retirement), and concurrent-refresh non-corruption.",
+      "summary": "Hardening tests for refresh's gate-retirement filter — stable row IDs across re-runs, causal-signal gating before queueing, malformed-inherited-gate demotion (not retirement), and concurrent-refresh non-corruption.",
       "tags": [
         "test",
         "refresh",
@@ -16105,7 +15789,7 @@
         222,
         260
       ],
-      "summary": "Tests that two concurrent refresh invocations both complete without corrupting durable state \u2014 verifies serialization/locking.",
+      "summary": "Tests that two concurrent refresh invocations both complete without corrupting durable state — verifies serialization/locking.",
       "tags": [
         "test",
         "concurrency",
@@ -16119,7 +15803,7 @@
       "type": "file",
       "name": "test_replay_hook_events.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_replay_hook_events.py",
-      "summary": "Tests the hook-event schema-migration tool \u2014 upgrades v1/v2 rows to latest schema, skips malformed rows, honors dry-run, preserves original timestamps, and stamps missing ones.",
+      "summary": "Tests the hook-event schema-migration tool — upgrades v1/v2 rows to latest schema, skips malformed rows, honors dry-run, preserves original timestamps, and stamps missing ones.",
       "tags": [
         "test",
         "schema-migration",
@@ -16137,7 +15821,7 @@
         13,
         82
       ],
-      "summary": "Six unit tests covering v1 \u2192 v2 row upgrade, supported-field retention, malformed-row tolerance, dry-run safety, timestamp preservation, and ts auto-stamping.",
+      "summary": "Six unit tests covering v1 → v2 row upgrade, supported-field retention, malformed-row tolerance, dry-run safety, timestamp preservation, and ts auto-stamping.",
       "tags": [
         "test",
         "replay",
@@ -16151,7 +15835,7 @@
       "type": "file",
       "name": "test_scrub_secrets_extended_patterns.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_scrub_secrets_extended_patterns.py",
-      "summary": "Tests secret-scrubber regex coverage for fourteen patterns \u2014 GitLab PATs, HF tokens, AWS keys, Twilio SIDs, Telegram bots, basic-auth URLs, MongoDB/Postgres connection strings, multiline JSON secrets, Azure storage keys, escaped PEMs, and bearer tokens.",
+      "summary": "Tests secret-scrubber regex coverage for fourteen patterns — GitLab PATs, HF tokens, AWS keys, Twilio SIDs, Telegram bots, basic-auth URLs, MongoDB/Postgres connection strings, multiline JSON secrets, Azure storage keys, escaped PEMs, and bearer tokens.",
       "tags": [
         "test",
         "secrets",
@@ -16184,7 +15868,7 @@
       "type": "file",
       "name": "test_self_healing_roadmap.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_self_healing_roadmap.py",
-      "summary": "The flagship integration suite \u2014 30 end-to-end tests covering init, state-root precedence, repo-integration manifest, hook installation/merge/gitignore, runtime adapter, hook-event collection/scrubbing, refresh, skill mapping, export, validator, and eval-fixture coverage.",
+      "summary": "The flagship integration suite — 30 end-to-end tests covering init, state-root precedence, repo-integration manifest, hook installation/merge/gitignore, runtime adapter, hook-event collection/scrubbing, refresh, skill mapping, export, validator, and eval-fixture coverage.",
       "tags": [
         "test",
         "integration",
@@ -16235,7 +15919,7 @@
       "type": "file",
       "name": "test_serve_dashboard_host.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_serve_dashboard_host.py",
-      "summary": "Tests serve_dashboard host validation \u2014 loopback IPv4/IPv6/localhost accepted by default, all-interfaces and public IPs refused unless --insecure-public-bind is passed.",
+      "summary": "Tests serve_dashboard host validation — loopback IPv4/IPv6/localhost accepted by default, all-interfaces and public IPs refused unless --insecure-public-bind is passed.",
       "tags": [
         "test",
         "dashboard",
@@ -16271,7 +15955,7 @@
         59,
         89
       ],
-      "summary": "CLI-level tests for serve_dashboard \u2014 --help mentions the insecure flag, non-loopback hosts are refused at startup.",
+      "summary": "CLI-level tests for serve_dashboard — --help mentions the insecure flag, non-loopback hosts are refused at startup.",
       "tags": [
         "test",
         "cli",
@@ -16285,7 +15969,7 @@
       "type": "file",
       "name": "test_state_paths_precedence.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_state_paths_precedence.py",
-      "summary": "Tests the state-root precedence ladder \u2014 explicit --state-dir > env var > --personal > repo-local > XDG > home fallback \u2014 and confirms lower tiers never override higher ones.",
+      "summary": "Tests the state-root precedence ladder — explicit --state-dir > env var > --personal > repo-local > XDG > home fallback — and confirms lower tiers never override higher ones.",
       "tags": [
         "test",
         "state-paths",
@@ -16317,7 +16001,7 @@
       "type": "file",
       "name": "test_validate_outputs_psych_tightening.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_validate_outputs_psych_tightening.py",
-      "summary": "Tests the tightened validate_outputs rules that block psychological/ability claims about the operator \u2014 Norwegian diacritics, stripped-form matches, neutral-tail exemptions, and judgment-verb still firing.",
+      "summary": "Tests the tightened validate_outputs rules that block psychological/ability claims about the operator — Norwegian diacritics, stripped-form matches, neutral-tail exemptions, and judgment-verb still firing.",
       "tags": [
         "test",
         "validate",
@@ -16336,7 +16020,7 @@
         53,
         78
       ],
-      "summary": "Six tests covering 'd\u00e5rlig' diacritical and stripped forms, state-verb exemption with neutral/skills nouns, and adjective/judgment-verb forms still tripping the rule.",
+      "summary": "Six tests covering 'dårlig' diacritical and stripped forms, state-verb exemption with neutral/skills nouns, and adjective/judgment-verb forms still tripping the rule.",
       "tags": [
         "test",
         "validate",
@@ -16382,7 +16066,7 @@
       "type": "config",
       "name": "hooks.json",
       "filePath": "agent-learning-compounder/hooks/hooks.json",
-      "summary": "Claude Code plugin hooks manifest \u2014 wires SessionStart (startup/clear/compact) to render the state surface as markdown and Stop to refresh the dashboard and emit a session report.",
+      "summary": "Claude Code plugin hooks manifest — wires SessionStart (startup/clear/compact) to render the state surface as markdown and Stop to refresh the dashboard and emit a session report.",
       "tags": [
         "configuration",
         "hooks",
@@ -16424,7 +16108,7 @@
       "type": "document",
       "name": "agent-quickstart",
       "filePath": "agent-learning-compounder/reference-lib/agent-quickstart",
-      "summary": "Quickstart reference for agents adopting ALC \u2014 onboarding flow, command reference, and the durable read/write surfaces (latest-approved-gates.md, latest-skill-context.md).",
+      "summary": "Quickstart reference for agents adopting ALC — onboarding flow, command reference, and the durable read/write surfaces (latest-approved-gates.md, latest-skill-context.md).",
       "tags": [
         "documentation",
         "quickstart",
@@ -16466,7 +16150,7 @@
       "type": "document",
       "name": "architecture",
       "filePath": "agent-learning-compounder/reference-lib/architecture",
-      "summary": "Architecture reference document describing the layered pipeline (install \u2192 bootstrap \u2192 ingestion \u2192 export \u2192 hook telemetry \u2192 refresh) and trust boundaries that every contributor reads before changing subsystems.",
+      "summary": "Architecture reference document describing the layered pipeline (install → bootstrap → ingestion → export → hook telemetry → refresh) and trust boundaries that every contributor reads before changing subsystems.",
       "tags": [
         "documentation",
         "architecture",
@@ -16494,7 +16178,7 @@
       "type": "document",
       "name": "capability-map",
       "filePath": "agent-learning-compounder/reference-lib/capability-map",
-      "summary": "Capability-map reference enumerating the M1\u2013M11 MCP catalog tiers and which MCP tool/skill fulfills each capability.",
+      "summary": "Capability-map reference enumerating the M1–M11 MCP catalog tiers and which MCP tool/skill fulfills each capability.",
       "tags": [
         "documentation",
         "capability",
@@ -16536,7 +16220,7 @@
       "type": "document",
       "name": "cross-repo-gates",
       "filePath": "agent-learning-compounder/reference-lib/cross-repo-gates",
-      "summary": "Reference for the cross-repo gate federation \u2014 promote/inherit semantics, derived_from provenance chain, and the shared registry contract.",
+      "summary": "Reference for the cross-repo gate federation — promote/inherit semantics, derived_from provenance chain, and the shared registry contract.",
       "tags": [
         "documentation",
         "gates",
@@ -16649,7 +16333,7 @@
       "type": "file",
       "name": "hook-telemetry",
       "filePath": "agent-learning-compounder/reference-lib/hook-telemetry",
-      "summary": "Detailed reference for the runtime-agnostic hook telemetry pipeline \u2014 allowed event fields, symlink rejection, and dual-runtime wiring constraints.",
+      "summary": "Detailed reference for the runtime-agnostic hook telemetry pipeline — allowed event fields, symlink rejection, and dual-runtime wiring constraints.",
       "tags": [
         "documentation",
         "reference",
@@ -16762,7 +16446,7 @@
       "type": "file",
       "name": "skill-health",
       "filePath": "agent-learning-compounder/reference-lib/skill-health",
-      "summary": "Reference for skill-health signals derived from session telemetry \u2014 failure rates, retries, and skill-map updates.",
+      "summary": "Reference for skill-health signals derived from session telemetry — failure rates, retries, and skill-map updates.",
       "tags": [
         "documentation",
         "reference",
@@ -16974,7 +16658,7 @@
         141,
         176
       ],
-      "summary": "Runs the eval loop \u2014 fetches recent recommendations, invokes the configured judge, parses verdicts, and writes new eval events deterministically.",
+      "summary": "Runs the eval loop — fetches recent recommendations, invokes the configured judge, parses verdicts, and writes new eval events deterministically.",
       "tags": [
         "evaluation",
         "judge",
@@ -17091,7 +16775,7 @@
         335,
         425
       ],
-      "summary": "Orchestrates the full init flow \u2014 detects repo, ensures and smoke-tests MCP, collects runtime summary, and writes the rendered session context atomically.",
+      "summary": "Orchestrates the full init flow — detects repo, ensures and smoke-tests MCP, collects runtime summary, and writes the rendered session context atomically.",
       "tags": [
         "entry-point",
         "cli",
@@ -17243,7 +16927,7 @@
         394,
         504
       ],
-      "summary": "End-to-end agent invocation entry \u2014 resolves the agent, emits start/end telemetry, runs dispatch, writes optional output file, and prunes stale dev agents.",
+      "summary": "End-to-end agent invocation entry — resolves the agent, emits start/end telemetry, runs dispatch, writes optional output file, and prunes stale dev agents.",
       "tags": [
         "entry-point",
         "orchestrator",
@@ -17327,7 +17011,7 @@
         153,
         256
       ],
-      "summary": "Top-level anomaly analyst \u2014 loads sessions, computes rollups, and runs both z-score and IQR detectors, returning anomaly rows.",
+      "summary": "Top-level anomaly analyst — loads sessions, computes rollups, and runs both z-score and IQR detectors, returning anomaly rows.",
       "tags": [
         "analyst",
         "anomaly",
@@ -17749,7 +17433,7 @@
       "type": "file",
       "name": "exec_sandbox.py",
       "filePath": "agent-learning-compounder/scripts/exec_sandbox.py",
-      "summary": "Sandboxed command execution surface for agent-controlled exec calls \u2014 enforces scope-based path/command policies, spawns a git worktree, captures truncated outputs, and emits an exec event.",
+      "summary": "Sandboxed command execution surface for agent-controlled exec calls — enforces scope-based path/command policies, spawns a git worktree, captures truncated outputs, and emits an exec event.",
       "tags": [
         "sandbox",
         "security",
@@ -17784,7 +17468,7 @@
         73,
         81
       ],
-      "summary": "Dataclass capturing the outcome of a sandboxed execution \u2014 exit code, output paths, duration, event id, worktree dir, and timeout flag.",
+      "summary": "Dataclass capturing the outcome of a sandboxed execution — exit code, output paths, duration, event id, worktree dir, and timeout flag.",
       "tags": [
         "dataclass",
         "result",
@@ -18343,7 +18027,7 @@
       "type": "file",
       "name": "validate_artifacts.py",
       "filePath": "agent-learning-compounder/scripts/validate_artifacts.py",
-      "summary": "Validates plugin/skill artifacts \u2014 agent contracts, manifest merges, pending-writes \u2014 and detects directory cycles to gate releases.",
+      "summary": "Validates plugin/skill artifacts — agent contracts, manifest merges, pending-writes — and detects directory cycles to gate releases.",
       "tags": [
         "validation",
         "contracts",
@@ -18423,7 +18107,7 @@
       "type": "document",
       "name": "SKILL.md",
       "filePath": "agent-learning-compounder/skills/alc-core/SKILL.md",
-      "summary": "Skill manifest for the alc-core skill \u2014 the central agent-facing surface for compiling repo sessions, telemetry, and durable learning recommendations.",
+      "summary": "Skill manifest for the alc-core skill — the central agent-facing surface for compiling repo sessions, telemetry, and durable learning recommendations.",
       "tags": [
         "documentation",
         "skill-manifest",
@@ -18477,7 +18161,7 @@
       "type": "document",
       "name": "SKILL.md",
       "filePath": "agent-learning-compounder/skills/alc-next/SKILL.md",
-      "summary": "Skill manifest for alc-next \u2014 the operator-facing next-step recommendation surface that highlights the highest-value action queued from the learning loop.",
+      "summary": "Skill manifest for alc-next — the operator-facing next-step recommendation surface that highlights the highest-value action queued from the learning loop.",
       "tags": [
         "documentation",
         "skill-manifest",
@@ -18504,7 +18188,7 @@
       "type": "file",
       "name": "test_agents.py",
       "filePath": "agent-learning-compounder/tests/test_agents.py",
-      "summary": "Smoke tests for the installed agent contracts \u2014 parses frontmatter and validates agent mapping structure across plugin agents.",
+      "summary": "Smoke tests for the installed agent contracts — parses frontmatter and validates agent mapping structure across plugin agents.",
       "tags": [
         "test",
         "smoke",
@@ -18581,7 +18265,7 @@
         0,
         0
       ],
-      "summary": "TestCase verifying alc_apply contract surfaces \u2014 agent frontmatter, accepted schema, refusal conditions.",
+      "summary": "TestCase verifying alc_apply contract surfaces — agent frontmatter, accepted schema, refusal conditions.",
       "tags": [
         "test",
         "contracts",
@@ -18787,7 +18471,7 @@
         317,
         377
       ],
-      "summary": "Covers the signals block contract \u2014 required fields per signal type and graceful handling of unknown variants.",
+      "summary": "Covers the signals block contract — required fields per signal type and graceful handling of unknown variants.",
       "tags": [
         "test",
         "unittest",
@@ -19056,7 +18740,7 @@
       "type": "file",
       "name": "test_analyst_queries.py",
       "filePath": "agent-learning-compounder/tests/test_analyst_queries.py",
-      "summary": "Large 511-line suite exercising the analyst's sqlite query surface \u2014 schema creation, multi-shape event seeding, and assertion against expected aggregations.",
+      "summary": "Large 511-line suite exercising the analyst's sqlite query surface — schema creation, multi-shape event seeding, and assertion against expected aggregations.",
       "tags": [
         "test",
         "analyst",
@@ -19326,7 +19010,7 @@
         46,
         70
       ],
-      "summary": "Verifies the alc-report command spec \u2014 frontmatter, bash blocks, and renderer help flags.",
+      "summary": "Verifies the alc-report command spec — frontmatter, bash blocks, and renderer help flags.",
       "tags": [
         "test",
         "unittest",
@@ -19554,7 +19238,7 @@
       "type": "file",
       "name": "test_event_writer.py",
       "filePath": "agent-learning-compounder/tests/test_event_writer.py",
-      "summary": "Tests the durable events writer \u2014 sqlite-backed insertion with retries, dedup, and bounded field enforcement.",
+      "summary": "Tests the durable events writer — sqlite-backed insertion with retries, dedup, and bounded field enforcement.",
       "tags": [
         "test",
         "events",
@@ -19577,131 +19261,6 @@
         "test",
         "unittest",
         "writer"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-      "type": "file",
-      "name": "test_exec_sandbox_eval.py",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-      "summary": "Integration tests for the exec_sandbox eval scope, mocking alc_invoke to verify scope execution, parent event chaining, and recursive depth guarding.",
-      "tags": [
-        "test",
-        "exec-sandbox",
-        "integration",
-        "mcp"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_eval.py:ExecSandboxEvalTests",
-      "type": "class",
-      "name": "ExecSandboxEvalTests",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-      "lineRange": [
-        22,
-        118
-      ],
-      "summary": "Verifies the eval scope of exec_sandbox: stubbed alc_invoke runs, parent_event_id chaining, and depth-guard rejection of recursive calls.",
-      "tags": [
-        "test-case",
-        "exec-sandbox",
-        "eval-scope"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
-      "type": "file",
-      "name": "test_exec_sandbox_read.py",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_read.py",
-      "summary": "Integration tests for the exec_sandbox read scope: allowlisted commands run with event emission, forbidden commands return exit 3, timeouts return 124, and python commands get the no-network flag.",
-      "tags": [
-        "test",
-        "exec-sandbox",
-        "read-scope",
-        "security"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_read.py:ExecSandboxReadTests",
-      "type": "class",
-      "name": "ExecSandboxReadTests",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_read.py",
-      "lineRange": [
-        22,
-        143
-      ],
-      "summary": "Tests allowlisting, forbidden-command rejection, timeout exit codes, and network-flag presence in the exec_sandbox read scope.",
-      "tags": [
-        "test-case",
-        "exec-sandbox",
-        "read-scope"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
-      "type": "file",
-      "name": "test_exec_sandbox_security.py",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_security.py",
-      "summary": "Security regression tests for exec_sandbox: env scrubbing, path-traversal blocking, shell-metacharacter rejection, secret scrubbing, and stdout truncation at 100KB.",
-      "tags": [
-        "test",
-        "exec-sandbox",
-        "security",
-        "secret-scrubbing"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_security.py:ExecSandboxSecurityTests",
-      "type": "class",
-      "name": "ExecSandboxSecurityTests",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_security.py",
-      "lineRange": [
-        20,
-        163
-      ],
-      "summary": "Asserts exec_sandbox's defensive boundaries: network env sanitization, repo-scope enforcement, path traversal blocking, shell-bypass rejection, secret scrubbing, and stdout payload truncation.",
-      "tags": [
-        "test-case",
-        "exec-sandbox",
-        "security",
-        "trust-boundary"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-      "type": "file",
-      "name": "test_exec_sandbox_worktree.py",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-      "summary": "Tests the worktree scope of exec_sandbox: writes within an isolated worktree, concurrent isolation, timeout cleanup, and stale-recovery cleanup.",
-      "tags": [
-        "test",
-        "exec-sandbox",
-        "worktree-scope",
-        "concurrency"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_worktree.py:ExecSandboxWorktreeTests",
-      "type": "class",
-      "name": "ExecSandboxWorktreeTests",
-      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-      "lineRange": [
-        21,
-        192
-      ],
-      "summary": "Verifies the worktree scope creates isolated git worktrees, concurrent runs do not collide, timeouts still clean up, and stale recovery runs are pruned.",
-      "tags": [
-        "test-case",
-        "exec-sandbox",
-        "worktree-scope"
       ],
       "complexity": "complex"
     },
@@ -20475,7 +20034,7 @@
       "type": "file",
       "name": "catalog.py",
       "filePath": "agent-learning-compounder/alc_mcp/catalog.py",
-      "summary": "Canonical MCP tool catalog declaring the 11 stdio tools (M1-M11) the ALC MCP server exposes \u2014 read/propose/observe/exec surfaces with parameter schemas, return schemas, and scope-aware (user/project/both) parameter wiring.",
+      "summary": "Canonical MCP tool catalog declaring the 11 stdio tools (M1-M11) the ALC MCP server exposes — read/propose/observe/exec surfaces with parameter schemas, return schemas, and scope-aware (user/project/both) parameter wiring.",
       "tags": [
         "mcp",
         "schema-definition",
@@ -20508,7 +20067,7 @@
       "type": "file",
       "name": "alc_next_action.py",
       "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "summary": "Session-lifecycle synthesizer (M11 next_action) \u2014 collects bucketed signals via alc_query (pending patches, recommendations, recent applies, verdicts, cross-scope gate counts) and emits a structured recommendation per intent (start/next/end/recap/leftoff/auto) using a 5-rung priority ladder.",
+      "summary": "Session-lifecycle synthesizer (M11 next_action) — collects bucketed signals via alc_query (pending patches, recommendations, recent applies, verdicts, cross-scope gate counts) and emits a structured recommendation per intent (start/next/end/recap/leftoff/auto) using a 5-rung priority ladder.",
       "tags": [
         "service",
         "synthesis",
@@ -20516,7 +20075,7 @@
         "mcp-backing"
       ],
       "complexity": "complex",
-      "languageNotes": "Library module \u2014 no CLI entry. The bin/state_handle fallback import block lets the module be invoked from outside the bin/ sys.path."
+      "languageNotes": "Library module — no CLI entry. The bin/state_handle fallback import block lets the module be invoked from outside the bin/ sys.path."
     },
     {
       "id": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
@@ -20544,7 +20103,7 @@
         105,
         181
       ],
-      "summary": "Aggregates project-scope state (pending patches, recommendations, 7-day applies and verdicts) and user-scope cross-repo gate counts into the public signals dict \u2014 never returns raw rows.",
+      "summary": "Aggregates project-scope state (pending patches, recommendations, 7-day applies and verdicts) and user-scope cross-repo gate counts into the public signals dict — never returns raw rows.",
       "tags": [
         "aggregator",
         "signals",
@@ -20561,7 +20120,7 @@
         305,
         316
       ],
-      "summary": "Forward-looking synthesis: walks the 5-rung priority ladder (pending patches \u2192 recent rejects \u2192 stale recs \u2192 recent commits \u2192 idle) and returns the first matching rung result.",
+      "summary": "Forward-looking synthesis: walks the 5-rung priority ladder (pending patches → recent rejects → stale recs → recent commits → idle) and returns the first matching rung result.",
       "tags": [
         "synthesis",
         "priority-ladder"
@@ -20621,7 +20180,7 @@
       "type": "file",
       "name": "alc_query.py",
       "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "summary": "Canonical read-only query API (KTD-21) \u2014 the single seam through which MCP tools, dashboards, hooks, and CLI consume ALC state. Implements scope-aware (user/project/both) reads for gates, skill context, recommendations, pending patches, event DAGs, and skill-usage summaries.",
+      "summary": "Canonical read-only query API (KTD-21) — the single seam through which MCP tools, dashboards, hooks, and CLI consume ALC state. Implements scope-aware (user/project/both) reads for gates, skill context, recommendations, pending patches, event DAGs, and skill-usage summaries.",
       "tags": [
         "service",
         "api-handler",
@@ -20776,7 +20335,7 @@
         521,
         575
       ],
-      "summary": "Aggregates events by actor_name with count, last-used timestamp, optional prefix filter \u2014 the closest skill-usage proxy in the events schema.",
+      "summary": "Aggregates events by actor_name with count, last-used timestamp, optional prefix filter — the closest skill-usage proxy in the events schema.",
       "tags": [
         "api-handler",
         "metrics",
@@ -20860,7 +20419,7 @@
         211,
         220
       ],
-      "summary": "Returns the dashboard URL for a repo \u2014 prefers the localhost URL recorded in dashboard/server.json, otherwise falls back to the local index.html file URI.",
+      "summary": "Returns the dashboard URL for a repo — prefers the localhost URL recorded in dashboard/server.json, otherwise falls back to the local index.html file URI.",
       "tags": [
         "utility",
         "url-resolver"
@@ -20876,7 +20435,7 @@
         45,
         88
       ],
-      "summary": "Implements the documented 7-tier resolver precedence: explicit state_dir \u2192 AGENT_LEARNING_STATE_DIR \u2192 user/personal arg \u2192 AGENT_LEARNING_USER env \u2192 repo/.agent-learning \u2192 XDG_STATE_HOME \u2192 ~/.local/state.",
+      "summary": "Implements the documented 7-tier resolver precedence: explicit state_dir → AGENT_LEARNING_STATE_DIR → user/personal arg → AGENT_LEARNING_USER env → repo/.agent-learning → XDG_STATE_HOME → ~/.local/state.",
       "tags": [
         "utility",
         "precedence",
@@ -20940,7 +20499,7 @@
       "type": "file",
       "name": "server.py",
       "filePath": "agent-learning-compounder/skills/alc-dashboard/server.py",
-      "summary": "Read-only stdlib HTTP server for the Alpine dashboard skill \u2014 serves /, /data.json, and /static/<file>. All POST/PUT/DELETE/PATCH return 405; writes stay on the CLI. PR 3 updated build_data_blob to call alc_query.get_gates(scope='both') and embed gates_rows + gates_summary for the single-list-with-badge UI.",
+      "summary": "Read-only stdlib HTTP server for the Alpine dashboard skill — serves /, /data.json, and /static/<file>. All POST/PUT/DELETE/PATCH return 405; writes stay on the CLI. PR 3 updated build_data_blob to call alc_query.get_gates(scope='both') and embed gates_rows + gates_summary for the single-list-with-badge UI.",
       "tags": [
         "entry-point",
         "api-handler",
@@ -20977,7 +20536,7 @@
         143,
         179
       ],
-      "summary": "Assembles the dashboard JSON payload from alc_query reads \u2014 recommendations bucketed into anomalies/patterns/correlations, pending patches, apply log, gates_and_insights (with PR 3 scope summary), and suggestions.",
+      "summary": "Assembles the dashboard JSON payload from alc_query reads — recommendations bucketed into anomalies/patterns/correlations, pending patches, apply log, gates_and_insights (with PR 3 scope summary), and suggestions.",
       "tags": [
         "aggregator",
         "data-builder",
@@ -21038,7 +20597,7 @@
       "type": "file",
       "name": "app.js",
       "filePath": "agent-learning-compounder/skills/alc-dashboard/static/app.js",
-      "summary": "Alpine dashboard client-side renderer \u2014 reads the inlined dashboard-data JSON, renders each tab panel (recommendations, patches, anomalies, gates, suggestions, etc.), and wires keyboard-accessible tab navigation. PR 3 added renderGatesList with scope badges so user vs project gates render in a single list with badge.",
+      "summary": "Alpine dashboard client-side renderer — reads the inlined dashboard-data JSON, renders each tab panel (recommendations, patches, anomalies, gates, suggestions, etc.), and wires keyboard-accessible tab navigation. PR 3 added renderGatesList with scope badges so user vs project gates render in a single list with badge.",
       "tags": [
         "component",
         "vanilla-js",
@@ -21058,7 +20617,7 @@
         13,
         15
       ],
-      "summary": "HTML-escapes a value against the HTML_ESCAPE_MAP \u2014 the security boundary for all dashboard innerHTML writes.",
+      "summary": "HTML-escapes a value against the HTML_ESCAPE_MAP — the security boundary for all dashboard innerHTML writes.",
       "tags": [
         "utility",
         "security",
@@ -21316,7 +20875,7 @@
       "type": "file",
       "name": "test_agent_learning_compounder.py",
       "filePath": "agent-learning-compounder/fixtures/tests/test_agent_learning_compounder.py",
-      "summary": "Large integration suite (~38 tests) exercising the canonical ALC pipeline scripts: extract_sessions, build_repo_baseline, validate_outputs, distill_learning, scrub_secrets, render_html_report \u2014 covering secret scrubbing, schema validation, baseline construction, distill dry-run vs. write, and HTML report rendering.",
+      "summary": "Large integration suite (~38 tests) exercising the canonical ALC pipeline scripts: extract_sessions, build_repo_baseline, validate_outputs, distill_learning, scrub_secrets, render_html_report — covering secret scrubbing, schema validation, baseline construction, distill dry-run vs. write, and HTML report rendering.",
       "tags": [
         "test",
         "integration",
@@ -21367,7 +20926,7 @@
         18,
         110
       ],
-      "summary": "TestCase that seeds a fixture repo with config/baseline/domain-rules/skill-map and reports, builds the FastAPI app via dashboard.build_app, and exercises HTTP routes \u2014 including the PR 3 scoped_gates contract.",
+      "summary": "TestCase that seeds a fixture repo with config/baseline/domain-rules/skill-map and reports, builds the FastAPI app via dashboard.build_app, and exercises HTTP routes — including the PR 3 scoped_gates contract.",
       "tags": [
         "test",
         "fastapi",
@@ -21484,6 +21043,462 @@
         "http"
       ],
       "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/event_schema.py",
+      "type": "file",
+      "name": "event_schema.py",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "summary": "Defines the EventV4 dataclass plus ActorInfo, Telemetry, and ChainLink companions, with coercers, ISO-8601 validation, boundary enforcement, and JSON-Schema/SQLite-DDL generators that all hook telemetry rows must conform to.",
+      "tags": [
+        "data-model",
+        "schema-definition",
+        "validation",
+        "telemetry",
+        "serialization"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses Python dataclasses with classmethods for parsing/coercion and reflects field types via typing.get_origin/get_args to emit JSON schemas at runtime."
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
+      "type": "class",
+      "name": "ActorInfo",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        193,
+        197
+      ],
+      "summary": "Dataclass capturing who emitted an event: actor kind (operator/agent/system), display name, optional model, and parent actor id for chained agent calls.",
+      "tags": [
+        "data-model",
+        "telemetry",
+        "actor"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
+      "type": "class",
+      "name": "Telemetry",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        201,
+        208
+      ],
+      "summary": "Dataclass holding optional per-event timing/token/cost metrics (duration, tokens in/out, cache reads, creation tokens, cost USD, interrupted flag).",
+      "tags": [
+        "data-model",
+        "telemetry",
+        "metrics"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
+      "type": "class",
+      "name": "ChainLink",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        212,
+        214
+      ],
+      "summary": "Single entry in an event's correlation chain pairing a role (parent/child/sibling) with an event_id.",
+      "tags": [
+        "data-model",
+        "correlation",
+        "telemetry"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
+      "type": "class",
+      "name": "EventV4",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        218,
+        471
+      ],
+      "summary": "Canonical v4 hook-event record with deterministic id derivation, JSON-schema/SQLite-DDL emitters, lossless from_dict/to_dict round-tripping, and a v3->v4 upgrade_from migration path.",
+      "tags": [
+        "data-model",
+        "schema-definition",
+        "serialization",
+        "migration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_schema.py:_enforce_boundary",
+      "type": "function",
+      "name": "_enforce_boundary",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        112,
+        127
+      ],
+      "summary": "Walks all string fields in a payload and rejects values containing absolute paths, secret markers, transcript chunks, or oversized base64 blobs to enforce the telemetry trust boundary.",
+      "tags": [
+        "validation",
+        "security",
+        "boundary"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_schema.py:_json_type_for_type",
+      "type": "function",
+      "name": "_json_type_for_type",
+      "filePath": "agent-learning-compounder/bin/event_schema.py",
+      "lineRange": [
+        130,
+        174
+      ],
+      "summary": "Reflects a Python type annotation (including Optional, Union, list, dict, dataclass) into a JSON-Schema fragment for runtime schema emission.",
+      "tags": [
+        "serialization",
+        "schema-definition",
+        "reflection"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/event_writer.py",
+      "type": "file",
+      "name": "event_writer.py",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "summary": "Durable write path for hook telemetry events: coerces rows through EventV4, scrubs secrets, enforces trust boundaries, takes a state-file flock, appends to events.jsonl with fsync, and rotates oversized logs.",
+      "tags": [
+        "telemetry",
+        "persistence",
+        "security",
+        "validation"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses fcntl.flock for cross-process state locking and rejects symlinked/non-regular event files to harden the durable-write path."
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:_acquire_state_lock",
+      "type": "function",
+      "name": "_acquire_state_lock",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        93,
+        103
+      ],
+      "summary": "Context manager that opens the per-state lock file and holds an fcntl.flock(LOCK_EX) for the duration of an event-write transaction.",
+      "tags": [
+        "concurrency",
+        "filesystem",
+        "locking"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:_scrub_strings",
+      "type": "function",
+      "name": "_scrub_strings",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        139,
+        151
+      ],
+      "summary": "Recursively walks a value and applies the secret-scrubber to every string leaf, raising on patterns the scrubber rejects.",
+      "tags": [
+        "security",
+        "validation",
+        "serialization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:_boundary_checks",
+      "type": "function",
+      "name": "_boundary_checks",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        167,
+        179
+      ],
+      "summary": "Post-scrub second-pass rejecting events whose string fields still contain absolute paths, secret markers, transcript chunks, base64 blobs, or blob-key field names.",
+      "tags": [
+        "security",
+        "validation",
+        "boundary"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:_coerce_row",
+      "type": "function",
+      "name": "_coerce_row",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        192,
+        236
+      ],
+      "summary": "Normalizes a raw dict or EventV4 dataclass into a write-ready row: assigns event_id/ts defaults, routes through EventV4 validation when applicable, runs boundary checks, scrubs strings, and bounds text length.",
+      "tags": [
+        "validation",
+        "serialization",
+        "telemetry"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:write_event",
+      "type": "function",
+      "name": "write_event",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        239,
+        255
+      ],
+      "summary": "Public single-event entrypoint that wraps write_events_batch for one row, returning the resolved event path.",
+      "tags": [
+        "api",
+        "telemetry",
+        "persistence"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
+      "type": "function",
+      "name": "write_events_batch",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        258,
+        283
+      ],
+      "summary": "Coerces every row, takes the state lock, ensures the events.jsonl path is a regular file, appends one JSON line per event with fsync, and triggers post-write rotation.",
+      "tags": [
+        "api",
+        "telemetry",
+        "persistence",
+        "concurrency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/event_writer.py:_rotate_if_needed",
+      "type": "function",
+      "name": "_rotate_if_needed",
+      "filePath": "agent-learning-compounder/bin/event_writer.py",
+      "lineRange": [
+        286,
+        298
+      ],
+      "summary": "Rotates the events log to a timestamped sibling when it exceeds the configured byte threshold and re-chmods the new file to 0600.",
+      "tags": [
+        "persistence",
+        "rotation",
+        "filesystem"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "type": "file",
+      "name": "sandbox_run_state.py",
+      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
+      "summary": "SQLite-backed tracker for sandbox exec runs: records per-run status, owns the worktree directory lifecycle, and recovers stale rows whose owning PID is gone by cleaning the worktree and emitting a recovery event.",
+      "tags": [
+        "persistence",
+        "sandbox",
+        "state-management",
+        "recovery"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Stores run rows in SQLite with WAL journaling and uses os.kill(pid, 0) liveness probes to drive stale-run recovery."
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
+      "type": "class",
+      "name": "RunStateTracker",
+      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
+      "lineRange": [
+        28,
+        161
+      ],
+      "summary": "Encapsulates the run-state SQLite database: opens/closes the connection, sets/reads/deletes per-exec-id status rows, allocates worktree directories, and runs the stale-recovery sweep.",
+      "tags": [
+        "persistence",
+        "sandbox",
+        "state-management"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/sandbox_run_state.py:_cleanup_worktree",
+      "type": "function",
+      "name": "_cleanup_worktree",
+      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
+      "lineRange": [
+        178,
+        188
+      ],
+      "summary": "Safely removes a sandbox worktree directory, refusing paths outside the repo's worktrees root to prevent accidental rm -rf of unrelated trees.",
+      "tags": [
+        "sandbox",
+        "filesystem",
+        "security"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
+      "type": "function",
+      "name": "_emit_recovered_event",
+      "filePath": "agent-learning-compounder/bin/sandbox_run_state.py",
+      "lineRange": [
+        191,
+        214
+      ],
+      "summary": "Emits a sandbox.run.recovered event via the event_writer when stale-recovery cleans an abandoned exec, including the exec_id, worktree, and acting actor.",
+      "tags": [
+        "telemetry",
+        "recovery",
+        "sandbox"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+      "type": "file",
+      "name": "test_exec_sandbox_eval.py",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+      "summary": "Integration tests for exec-sandbox eval scope: recursion-depth guards, mocked alc invocation, and parent-event chain propagation.",
+      "tags": [
+        "test",
+        "integration-test",
+        "sandbox"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_eval.py:ExecSandboxEvalTests",
+      "type": "class",
+      "name": "ExecSandboxEvalTests",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+      "lineRange": [
+        40,
+        130
+      ],
+      "summary": "unittest.TestCase covering recursion guard, mocked alc invoke, and parent-event chain handling for the exec_sandbox eval entrypoint.",
+      "tags": [
+        "test",
+        "sandbox",
+        "integration-test"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
+      "type": "file",
+      "name": "test_exec_sandbox_read.py",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_read.py",
+      "summary": "Integration tests for exec-sandbox read scope: allowlisted command execution, forbidden-command blocking (exit 3), timeout exit 124, and no-network flag propagation.",
+      "tags": [
+        "test",
+        "integration-test",
+        "sandbox",
+        "security"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_read.py:ExecSandboxReadTests",
+      "type": "class",
+      "name": "ExecSandboxReadTests",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_read.py",
+      "lineRange": [
+        30,
+        154
+      ],
+      "summary": "unittest.TestCase covering allowlist, forbidden-block, timeout, and no-network behaviors of the exec_sandbox read scope.",
+      "tags": [
+        "test",
+        "sandbox",
+        "security"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
+      "type": "file",
+      "name": "test_exec_sandbox_security.py",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_security.py",
+      "summary": "Security tests for the exec sandbox: write-outside-repo blocking, path-traversal rejection, shell-metacharacter bypass blocking, network env sanitization, secret scrubbing in event payloads, and stdout truncation to 100KB.",
+      "tags": [
+        "test",
+        "security",
+        "sandbox",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_security.py:ExecSandboxSecurityTests",
+      "type": "class",
+      "name": "ExecSandboxSecurityTests",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_security.py",
+      "lineRange": [
+        30,
+        168
+      ],
+      "summary": "unittest.TestCase asserting the exec sandbox's defense-in-depth controls: traversal, metachar, network, secret, and payload-size boundaries.",
+      "tags": [
+        "test",
+        "security",
+        "sandbox"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+      "type": "file",
+      "name": "test_exec_sandbox_worktree.py",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+      "summary": "Tests the exec-sandbox worktree lifecycle: per-run write/clean, timeout-still-cleans, concurrent-run isolation, and stale-recovery worktree cleanup.",
+      "tags": [
+        "test",
+        "sandbox",
+        "concurrency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:agent-learning-compounder/tests/test_exec_sandbox_worktree.py:ExecSandboxWorktreeTests",
+      "type": "class",
+      "name": "ExecSandboxWorktreeTests",
+      "filePath": "agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+      "lineRange": [
+        30,
+        197
+      ],
+      "summary": "unittest.TestCase exercising worktree allocation, cleanup on timeout, concurrent isolation, and stale-run recovery against the RunStateTracker.",
+      "tags": [
+        "test",
+        "sandbox",
+        "concurrency"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "type": "file",
+      "name": "test_pipeline_b1_b3_b12.py",
+      "filePath": "agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "summary": "End-to-end pipeline regression covering bugs B1/B3/B12: drives collect_hook_event -> event_writer -> index_events -> alc_query against a tmpdir StateHandle to catch schema-bump drift between collector and indexer.",
+      "tags": [
+        "test",
+        "integration-test",
+        "pipeline",
+        "regression"
+      ],
+      "complexity": "moderate"
     }
   ],
   "edges": [
@@ -26900,13 +26915,6 @@
     },
     {
       "source": "file:agent-learning-compounder/bin/backfill_transcripts.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/backfill_transcripts.py",
       "target": "file:agent-learning-compounder/bin/state_paths.py",
       "type": "imports",
       "direction": "forward",
@@ -26915,41 +26923,6 @@
     {
       "source": "file:agent-learning-compounder/bin/backfill_transcripts.py",
       "target": "file:agent-learning-compounder/bin/transcript_parser.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/correlate_events.py",
-      "target": "file:agent-learning-compounder/bin/event_schema.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/correlate_events.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_emit.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/exec_sandbox.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/ingest_new_transcripts.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
       "type": "imports",
       "direction": "forward",
       "weight": 0.7
@@ -26964,20 +26937,6 @@
     {
       "source": "file:agent-learning-compounder/bin/ingest_new_transcripts.py",
       "target": "file:agent-learning-compounder/bin/transcript_parser.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/transcript_parser.py",
-      "target": "file:agent-learning-compounder/bin/event_writer.py",
       "type": "imports",
       "direction": "forward",
       "weight": 0.7
@@ -27048,97 +27007,6 @@
     {
       "source": "file:agent-learning-compounder/bin/event_emit.py",
       "target": "function:agent-learning-compounder/bin/event_emit.py:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "function:agent-learning-compounder/bin/event_schema.py:_enforce_boundary",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "function:agent-learning-compounder/bin/event_schema.py:_json_type_for_type",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:_acquire_state_lock",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:_scrub_strings",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:_boundary_checks",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:_coerce_row",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:_rotate_if_needed",
       "type": "contains",
       "direction": "forward",
       "weight": 1
@@ -27235,27 +27103,6 @@
       "weight": 1
     },
     {
-      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "target": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "target": "function:agent-learning-compounder/bin/sandbox_run_state.py:_cleanup_worktree",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "target": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
       "source": "file:agent-learning-compounder/bin/transcript_parser.py",
       "target": "function:agent-learning-compounder/bin/transcript_parser.py:iter_transcript_jsonl",
       "type": "contains",
@@ -27333,48 +27180,6 @@
       "weight": 1
     },
     {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_writer.py",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/event_schema.py",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
       "source": "file:agent-learning-compounder/bin/transcript_parser.py",
       "target": "function:agent-learning-compounder/bin/transcript_parser.py:parse_claude_transcript",
       "type": "exports",
@@ -27410,13 +27215,6 @@
       "weight": 0.8
     },
     {
-      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
-      "target": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
       "source": "file:agent-learning-compounder/bin/exec_sandbox.py",
       "target": "function:agent-learning-compounder/bin/exec_sandbox.py:run",
       "type": "exports",
@@ -27434,13 +27232,6 @@
       "source": "file:agent-learning-compounder/bin/exec_sandbox.py",
       "target": "class:agent-learning-compounder/bin/exec_sandbox.py:ExecResult",
       "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/backfill_transcripts.py:backfill",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "calls",
       "direction": "forward",
       "weight": 0.8
     },
@@ -27466,50 +27257,8 @@
       "weight": 0.8
     },
     {
-      "source": "function:agent-learning-compounder/bin/correlate_events.py:_derive_pair_row",
-      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/correlate_events.py:main",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/event_emit.py:event_emit",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/ingest_new_transcripts.py:ingest",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
       "source": "function:agent-learning-compounder/bin/ingest_new_transcripts.py:ingest",
       "target": "function:agent-learning-compounder/bin/transcript_parser.py:iter_transcript_events",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/exec_sandbox.py:run",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
-      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
       "type": "calls",
       "direction": "forward",
       "weight": 0.8
@@ -30404,7 +30153,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_probe_wiring.py",
@@ -30440,7 +30189,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/collect_hook_event",
@@ -30448,7 +30197,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_propose_domain_rules.py",
@@ -30484,7 +30233,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/refresh_learning_state",
@@ -30492,7 +30241,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_queue_dedup.py",
@@ -30528,7 +30277,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/refresh_learning_state",
@@ -30536,7 +30285,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_refresh_retirement_filter.py",
@@ -30600,7 +30349,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_replay_hook_events.py",
@@ -30622,7 +30371,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_scrub_secrets_extended_patterns.py",
@@ -30644,7 +30393,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_self_healing_roadmap.py",
@@ -30680,7 +30429,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/install_runtime_hooks",
@@ -30688,7 +30437,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/collect_hook_event",
@@ -30696,7 +30445,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/refresh_learning_state",
@@ -30704,7 +30453,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/distill_learning",
@@ -30712,7 +30461,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/export_skill_context",
@@ -30720,7 +30469,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/bin/validate_outputs",
@@ -30728,7 +30477,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_serve_dashboard_host.py",
@@ -30764,7 +30513,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_state_paths_precedence.py",
@@ -30786,7 +30535,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_validate_outputs_psych_tightening.py",
@@ -30808,7 +30557,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_validate_outputs_regex_metachars.py",
@@ -30830,7 +30579,7 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5,
-      "description": "Direction corrected (was test \u2192 production)"
+      "description": "Direction corrected (was test → production)"
     },
     {
       "source": "config:agent-learning-compounder/hooks/hooks.json",
@@ -31876,34 +31625,6 @@
       "weight": 1
     },
     {
-      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_eval.py:ExecSandboxEvalTests",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
-      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_read.py:ExecSandboxReadTests",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
-      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_security.py:ExecSandboxSecurityTests",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_worktree.py:ExecSandboxWorktreeTests",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
       "source": "file:agent-learning-compounder/tests/test_hooks.py",
       "target": "class:agent-learning-compounder/tests/test_hooks.py:HookTests",
       "type": "contains",
@@ -32161,42 +31882,42 @@
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_start_next",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_end",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_recap",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
       "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_leftoff",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_next_action.py",
@@ -32259,77 +31980,77 @@
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
       "target": "function:agent-learning-compounder/bin/alc_query.py:_parse_since",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/alc_query.py",
@@ -32413,21 +32134,21 @@
       "target": "class:agent-learning-compounder/bin/state_handle.py:StateHandle",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/state_handle.py",
       "target": "function:agent-learning-compounder/bin/state_handle.py:dashboard_url",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/state_handle.py",
       "target": "function:agent-learning-compounder/bin/state_handle.py:_resolve_state_root",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/bin/state_handle.py",
@@ -32448,7 +32169,7 @@
       "target": "class:agent-learning-compounder/alc_mcp/catalog.py:MCPToolSpec",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/alc_mcp/catalog.py",
@@ -32462,14 +32183,14 @@
       "target": "class:agent-learning-compounder/dashboard/__init__.py:JobRegistry",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/__init__.py",
       "target": "function:agent-learning-compounder/dashboard/__init__.py:build_app",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/__init__.py",
@@ -32532,35 +32253,35 @@
       "target": "class:agent-learning-compounder/skills/alc-dashboard/server.py:_DashboardHandler",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/server.py:create_server",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/server.py:_resolve_state",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/server.py:main",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
@@ -32644,35 +32365,35 @@
       "target": "function:agent-learning-compounder/skills/alc-dashboard/static/app.js:escapeHtml",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/static/app.js:renderGatesList",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/static/app.js:renderDashboard",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/static/app.js:bindTabs",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
       "target": "function:agent-learning-compounder/skills/alc-dashboard/static/app.js:toRows",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
@@ -32700,7 +32421,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/App.tsx:App",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/App.tsx",
@@ -32714,7 +32435,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/App.tsx:applyStoredTheme",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/components/ScopedGatesPanel.tsx",
@@ -32728,7 +32449,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/components/ScopedGatesPanel.tsx:ScopedGatesPanel",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/components/ScopedGatesPanel.tsx",
@@ -32742,14 +32463,14 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/components/ScopedGatesPanel.tsx:GatesList",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
       "target": "function:agent-learning-compounder/dashboard/web/src/lib/data.ts:readDashboardData",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
@@ -32763,7 +32484,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/lib/data.ts:trendSeries",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
@@ -32777,7 +32498,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/lib/data.ts:domainHeatRows",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
@@ -32791,7 +32512,7 @@
       "target": "function:agent-learning-compounder/dashboard/web/src/lib/data.ts:gateStability",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
@@ -32812,56 +32533,378 @@
       "target": "class:agent-learning-compounder/fixtures/tests/test_agent_learning_compounder.py:AgentLearningCompounderTests",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/fixtures/tests/test_dashboard.py",
       "target": "class:agent-learning-compounder/fixtures/tests/test_dashboard.py:Dashboard",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/tests/test_alc_invoke.py",
       "target": "class:agent-learning-compounder/tests/test_alc_invoke.py:AlcInvokeTests",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/tests/test_alc_invoke.py",
       "target": "function:agent-learning-compounder/tests/test_alc_invoke.py:_make_agent_text",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/tests/test_dashboard_readonly.py",
       "target": "class:agent-learning-compounder/tests/test_dashboard_readonly.py:DashboardReadonlyTests",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/tests/test_dashboard_readonly.py",
       "target": "function:agent-learning-compounder/tests/test_dashboard_readonly.py:_start_server",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "source": "file:agent-learning-compounder/tests/test_dashboard_readonly.py",
       "target": "function:agent-learning-compounder/tests/test_dashboard_readonly.py:_http_get",
       "type": "contains",
       "direction": "forward",
-      "weight": 1.0
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "function:agent-learning-compounder/bin/event_schema.py:_enforce_boundary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "function:agent-learning-compounder/bin/event_schema.py:_json_type_for_type",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:ActorInfo",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:Telemetry",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:ChainLink",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_schema.py",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:_acquire_state_lock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:_scrub_strings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:_boundary_checks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:_coerce_row",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:_rotate_if_needed",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:write_events_batch",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "file:agent-learning-compounder/bin/event_schema.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "file:agent-learning-compounder/bin/scrub_secrets.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "file:agent-learning-compounder/bin/state_paths.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/event_writer.py:_coerce_row",
+      "target": "class:agent-learning-compounder/bin/event_schema.py:EventV4",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/event_writer.py:_scrub_strings",
+      "target": "function:agent-learning-compounder/bin/scrub_secrets.py:scrub",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "function:agent-learning-compounder/bin/sandbox_run_state.py:_cleanup_worktree",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "class:agent-learning-compounder/bin/sandbox_run_state.py:RunStateTracker",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "file:agent-learning-compounder/bin/event_writer.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/sandbox_run_state.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/sandbox_run_state.py:_emit_recovered_event",
+      "target": "function:agent-learning-compounder/bin/event_writer.py:write_event",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_eval.py:ExecSandboxEvalTests",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
+      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_read.py:ExecSandboxReadTests",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
+      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_security.py:ExecSandboxSecurityTests",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+      "target": "class:agent-learning-compounder/tests/test_exec_sandbox_worktree.py:ExecSandboxWorktreeTests",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "target": "file:agent-learning-compounder/bin/alc_query.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "target": "file:agent-learning-compounder/bin/collect_hook_event.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "target": "file:agent-learning-compounder/bin/event_writer.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "target": "file:agent-learning-compounder/bin/index_events.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "target": "file:agent-learning-compounder/bin/state_handle.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/event_writer.py",
+      "target": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
     }
   ],
   "layers": [
     {
       "id": "layer:install",
       "name": "Install & Distribution",
-      "description": "Install orchestration (install.sh, bootstrap.sh, alc-install.mjs), marketplace and plugin manifests, package metadata, optional-dependency declarations \u2014 everything that lets a fresh repo or runtime adopt the skill.",
+      "description": "Install orchestration (install.sh, bootstrap.sh, alc-install.mjs), marketplace and plugin manifests, package metadata, optional-dependency declarations — everything that lets a fresh repo or runtime adopt the skill.",
       "nodeIds": [
         "config:MANIFEST.json",
         "file:bootstrap.sh",
@@ -32879,7 +32922,7 @@
     {
       "id": "layer:pipeline-core",
       "name": "Pipeline Core",
-      "description": "The canonical Python pipeline that distills repo facts, sessions, and telemetry into durable agent memory \u2014 bin/ canonical executables plus their scripts/ symlinks (analyst, recommender, gate exports, hook collection, refresh).",
+      "description": "The canonical Python pipeline that distills repo facts, sessions, and telemetry into durable agent memory — bin/ canonical executables plus their scripts/ symlinks (analyst, recommender, gate exports, hook collection, refresh).",
       "nodeIds": [
         "file:agent-learning-compounder/scripts/replay_hook_events.py",
         "file:agent-learning-compounder/scripts/scrub_secrets.py",
@@ -32957,11 +33000,8 @@
         "file:agent-learning-compounder/bin/backfill_transcripts.py",
         "file:agent-learning-compounder/bin/correlate_events.py",
         "file:agent-learning-compounder/bin/event_emit.py",
-        "file:agent-learning-compounder/bin/event_schema.py",
-        "file:agent-learning-compounder/bin/event_writer.py",
         "file:agent-learning-compounder/bin/exec_sandbox.py",
         "file:agent-learning-compounder/bin/ingest_new_transcripts.py",
-        "file:agent-learning-compounder/bin/sandbox_run_state.py",
         "file:agent-learning-compounder/bin/transcript_parser.py",
         "file:agent-learning-compounder/bin/alc_apply_contracts.py",
         "document:agent-learning-compounder/scripts/spike/RESULTS.md",
@@ -33046,7 +33086,10 @@
         "file:agent-learning-compounder/scripts/render_unified_report.py",
         "file:agent-learning-compounder/scripts/run_pressure_tests.py",
         "file:agent-learning-compounder/scripts/serve_dashboard.py",
-        "file:agent-learning-compounder/scripts/validate_artifacts.py"
+        "file:agent-learning-compounder/scripts/validate_artifacts.py",
+        "file:agent-learning-compounder/bin/event_schema.py",
+        "file:agent-learning-compounder/bin/event_writer.py",
+        "file:agent-learning-compounder/bin/sandbox_run_state.py"
       ]
     },
     {
@@ -33112,7 +33155,7 @@
     {
       "id": "layer:data-contracts",
       "name": "Data Contracts",
-      "description": "JSON-schema manifests for U8\u2013U13 pipeline stages (analyst, recommender, apply, invoke, eval) plus the shared base schema \u2014 the durable contract between pipeline stages and downstream consumers.",
+      "description": "JSON-schema manifests for U8–U13 pipeline stages (analyst, recommender, apply, invoke, eval) plus the shared base schema — the durable contract between pipeline stages and downstream consumers.",
       "nodeIds": [
         "schema:agent-learning-compounder/data-contracts/manifests/u11-apply.json",
         "schema:agent-learning-compounder/data-contracts/manifests/u12-invoke.json",
@@ -33147,7 +33190,7 @@
     {
       "id": "layer:tests",
       "name": "Tests",
-      "description": "Both test suites \u2014 fixtures/tests/ (the real unit+integration suite, ~166 tests) and tests/ (post-install smoke suite verifying installed layout), plus alc_mcp/tests/ for MCP-specific coverage.",
+      "description": "Both test suites — fixtures/tests/ (the real unit+integration suite, ~166 tests) and tests/ (post-install smoke suite verifying installed layout), plus alc_mcp/tests/ for MCP-specific coverage.",
       "nodeIds": [
         "file:agent-learning-compounder/tests/test_alc_eval.py",
         "file:agent-learning-compounder/alc_mcp/tests/test_mcp_catalog.py",
@@ -33228,10 +33271,6 @@
         "file:agent-learning-compounder/tests/test_event_emit.py",
         "file:agent-learning-compounder/tests/test_event_schema.py",
         "file:agent-learning-compounder/tests/test_event_writer.py",
-        "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
-        "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
-        "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
-        "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
         "file:agent-learning-compounder/tests/test_hooks.py",
         "file:agent-learning-compounder/tests/test_index_events.py",
         "file:agent-learning-compounder/tests/test_ingest_new_transcripts.py",
@@ -33245,7 +33284,12 @@
         "file:agent-learning-compounder/tests/test_smoke.py",
         "file:agent-learning-compounder/tests/test_state_handle.py",
         "file:agent-learning-compounder/tests/test_synthesize_samples.py",
-        "file:agent-learning-compounder/tests/test_transcript_parser.py"
+        "file:agent-learning-compounder/tests/test_transcript_parser.py",
+        "file:agent-learning-compounder/tests/test_exec_sandbox_eval.py",
+        "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
+        "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
+        "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
+        "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py"
       ]
     },
     {
@@ -33337,7 +33381,7 @@
     {
       "order": 1,
       "title": "What ALC Is",
-      "description": "Start with the README to internalise the project's single-sentence pitch: a compound-memory loop where sessions feed durable agent memory and future sessions read it back. The README maps out the three first-class install paths (npx, curl-pipe-sh, Claude marketplace), the auto-loaded compact-context files that an agent sees at session start, and the trust posture \u2014 no raw prompts, transcripts, or tool output ever land on disk. ARCHITECTURE.md is the deeper companion: it names the eight layers and the KTD seam abstractions (alc_query, alc_propose, alc_apply, exec_sandbox) you'll meet later in the tour.",
+      "description": "Start with the README to internalise the project's single-sentence pitch: a compound-memory loop where sessions feed durable agent memory and future sessions read it back. The README maps out the three first-class install paths (npx, curl-pipe-sh, Claude marketplace), the auto-loaded compact-context files that an agent sees at session start, and the trust posture — no raw prompts, transcripts, or tool output ever land on disk. ARCHITECTURE.md is the deeper companion: it names the eight layers and the KTD seam abstractions (alc_query, alc_propose, alc_apply, exec_sandbox) you'll meet later in the tour.",
       "nodeIds": [
         "document:README.md",
         "document:ARCHITECTURE.md"
@@ -33356,7 +33400,7 @@
     {
       "order": 3,
       "title": "The Install Layer in Code",
-      "description": "Three thin programs implement the three install paths and they all delegate to one place. `scripts/alc-install.mjs` is the npm/npx entry that also works around npm's tarball symlink-dereferencing by re-materialising the dual-name `.py` aliases. `bootstrap.sh` is the curl-pipe-sh script that fetches the tarball and execs the real installer. `install.sh` is that real installer \u2014 it resolves the target runtime (Codex, Claude, or both), refuses to write through symlinks, backs existing installs into timestamped `.bak-<ts>` directories, and is the only thing that ever touches the install root.",
+      "description": "Three thin programs implement the three install paths and they all delegate to one place. `scripts/alc-install.mjs` is the npm/npx entry that also works around npm's tarball symlink-dereferencing by re-materialising the dual-name `.py` aliases. `bootstrap.sh` is the curl-pipe-sh script that fetches the tarball and execs the real installer. `install.sh` is that real installer — it resolves the target runtime (Codex, Claude, or both), refuses to write through symlinks, backs existing installs into timestamped `.bak-<ts>` directories, and is the only thing that ever touches the install root.",
       "nodeIds": [
         "file:scripts/alc-install.mjs",
         "file:bootstrap.sh",
@@ -33367,7 +33411,7 @@
     {
       "order": 4,
       "title": "Per-Repo Bootstrap and First-Run Profiling",
-      "description": "Once the skill is installed, each consuming repo needs its own state and self-test. `bin/init_learning_system` writes `<repo>/.agent-learning.json`, scaffolds the state directory tree, and runs the durable-write health contract that future stages depend on. `bin/alc_init` is the agent-facing first-run profiler \u2014 it brings the MCP surface to green and is what an agent invokes the very first time it lands in a fresh repo. Both are deliberately declarative: they never register schedulers or touch tracked files.",
+      "description": "Once the skill is installed, each consuming repo needs its own state and self-test. `bin/init_learning_system` writes `<repo>/.agent-learning.json`, scaffolds the state directory tree, and runs the durable-write health contract that future stages depend on. `bin/alc_init` is the agent-facing first-run profiler — it brings the MCP surface to green and is what an agent invokes the very first time it lands in a fresh repo. Both are deliberately declarative: they never register schedulers or touch tracked files.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/init_learning_system",
         "file:agent-learning-compounder/bin/alc_init"
@@ -33376,26 +33420,26 @@
     {
       "order": 5,
       "title": "Wiring Runtime Hooks",
-      "description": "Hook telemetry is what closes the compound loop \u2014 but installing it touches the user's runtime config, so it's deliberately two-phase. `install_runtime_hooks.py` is a `--dry-run` by default; you must pass `--apply` to actually write `.codex/hooks.json` or `.claude/settings.local.json`. It validates command integrity, confirms the manifest path is gitignored, and refuses to overwrite if the file is already tracked. This is the seam where the installer hands telemetry off to the runtime.",
+      "description": "Hook telemetry is what closes the compound loop — but installing it touches the user's runtime config, so it's deliberately two-phase. `install_runtime_hooks.py` is a `--dry-run` by default; you must pass `--apply` to actually write `.codex/hooks.json` or `.claude/settings.local.json`. It validates command integrity, confirms the manifest path is gitignored, and refuses to overwrite if the file is already tracked. This is the seam where the installer hands telemetry off to the runtime.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/install_runtime_hooks.py"
       ]
     },
     {
       "order": 6,
-      "title": "Telemetry Capture \u2014 From Hook Payload to JSONL",
-      "description": "When a hook fires, three modules collaborate to write a single trustworthy event. `collect_hook_event.py` is the runtime-agnostic adapter: it normalises raw Codex/Claude payloads into the bounded allowlist schema. `event_schema.py` is the canonical event-v4 contract (ActorInfo, Telemetry, ChainLink, deterministic IDs, JSON-schema + SQLite-DDL emission). `event_writer.py` is the chokepoint \u2014 it enforces the trust boundary: flock-based state lock, regular-file-only writes, secret scrubbing, length bounding, and atomic JSONL rotation. Any new caller writing telemetry must go through this trio.",
+      "title": "Telemetry Capture — From Hook Payload to JSONL",
+      "description": "When a hook fires, three modules collaborate to write a single trustworthy event. `collect_hook_event.py` is the runtime-agnostic adapter: it normalises raw Codex/Claude payloads into the bounded allowlist schema. `event_schema.py` is the canonical event-v4 contract (ActorInfo, Telemetry, ChainLink, deterministic IDs, JSON-schema + SQLite-DDL emission). `event_writer.py` is the chokepoint — it enforces the trust boundary: flock-based state lock, regular-file-only writes, secret scrubbing, length bounding, and atomic JSONL rotation. Any new caller writing telemetry must go through this trio.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/collect_hook_event.py",
         "file:agent-learning-compounder/bin/event_schema.py",
         "file:agent-learning-compounder/bin/event_writer.py"
       ],
-      "languageLesson": "Python dataclasses with `__post_init__` deterministic ID computation give you both schema enforcement and stable cross-process equality without pulling in a runtime validator like Pydantic \u2014 useful when the writer must work in stripped-down install environments."
+      "languageLesson": "Python dataclasses with `__post_init__` deterministic ID computation give you both schema enforcement and stable cross-process equality without pulling in a runtime validator like Pydantic — useful when the writer must work in stripped-down install environments."
     },
     {
       "order": 7,
-      "title": "Trust Seams \u2014 Scrubbing, Validation, State Paths",
-      "description": "Trust in ALC is enforced by three specific files that every writer and exporter routes through. `scrub_secrets.py` (the top fan-in module in the whole repo) is the single chokepoint that redacts tokens, keys, paths, and email addresses before anything lands on disk. `validate_outputs.py` rejects psychological/ability claims about the operator and verifies bucket-line shape before durable-memory writes \u2014 set `AGENT_LEARNING_SUBJECT_NAMES` to catch personal-name variants. `state_paths.py` resolves the documented state-root precedence and provides atomic write helpers that refuse to follow symlinks. Treat these three as the load-bearing trust seams of the whole project.",
+      "title": "Trust Seams — Scrubbing, Validation, State Paths",
+      "description": "Trust in ALC is enforced by three specific files that every writer and exporter routes through. `scrub_secrets.py` (the top fan-in module in the whole repo) is the single chokepoint that redacts tokens, keys, paths, and email addresses before anything lands on disk. `validate_outputs.py` rejects psychological/ability claims about the operator and verifies bucket-line shape before durable-memory writes — set `AGENT_LEARNING_SUBJECT_NAMES` to catch personal-name variants. `state_paths.py` resolves the documented state-root precedence and provides atomic write helpers that refuse to follow symlinks. Treat these three as the load-bearing trust seams of the whole project.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/scrub_secrets.py",
         "file:agent-learning-compounder/bin/validate_outputs.py",
@@ -33404,8 +33448,8 @@
     },
     {
       "order": 8,
-      "title": "Ingestion \u2014 Repo Facts and Session Transcripts",
-      "description": "With trustworthy event capture in place, the ingestion stage turns inputs into a corpus. `build_repo_baseline.py` walks the target repo and extracts purpose, stack, entry points, CI files, packaging commands, and instruction rules \u2014 the static side of the corpus. `extract_sessions.py` walks the runtime's project directories, samples middle messages from session transcripts, and filters by working-directory match \u2014 the dynamic side. Together they produce the input that the analyst and distillation pipeline consume next.",
+      "title": "Ingestion — Repo Facts and Session Transcripts",
+      "description": "With trustworthy event capture in place, the ingestion stage turns inputs into a corpus. `build_repo_baseline.py` walks the target repo and extracts purpose, stack, entry points, CI files, packaging commands, and instruction rules — the static side of the corpus. `extract_sessions.py` walks the runtime's project directories, samples middle messages from session transcripts, and filters by working-directory match — the dynamic side. Together they produce the input that the analyst and distillation pipeline consume next.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/build_repo_baseline.py",
         "file:agent-learning-compounder/bin/extract_sessions.py"
@@ -33414,7 +33458,7 @@
     {
       "order": 9,
       "title": "The Analyst and Recommender Pipeline",
-      "description": "This is the brain. `analyst_queries.py` is the catalogue of the 10 canonical Q1-Q10 SQL queries that run read-only against the v4 events DB with a schema-version guard \u2014 it produces the patterns, anomalies, correlations, and recommendations artifacts. `recommender_generators.py` then turns validated recommendation records into agent-ready patch bundles for the anomaly, routing, model-swap, agent-spawn, and workflow-chain kinds. The data contracts in `u8-analyst.json` and `u9-recommender.json` are the durable JSON-schema manifests pinning each artifact's shape, retention, and surfacing rules \u2014 change those manifests and every consumer downstream must follow.",
+      "description": "This is the brain. `analyst_queries.py` is the catalogue of the 10 canonical Q1-Q10 SQL queries that run read-only against the v4 events DB with a schema-version guard — it produces the patterns, anomalies, correlations, and recommendations artifacts. `recommender_generators.py` then turns validated recommendation records into agent-ready patch bundles for the anomaly, routing, model-swap, agent-spawn, and workflow-chain kinds. The data contracts in `u8-analyst.json` and `u9-recommender.json` are the durable JSON-schema manifests pinning each artifact's shape, retention, and surfacing rules — change those manifests and every consumer downstream must follow.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/analyst_queries.py",
         "file:agent-learning-compounder/bin/recommender_generators.py",
@@ -33423,8 +33467,8 @@
     },
     {
       "order": 10,
-      "title": "Distillation and Refresh \u2014 Closing the Loop",
-      "description": "`distill_learning.py` is the core distillation pipeline that turns the corpus into a durable learning report with gates, skill sections, and evergreen proposals. `refresh_learning_state.py` is the top-level orchestrator that chains baseline, skill-usage, gate-effectiveness, domain-rule mining, and queue-dedup steps under a single state lock \u2014 re-derive everything, declaratively, never registering a scheduler. `auto_distill_session` is the non-interactive automation entry that runs after a session ends, refreshing the export surfaces an agent will load on next start. This is the loop the README's diagram closes.",
+      "title": "Distillation and Refresh — Closing the Loop",
+      "description": "`distill_learning.py` is the core distillation pipeline that turns the corpus into a durable learning report with gates, skill sections, and evergreen proposals. `refresh_learning_state.py` is the top-level orchestrator that chains baseline, skill-usage, gate-effectiveness, domain-rule mining, and queue-dedup steps under a single state lock — re-derive everything, declaratively, never registering a scheduler. `auto_distill_session` is the non-interactive automation entry that runs after a session ends, refreshing the export surfaces an agent will load on next start. This is the loop the README's diagram closes.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/distill_learning.py",
         "file:agent-learning-compounder/bin/refresh_learning_state.py",
@@ -33433,8 +33477,8 @@
     },
     {
       "order": 11,
-      "title": "Compact-Context Exports \u2014 What an Agent Sees on Start",
-      "description": "An agent never reads the raw corpus; it reads two synthesised markdown files plus a session digest. `export_gates.py` renders `latest-approved-gates.md` from the gate registry \u2014 it parses gate blocks, applies probes, and preserves inherited blocks from the shared cross-repo registry (note the `derived_from:` provenance). `export_skill_context.py` renders `latest-skill-context.md`, the compact skill-routing surface that replaces the raw skill map. These two markdown files are what auto-loads at session start; the README calls them out by name for a reason.",
+      "title": "Compact-Context Exports — What an Agent Sees on Start",
+      "description": "An agent never reads the raw corpus; it reads two synthesised markdown files plus a session digest. `export_gates.py` renders `latest-approved-gates.md` from the gate registry — it parses gate blocks, applies probes, and preserves inherited blocks from the shared cross-repo registry (note the `derived_from:` provenance). `export_skill_context.py` renders `latest-skill-context.md`, the compact skill-routing surface that replaces the raw skill map. These two markdown files are what auto-loads at session start; the README calls them out by name for a reason.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/export_gates.py",
         "file:agent-learning-compounder/bin/export_skill_context.py"
@@ -33442,27 +33486,27 @@
     },
     {
       "order": 12,
-      "title": "The MCP Surface \u2014 12 Tools, One Catalog",
-      "description": "Live querying of the durable memory happens via the stdio MCP server. `alc_mcp/catalog.py` is the canonical `MCP_TOOLS` catalog defining the M1-M11 capability specs split across read (`get_gates`, `get_recommendations`, `get_skill_context`), propose (`propose_gate`, `report_outcome`), sandbox (`exec_sandbox`), and the newest synthesiser `next_action` (M11). `server.py` is the JSON-RPC stdio server \u2014 it auto-registers every catalog entry, wiring each `MCPToolSpec.backing` into a thin async handler over alc_query/alc_propose. `.mcp.json` is the manifest that Claude Code reads to discover all of this. Add a tool by appending to the catalog; the server picks it up automatically.",
+      "title": "The MCP Surface — 12 Tools, One Catalog",
+      "description": "Live querying of the durable memory happens via the stdio MCP server. `alc_mcp/catalog.py` is the canonical `MCP_TOOLS` catalog defining the M1-M11 capability specs split across read (`get_gates`, `get_recommendations`, `get_skill_context`), propose (`propose_gate`, `report_outcome`), sandbox (`exec_sandbox`), and the newest synthesiser `next_action` (M11). `server.py` is the JSON-RPC stdio server — it auto-registers every catalog entry, wiring each `MCPToolSpec.backing` into a thin async handler over alc_query/alc_propose. `.mcp.json` is the manifest that Claude Code reads to discover all of this. Add a tool by appending to the catalog; the server picks it up automatically.",
       "nodeIds": [
         "file:agent-learning-compounder/alc_mcp/catalog.py",
         "file:agent-learning-compounder/alc_mcp/server.py",
         "config:agent-learning-compounder/.mcp.json"
       ],
-      "languageLesson": "Catalog-driven RPC servers separate the contract (the data-defined spec) from the dispatcher (the auto-wired handler). Adding a tool becomes one data entry rather than three coordinated edits \u2014 a pattern worth copying whenever you have N similar endpoints."
+      "languageLesson": "Catalog-driven RPC servers separate the contract (the data-defined spec) from the dispatcher (the auto-wired handler). Adding a tool becomes one data entry rather than three coordinated edits — a pattern worth copying whenever you have N similar endpoints."
     },
     {
       "order": 13,
-      "title": "Next-Action Synthesis \u2014 One Source of Truth",
-      "description": "`alc_next_action.py` is the M11 capability the README highlights as 'the single best move from current state.' It walks signal rungs \u2014 pending patches, recent rejects, stale recommendations, idle \u2014 and produces intent-specific suggestions for session-start, session-end recap, and the standalone 'what's next?' query. The README's claim that one synthesiser handles all three intents lives here; if you ever feel tempted to write a separate end-of-session summariser, look here first.",
+      "title": "Next-Action Synthesis — One Source of Truth",
+      "description": "`alc_next_action.py` is the M11 capability the README highlights as 'the single best move from current state.' It walks signal rungs — pending patches, recent rejects, stale recommendations, idle — and produces intent-specific suggestions for session-start, session-end recap, and the standalone 'what's next?' query. The README's claim that one synthesiser handles all three intents lives here; if you ever feel tempted to write a separate end-of-session summariser, look here first.",
       "nodeIds": [
         "file:agent-learning-compounder/bin/alc_next_action.py"
       ]
     },
     {
       "order": 14,
-      "title": "The Dashboard \u2014 FastAPI Shell, React SPA",
-      "description": "The operator-facing surface is two complementary layers. `skills/alc-dashboard/server.py` is the localhost FastAPI/Jinja2/HTMX server that reads suggestions off the state surface and buckets recommendations for display \u2014 the server-rendered baseline that works without a build step. The React SPA at `dashboard/web/src/main.tsx` and `App.tsx` is the richer surface: a Vite + Tailwind app that applies a stored theme, polls the backend, and composes the action bar plus domain-heat panels. Both consume the same backend data; you choose the surface by which entry point you run.",
+      "title": "The Dashboard — FastAPI Shell, React SPA",
+      "description": "The operator-facing surface is two complementary layers. `skills/alc-dashboard/server.py` is the localhost FastAPI/Jinja2/HTMX server that reads suggestions off the state surface and buckets recommendations for display — the server-rendered baseline that works without a build step. The React SPA at `dashboard/web/src/main.tsx` and `App.tsx` is the richer surface: a Vite + Tailwind app that applies a stored theme, polls the backend, and composes the action bar plus domain-heat panels. Both consume the same backend data; you choose the surface by which entry point you run.",
       "nodeIds": [
         "file:agent-learning-compounder/skills/alc-dashboard/server.py",
         "file:agent-learning-compounder/dashboard/web/src/main.tsx",
@@ -33471,8 +33515,8 @@
     },
     {
       "order": 15,
-      "title": "Where to Extend \u2014 Catalogs, Contracts, Plugin Surfaces",
-      "description": "Three artifacts are the canonical extension points. The MCP catalog (Step 12) is where you add tools. The data-contract manifests under `data-contracts/manifests/` \u2014 the U11 apply contract is a good representative \u2014 are where you declare new pipeline-stage artifacts with retention, caps, and dashboard surfacing. `plugin.json` and the runtime entrypoints `AGENTS.md` (Codex) and `CLAUDE.md` (Claude) are where you register slash commands, persona agents, and implicit-invocation policy. Touch these three surfaces together and the change ripples cleanly through install, MCP, and the dashboard.",
+      "title": "Where to Extend — Catalogs, Contracts, Plugin Surfaces",
+      "description": "Three artifacts are the canonical extension points. The MCP catalog (Step 12) is where you add tools. The data-contract manifests under `data-contracts/manifests/` — the U11 apply contract is a good representative — are where you declare new pipeline-stage artifacts with retention, caps, and dashboard surfacing. `plugin.json` and the runtime entrypoints `AGENTS.md` (Codex) and `CLAUDE.md` (Claude) are where you register slash commands, persona agents, and implicit-invocation policy. Touch these three surfaces together and the change ripples cleanly through install, MCP, and the dashboard.",
       "nodeIds": [
         "schema:agent-learning-compounder/data-contracts/manifests/u11-apply.json",
         "config:agent-learning-compounder/.claude-plugin/plugin.json",
