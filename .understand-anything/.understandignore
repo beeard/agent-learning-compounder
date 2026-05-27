@@ -1,0 +1,32 @@
+# .understandignore — patterns for files/dirs to exclude from analysis
+# Syntax: same as .gitignore (globs, # comments, ! negation, trailing / for dirs)
+#
+# Built-in defaults (always excluded): node_modules/, .git/, dist/, build/, *.lock, *.min.js, etc.
+
+# --- State dumps (large JSONL, not source) ---
+.agent-learning/
+agent-learning-compounder/.agent-learning/
+agent-learning-compounder/personal/
+
+# --- Distribution artifacts ---
+dist/
+agent-learning-compounder/dist/
+*.tar.gz
+*.zip
+
+# --- Test fixtures (data, not source) ---
+agent-learning-compounder/fixtures/eval-fixtures/
+agent-learning-compounder/fixtures/sessions/
+agent-learning-compounder/fixtures/skill-cohorts/
+
+# --- Caches ---
+.pytest_cache/
+agent-learning-compounder/.pytest_cache/
+.understand-anything/
+
+# --- Docs history (frozen artifacts) ---
+docs/history/
+
+# --- Asset scratch ---
+agent-learning-compounder/assets/_*.html
+agent-learning-compounder/assets/_*.png
