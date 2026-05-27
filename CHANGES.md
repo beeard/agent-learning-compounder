@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased — PR 5 — Install-time warm loop
+## 2026.05.27+review7-plus2.3
 
 Close the warm-loop seam — `replay_hook_events` → `index_events` — into
 the install bootstrap and the Stop hook. A fresh install lands with a

@@ -34,6 +34,30 @@ should be resurrected by anyone running the next architecture review.
 
 **Estimated effort when triggered:** ~5h. `PipelineStep` protocol, `Pipeline` class with named steps + dependency graph + skip/only flags, convert refresh_learning_state to thin CLI wrapper.
 
+## #07 — `events.jsonl` has two writers; replay truncates
+
+**Files:** `bin/event_writer.py` (appends), `bin/replay_hook_events` (truncates via O_TRUNC), `bin/alc_bootstrap_pipeline` (calls replay each Stop)
+
+**Surfaced by:** PR 5 (2026-05-27, commit `f6311a6`). The PR 5 design brief explicitly chose full-replay-each-Stop (Decision 3, Option I) over an incremental cursor on `hook-events.jsonl`. Implemented per brief; this entry records the latent correctness gap so the next architecture review doesn't re-derive it.
+
+**The gap:** Two surfaces write to `<repo_state>/events.jsonl`:
+1. `event_writer.write_event(..., repo=R)` — append-only, called from `bin/alc_eval`, `bin/alc_propose.py`, `bin/alc_invoke`, `bin/exec_sandbox`, `bin/sandbox_run_state.py`, `bin/alc_apply_dispatch.py`, `bin/ingest_new_transcripts`, `bin/event_emit`, `bin/correlate_events`.
+2. `replay_hook_events --output events.jsonl` — O_TRUNC + rewrite from `hook-events.jsonl`.
+
+PR 5 wired (2) onto every Stop hook via `bin/alc_bootstrap_pipeline`. If any (1) call lands between Stops, the next Stop's replay truncates `events.jsonl` and the (1)-sourced rows are lost. The indexer cursor wouldn't help — those rows never got indexed before the truncate.
+
+**Not biting today because:** on this repo, the (1) callers are infrequent (alc_eval / alc_propose / sandbox runs are operator-triggered, not session-implicit). Live verification on 2026-05-27 showed 0 lost rows so far. The latent risk grows as ALC usage broadens (e.g., per-session sandbox runs, automated eval cycles).
+
+**Resurrect when ANY of:**
+- A regression appears where `event_writer`-sourced rows disappear from `events.sqlite` after a Stop.
+- `bin/exec_sandbox` or `bin/alc_eval` starts running automatically in-session (turns (1) into a session-implicit writer).
+- The user complains about Stop-hook latency (replay rewrites scale with `hook-events.jsonl` size; the 5 MB rotation caps it but isn't free).
+- The "incremental refresh path" trigger from #06 fires for any other reason — the two refactors share a sequencing concern and may want to be done together.
+
+**Estimated effort when triggered:** ~3h. Either (a) add an incremental cursor on `hook-events.jsonl` so replay appends rather than truncates (cleanest; matches PR 5 brief's "Decision 3 Option II"), or (b) split the two writer paths into separate JSONLs (`events.from_hooks.jsonl` + `events.from_writer.jsonl`) and have `index_events` read both — heavier change touching more callers.
+
 ## Source
 
 Full review: `/tmp/architecture-review-20260526T1318Z.html` (transient — rebuild via `/improve-codebase-architecture review` if needed).
+
+PR 5 wiring decision: `docs/dev/pr5-next-session.md` § "Decision 3 — Replay incremental or full each Stop?".
