@@ -168,10 +168,17 @@ def _rotate_session_reports(dest: pathlib.Path, keep: int = _SESSION_REPORT_KEEP
 
 
 def render_session_report(state: StateHandle) -> pathlib.Path:
-    """Build a per-session markdown report from the last hour of activity."""
+    """Build a per-session markdown report from recent activity.
+
+    Reports the last 1h primarily (session-scoped), but also surfaces 24h
+    context so an empty 1h window still reflects whether the repo is
+    genuinely idle vs. just outside the immediate session window.
+    """
     since = "1h"
+    fallback_since = "24h"
 
     actors = alc_query.get_actor_summary(state, since=since)
+    actors_24h = alc_query.get_actor_summary(state, since=fallback_since)
     applies = alc_query.get_apply_log(state, since=since)
     outcomes = alc_query.get_outcomes(state, since=since)
     pending = alc_query.get_pending_patches(state)
@@ -183,22 +190,35 @@ def render_session_report(state: StateHandle) -> pathlib.Path:
         f"# Session report — {state.repo.name}",
         "",
         f"_Generated at {now_str} by `render_state_surface --format session-report`._",
-        f"_Covers activity in the last {since}._",
+        f"_Covers activity in the last {since} (with {fallback_since} context)._",
         "",
         "## Activity summary",
         "",
     ]
 
     total = actors.get("total") or 0
+    total_24h = actors_24h.get("total") or 0
+    last_activity = actors_24h.get("last_activity_iso")
     if total > 0:
         by_kind = actors.get("by_actor_kind") or []
         kind_str = ", ".join(
             f"{r['count']} {r['actor_kind']} ({r['unique_actors']} unique)"
             for r in by_kind
         )
-        lines.append(f"- **Events:** {total} — {kind_str}")
+        lines.append(f"- **Events:** {total} in last {since} — {kind_str}")
+        if total_24h > total:
+            lines.append(f"- _Wider context: {total_24h} events in last {fallback_since}._")
+    elif total_24h > 0:
+        # Telemetry IS flowing, just not in the immediate window. Be honest
+        # about that — the prior "No events recorded" framing hid an
+        # actively-used repo behind a too-narrow query window.
+        last_str = (last_activity or "")[:19]
+        lines.append(
+            f"- _No events in last {since}, but {total_24h} events in last {fallback_since} "
+            f"(most recent: {last_str} UTC)._"
+        )
     else:
-        lines.append("- _No events recorded in this window._")
+        lines.append(f"- _No events recorded in the last {fallback_since}._")
 
     lines.append("")
     lines.append("## Apply log")

@@ -166,6 +166,16 @@ def _collect_signals(state: StateHandle) -> dict[str, Any]:
         if ts and (last_ts is None or ts > last_ts):
             last_ts = ts
 
+    # Broader last-activity signal: any event recorded in the last 7d, not
+    # just verdicts/applies. The narrow query above returns null on a repo
+    # that is actively used but hasn't proposed/applied a patch yet — which
+    # produced "no recent activity, quiet state" misreporting against repos
+    # with thousands of hook events.
+    activity_summary = alc_query.get_actor_summary(state, since="7d")
+    activity_last = activity_summary.get("last_activity_iso")
+    if activity_last and (last_ts is None or activity_last > last_ts):
+        last_ts = activity_last
+
     return {
         "pending_patches": pending_patch_count,
         "_first_patch_id": first_patch_id,
@@ -282,14 +292,45 @@ def _rung_recent_commits_no_plan(signals: dict[str, Any]) -> dict[str, Any] | No
     }
 
 
-def _rung_idle() -> dict[str, Any]:
-    """Priority rung 5: idle / no signal."""
+def _rung_idle(signals: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Priority rung 5: idle / no actionable workflow signal.
+
+    "Idle" here means none of the four workflow rungs fired (no pending
+    patches, no rejects, no stale-rec backlog, no recent applies). It does
+    NOT mean "no events." A repo can be heavily used (thousands of hook
+    rows in events.sqlite) yet still hit this rung if nothing has been
+    proposed/applied/rejected — the pipeline-driven workflow surfaces are
+    empty even when the telemetry surfaces are full. Distinguish those two
+    states in the message so the synthesizer stops claiming "no recent
+    activity" against an actively-used repo.
+    """
+    last_activity = (signals or {}).get("last_activity_iso") if signals else None
+    if last_activity:
+        # Recent telemetry but no workflow items — the pipeline ingest is
+        # populating events.sqlite but downstream propose/apply hasn't
+        # produced anything reviewable yet. That's a wiring/loop-closure
+        # finding, not "quiet."
+        return {
+            "headline": "Telemetry is flowing but no pending workflow items — investigate the propose/apply pipeline.",
+            "rationale": (
+                f"Events.sqlite has activity as recently as {last_activity[:19]}, but the "
+                "workflow surfaces (pending patches, recommendations, recent applies) are all empty. "
+                "This usually means the analyst/recommender pipeline isn't producing output, or its "
+                "output isn't being routed to the queue. Worth checking why the loop isn't closing."
+            ),
+            "skill": "alc-report",
+            "args": "--analyst-only",
+            "prompt": "Run the analyst pipeline against current events.sqlite and surface why nothing reaches the propose queue.",
+            "alternatives": [
+                {"skill": "ce-brainstorm", "rationale": "If the pipeline diagnosis confirms it's structural, brainstorm the fix."},
+            ],
+        }
     return {
-        "headline": "No pending work — quiet state. Good time to brainstorm.",
+        "headline": "No pending work and no recent telemetry — quiet state.",
         "rationale": (
-            "There are no pending patches, no urgent recommendations, and no recent activity. "
-            "This is a good moment to reflect on longer-horizon improvements or explore new directions "
-            "before the queue fills up again."
+            "No events recorded in events.sqlite within the recent window, no pending patches, "
+            "no urgent recommendations. Genuinely idle — good moment to reflect on longer-horizon "
+            "improvements or explore new directions."
         ),
         "skill": "ce-brainstorm",
         "args": None,
@@ -313,7 +354,7 @@ def _synthesise_start_next(signals: dict[str, Any]) -> dict[str, Any]:
         result = rung_fn(signals)
         if result is not None:
             return result
-    return _rung_idle()
+    return _rung_idle(signals)
 
 
 def _synthesise_end(signals: dict[str, Any]) -> dict[str, Any]:

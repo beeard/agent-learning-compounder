@@ -127,18 +127,35 @@ def _pipeline_commands(state: StateHandle, corpus: pathlib.Path, baseline: pathl
     else:
         distill_corpus = corpus
 
+    # Thread the per-repo skill-{map,usage,impact}.json into distill_learning
+    # so the skill_inventory / skill_usage / skill_compensation sections
+    # surface the analyzers' real output. Without these, distill falls back
+    # to a baseline-only skill view that reports `available_skills: 0` even
+    # when the analyzers have produced rich data — the report looks broken
+    # because the wrapper isn't passing the analyzer files it itself just
+    # wrote (refresh_learning_state.py:545-547).
+    skill_map_path = state.repo_state_dir / "skill-map.json"
+    skill_usage_path = state.repo_state_dir / "skill-usage.json"
+    skill_impact_path = state.repo_state_dir / "skill-impact.json"
+    distill_cmd = [
+        sys.executable,
+        str(BIN / "distill_learning"),
+        "--corpus",
+        str(distill_corpus),
+        "--baseline",
+        str(baseline),
+        "--output",
+        str(latest_report),
+        "--no-html",
+    ]
+    if skill_map_path.exists():
+        distill_cmd.extend(["--skill-map", str(skill_map_path)])
+    if skill_usage_path.exists():
+        distill_cmd.extend(["--skill-usage", str(skill_usage_path)])
+    if skill_impact_path.exists():
+        distill_cmd.extend(["--skill-impact", str(skill_impact_path)])
     commands.extend([
-        [
-            sys.executable,
-            str(BIN / "distill_learning"),
-            "--corpus",
-            str(distill_corpus),
-            "--baseline",
-            str(baseline),
-            "--output",
-            str(latest_report),
-            "--no-html",
-        ],
+        distill_cmd,
         [
             sys.executable,
             str(BIN / "synthesize_samples"),

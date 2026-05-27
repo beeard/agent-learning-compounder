@@ -491,10 +491,10 @@ def get_actor_summary(
     """
     _validate_scope(scope)
     if scope == "user":
-        return {"since": since, "total": 0, "by_actor_kind": []}
+        return {"since": since, "total": 0, "by_actor_kind": [], "last_activity_iso": None}
     path = state.events_sqlite
     if not path.is_file():
-        return {"since": since, "total": 0, "by_actor_kind": []}
+        return {"since": since, "total": 0, "by_actor_kind": [], "last_activity_iso": None}
 
     cutoff = _parse_since(since)
     sql = "SELECT actor_kind, COUNT(*) AS count, COUNT(DISTINCT actor_name) AS unique_actors"
@@ -505,8 +505,15 @@ def get_actor_summary(
         params.append(cutoff)
     sql += " GROUP BY actor_kind ORDER BY actor_kind"
 
+    last_sql = "SELECT MAX(ts) AS last_ts FROM events"
+    if cutoff is not None:
+        last_sql += " WHERE ts >= ?"
+
     with _with_conn(path) as conn:
         rows = _query_as_dicts(conn, sql, tuple(params))
+        last_row = _query_as_dicts(conn, last_sql, tuple(params))
+
+    last_ts = last_row[0]["last_ts"] if last_row and last_row[0].get("last_ts") else None
 
     return {
         "since": since,
@@ -515,6 +522,7 @@ def get_actor_summary(
             {"actor_kind": r["actor_kind"], "count": int(r["count"]), "unique_actors": int(r["unique_actors"])}
             for r in rows
         ],
+        "last_activity_iso": last_ts,
     }
 
 
