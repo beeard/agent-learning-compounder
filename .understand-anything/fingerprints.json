@@ -32123,5 +32123,284 @@
       "totalLines": 199,
       "hasStructuralAnalysis": true
     }
+  },
+  "agent-learning-compounder/bin/alc_bootstrap_pipeline.py": {
+    "contentHash": "f329de877afbc0d0f00af18e052f9dbecb91627651319b6c057cccecf6d18d56",
+    "functions": [
+      "_run_replay",
+      "main",
+      "parse_args",
+      "run"
+    ],
+    "classes": [],
+    "imports": [
+      "__future__",
+      "argparse\nimport os\nimport pathlib\nimport subprocess\nimport sys\n\nBIN_DIR",
+      "index_events",
+      "state_handle"
+    ],
+    "exports": [
+      "main",
+      "parse_args",
+      "run"
+    ]
+  },
+  "agent-learning-compounder/bin/alc_next_action.py": {
+    "contentHash": "8e07350855553d8fc1a7a5b93f0a411641b049511a491b5857ba6e5e90e9c4d7",
+    "functions": [
+      "_build_result",
+      "_collect_signals",
+      "_normalise_intent",
+      "_rung_idle",
+      "_rung_pending_patches",
+      "_rung_recent_commits_no_plan",
+      "_rung_recent_rejects",
+      "_rung_stale_recommendations",
+      "_seven_days_ago",
+      "_synthesise_auto",
+      "_synthesise_end",
+      "_synthesise_leftoff",
+      "_synthesise_recap",
+      "_synthesise_start_next",
+      "_write_cache",
+      "next_action"
+    ],
+    "classes": [],
+    "imports": [
+      "__future__",
+      "alc_query",
+      "alc_query\nexcept ImportError",
+      "datetime as dt\nimport json\nimport os\nfrom pathlib import Path\nfrom typing import Any\n\ntry",
+      "pathlib",
+      "state_handle",
+      "sys\n    _BIN",
+      "typing"
+    ],
+    "exports": [
+      "next_action"
+    ]
+  },
+  "agent-learning-compounder/bin/alc_query.py": {
+    "contentHash": "26a401b51775d79fb21688db17d30b52480d0d49e79835d9f48fbda117dc7fb1",
+    "functions": [
+      "_build",
+      "_configured_path",
+      "_connect_readonly",
+      "_ensure_session_filter",
+      "_normalize_kind_filter",
+      "_parse_gates_markdown",
+      "_parse_since",
+      "_query_as_dicts",
+      "_read_agent_learning_config",
+      "_read_json",
+      "_row_to_dict",
+      "_to_iso",
+      "_user_reports_dir",
+      "_validate_scope",
+      "_with_conn",
+      "get_actor_summary",
+      "get_apply_log",
+      "get_event_dag",
+      "get_gates",
+      "get_outcomes",
+      "get_pending_patches",
+      "get_recommendations",
+      "get_skill_context",
+      "get_skill_invocation_history",
+      "get_skill_usage_summary"
+    ],
+    "classes": [
+      "QueryError"
+    ],
+    "imports": [
+      "__future__",
+      "bin.state_handle",
+      "collections\nimport contextlib\nimport datetime as dt\nimport json\nimport re\nimport sqlite3\nimport sys\nfrom pathlib import Path\nfrom typing import Any, Literal\n\ntry",
+      "pathlib",
+      "state_handle",
+      "typing"
+    ],
+    "exports": [
+      "QueryError",
+      "get_actor_summary",
+      "get_apply_log",
+      "get_event_dag",
+      "get_gates",
+      "get_outcomes",
+      "get_pending_patches",
+      "get_recommendations",
+      "get_skill_context",
+      "get_skill_invocation_history",
+      "get_skill_usage_summary"
+    ]
+  },
+  "agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py": {
+    "contentHash": "1ce498e84d250fdee87b0153e1ad23c8265c59e2bee2bdf8178b044b3901cede",
+    "functions": [
+      "_emit",
+      "_safe_session",
+      "setUp",
+      "tearDown",
+      "test_e2e_two_uuids_remain_distinguishable",
+      "test_e2e_uuid_session_id_lands_as_hashed_token",
+      "test_safe_session_distinct_uuids_produce_distinct_tokens",
+      "test_safe_session_empty_returns_sentinel",
+      "test_safe_session_idempotent_on_hashed_token",
+      "test_safe_session_idempotent_on_session_sentinel",
+      "test_safe_session_non_uuid_slug_path_unchanged",
+      "test_safe_session_uuid_hashes_to_stable_prefixed_token",
+      "test_safe_session_uuid_never_leaks_raw_value"
+    ],
+    "classes": [
+      "SessionIdHashing"
+    ],
+    "imports": [
+      "__future__",
+      "importlib\n        mod",
+      "json\nimport os\nimport subprocess\nimport sys\nimport tempfile\nimport unittest\nfrom pathlib import Path\n\n\nREPO_ROOT",
+      "pathlib"
+    ],
+    "exports": [
+      "SessionIdHashing",
+      "setUp",
+      "tearDown",
+      "test_e2e_two_uuids_remain_distinguishable",
+      "test_e2e_uuid_session_id_lands_as_hashed_token",
+      "test_safe_session_distinct_uuids_produce_distinct_tokens",
+      "test_safe_session_empty_returns_sentinel",
+      "test_safe_session_idempotent_on_hashed_token",
+      "test_safe_session_idempotent_on_session_sentinel",
+      "test_safe_session_non_uuid_slug_path_unchanged",
+      "test_safe_session_uuid_hashes_to_stable_prefixed_token",
+      "test_safe_session_uuid_never_leaks_raw_value"
+    ]
+  },
+  "agent-learning-compounder/hooks/warm_loop_index.py": {
+    "contentHash": "d5afc3fd22981992b9cb17f6ff667b2ad51db9380bd2eb23f0dd965d26516e54",
+    "functions": [],
+    "classes": [],
+    "imports": [
+      "os\nimport pathlib\nimport subprocess\nimport sys\n\nPLUGIN_ROOT"
+    ],
+    "exports": []
+  },
+  "agent-learning-compounder/scripts/alc_bootstrap_pipeline.py": {
+    "contentHash": "f329de877afbc0d0f00af18e052f9dbecb91627651319b6c057cccecf6d18d56",
+    "functions": [
+      "_run_replay",
+      "main",
+      "parse_args",
+      "run"
+    ],
+    "classes": [],
+    "imports": [
+      "__future__",
+      "argparse\nimport os\nimport pathlib\nimport subprocess\nimport sys\n\nBIN_DIR",
+      "index_events",
+      "state_handle"
+    ],
+    "exports": [
+      "main",
+      "parse_args",
+      "run"
+    ]
+  },
+  "agent-learning-compounder/scripts/render_unified_report.py": {
+    "contentHash": "2e36e94e8cc9f8e8c33b58460353c589be3c8cbd4e24d778bf35ced86976a1b5",
+    "functions": [
+      "__enter__",
+      "__exit__",
+      "_default_corpus",
+      "_find_default_baseline",
+      "_load_dashboard_server",
+      "_pipeline_commands",
+      "_resolve_state",
+      "_run_command",
+      "_state_env",
+      "main",
+      "parse_args",
+      "run_unified_report"
+    ],
+    "classes": [
+      "CommandError",
+      "_Ctx"
+    ],
+    "imports": [
+      "__future__",
+      "argparse\nimport importlib.machinery\nimport importlib.util\nimport os\nimport pathlib\nimport subprocess\nimport sys\nimport webbrowser\nfrom dataclasses import dataclass\n\nROOT",
+      "bin.state_handle",
+      "dataclasses",
+      "state_handle"
+    ],
+    "exports": [
+      "CommandError",
+      "main",
+      "parse_args",
+      "run_unified_report"
+    ]
+  },
+  "agent-learning-compounder/tests/test_pr5_install_warm_loop.py": {
+    "contentHash": "75cbd00afb0effbc6b1253e12f6a29004b62a12e1980672ae3615e837c5cf6bf",
+    "functions": [
+      "_state",
+      "setUp",
+      "tearDown",
+      "test_dual_path_legacy_and_fresh_row_both_indexed",
+      "test_idempotent_rerun_does_not_duplicate",
+      "test_orchestrator_no_op_on_empty_state",
+      "test_skip_replay_indexes_existing_events_jsonl_only"
+    ],
+    "classes": [
+      "WarmLoopBootstrapTests"
+    ],
+    "imports": [
+      "__future__",
+      "alc_bootstrap_pipeline\nimport alc_query\nimport collect_hook_event\nfrom state_handle import StateHandle\n\n\nclass WarmLoopBootstrapTests",
+      "json\nimport os\nimport pathlib\nimport sys\nimport tempfile\nimport unittest\n\nREPO_ROOT",
+      "sqlite3\n        with sqlite3.connect",
+      "state_handle"
+    ],
+    "exports": [
+      "WarmLoopBootstrapTests",
+      "setUp",
+      "tearDown",
+      "test_dual_path_legacy_and_fresh_row_both_indexed",
+      "test_idempotent_rerun_does_not_duplicate",
+      "test_orchestrator_no_op_on_empty_state",
+      "test_skip_replay_indexes_existing_events_jsonl_only"
+    ]
+  },
+  "scripts/merge_dev_hooks.py": {
+    "contentHash": "4a8ace0e7c64346d2cd938ed111a958c083f20dff30ffdb83b0ec70fc2a70b2d",
+    "functions": [
+      "add_hook",
+      "apply",
+      "expected_hooks",
+      "has_command_with_substring",
+      "load_settings",
+      "main",
+      "plugin_root",
+      "understand_anything_hook_command",
+      "verify",
+      "write_settings"
+    ],
+    "classes": [],
+    "imports": [
+      "__future__",
+      "argparse\nimport json\nimport os\nimport pathlib\nimport sys\nfrom typing import Any\n\n\nREPO_DEFAULT",
+      "typing"
+    ],
+    "exports": [
+      "add_hook",
+      "apply",
+      "expected_hooks",
+      "has_command_with_substring",
+      "load_settings",
+      "main",
+      "plugin_root",
+      "understand_anything_hook_command",
+      "verify",
+      "write_settings"
+    ]
   }
 }

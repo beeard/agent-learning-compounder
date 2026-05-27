@@ -17850,68 +17850,6 @@
       "complexity": "moderate"
     },
     {
-      "id": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "type": "file",
-      "name": "render_unified_report.py",
-      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
-      "summary": "Orchestrates the unified ALC report pipeline by chaining baseline build, session distillation, indexing, correlation, and surface rendering commands.",
-      "tags": [
-        "orchestrator",
-        "pipeline",
-        "report"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:_pipeline_commands",
-      "type": "function",
-      "name": "_pipeline_commands",
-      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
-      "lineRange": [
-        0,
-        0
-      ],
-      "summary": "Builds the ordered list of subcommand invocations that make up the unified report pipeline.",
-      "tags": [
-        "pipeline",
-        "configuration"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
-      "type": "function",
-      "name": "run_unified_report",
-      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
-      "lineRange": [
-        0,
-        0
-      ],
-      "summary": "Executes the pipeline commands in sequence, collecting per-stage diagnostics for the operator.",
-      "tags": [
-        "orchestrator",
-        "pipeline",
-        "execution"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:main",
-      "type": "function",
-      "name": "main",
-      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
-      "lineRange": [
-        0,
-        0
-      ],
-      "summary": "CLI entry point that parses options and invokes run_unified_report.",
-      "tags": [
-        "entry-point",
-        "cli"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:agent-learning-compounder/scripts/run_pressure_tests.py",
       "type": "file",
       "name": "run_pressure_tests.py",
@@ -20063,321 +20001,6 @@
       "complexity": "simple"
     },
     {
-      "id": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "type": "file",
-      "name": "alc_next_action.py",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "summary": "Session-lifecycle synthesizer (M11 next_action) — collects bucketed signals via alc_query (pending patches, recommendations, recent applies, verdicts, cross-scope gate counts) and emits a structured recommendation per intent (start/next/end/recap/leftoff/auto) using a 5-rung priority ladder.",
-      "tags": [
-        "service",
-        "synthesis",
-        "session-lifecycle",
-        "mcp-backing"
-      ],
-      "complexity": "complex",
-      "languageNotes": "Library module — no CLI entry. The bin/state_handle fallback import block lets the module be invoked from outside the bin/ sys.path."
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
-      "type": "function",
-      "name": "next_action",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        541,
-        591
-      ],
-      "summary": "Public entry point: normalises intent, collects signals, dispatches to the matching synthesis branch (start_next, end, recap, leftoff, auto), assembles the schema-conforming dict, and writes the latest-next-action.json cache.",
-      "tags": [
-        "entry-point",
-        "api-handler",
-        "synthesis"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "type": "function",
-      "name": "_collect_signals",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        105,
-        181
-      ],
-      "summary": "Aggregates project-scope state (pending patches, recommendations, 7-day applies and verdicts) and user-scope cross-repo gate counts into the public signals dict — never returns raw rows.",
-      "tags": [
-        "aggregator",
-        "signals",
-        "scope-aware"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_start_next",
-      "type": "function",
-      "name": "_synthesise_start_next",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        305,
-        316
-      ],
-      "summary": "Forward-looking synthesis: walks the 5-rung priority ladder (pending patches → recent rejects → stale recs → recent commits → idle) and returns the first matching rung result.",
-      "tags": [
-        "synthesis",
-        "priority-ladder"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_end",
-      "type": "function",
-      "name": "_synthesise_end",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        319,
-        369
-      ],
-      "summary": "Session-close synthesis: chooses commit/PR, document-pending, or learn-from-quiet-session messaging based on recent applies and pending queue depth.",
-      "tags": [
-        "synthesis",
-        "session-lifecycle"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_recap",
-      "type": "function",
-      "name": "_synthesise_recap",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        372,
-        418
-      ],
-      "summary": "7-day narrative synthesis summarising patch applies and verdict tallies with last-activity date and a pointer to the full learning report.",
-      "tags": [
-        "synthesis",
-        "recap"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_leftoff",
-      "type": "function",
-      "name": "_synthesise_leftoff",
-      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
-      "lineRange": [
-        421,
-        464
-      ],
-      "summary": "Resume-from-last-session synthesis: surfaces the first pending patch id and most recent activity to give the operator a clean re-entry point.",
-      "tags": [
-        "synthesis",
-        "resume"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "file:agent-learning-compounder/bin/alc_query.py",
-      "type": "file",
-      "name": "alc_query.py",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "summary": "Canonical read-only query API (KTD-21) — the single seam through which MCP tools, dashboards, hooks, and CLI consume ALC state. Implements scope-aware (user/project/both) reads for gates, skill context, recommendations, pending patches, event DAGs, and skill-usage summaries.",
-      "tags": [
-        "service",
-        "api-handler",
-        "read-api",
-        "scope-aware",
-        "barrel"
-      ],
-      "complexity": "complex",
-      "languageNotes": "All SQLite connections opened read-only via URI mode; the _with_conn contextmanager fixes a previously leaked-connection bug in the dashboard."
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "function",
-      "name": "get_gates",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        96,
-        135
-      ],
-      "summary": "Scope-aware approved-gates reader (PR 2/3): merges project-scope and user-scope gate registers, dedupes by gate_id (project wins), tags each row with _source_scope, and optionally filters by domain.",
-      "tags": [
-        "api-handler",
-        "scope-aware",
-        "gates"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
-      "type": "function",
-      "name": "get_skill_context",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        138,
-        167
-      ],
-      "summary": "Scope-aware skill-context markdown reader: returns project file, user file, or both concatenated under scope headers so consumers can distinguish cross-repo vs per-repo learning.",
-      "tags": [
-        "api-handler",
-        "scope-aware",
-        "markdown"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
-      "type": "function",
-      "name": "get_apply_log",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        265,
-        306
-      ],
-      "summary": "Patch-apply event reader from project-scope events.sqlite with optional since/kind filters; returns [] for user scope (gates are written there, not applied).",
-      "tags": [
-        "api-handler",
-        "events",
-        "sqlite"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
-      "type": "function",
-      "name": "get_outcomes",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        309,
-        336
-      ],
-      "summary": "Eval-verdict event reader from project-scope events.sqlite with optional since filter.",
-      "tags": [
-        "api-handler",
-        "events",
-        "sqlite"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
-      "type": "function",
-      "name": "get_recommendations",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        339,
-        361
-      ],
-      "summary": "Reads analyst recommendation rows from <reports>/recommendations.json (project-scope only).",
-      "tags": [
-        "api-handler",
-        "recommendations"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
-      "type": "function",
-      "name": "get_pending_patches",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        364,
-        393
-      ],
-      "summary": "Returns pending patch bundles under <repo-state>/patches sorted by ts, filtering out deferred and rejected statuses; project-scope only.",
-      "tags": [
-        "api-handler",
-        "patches"
-      ],
-      "complexity": "simple"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
-      "type": "function",
-      "name": "get_event_dag",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        396,
-        479
-      ],
-      "summary": "Recursive CTE that reconstructs the parent/child event DAG for a session_id, capped at depth 64; falls back to orphan roots when a session's root chain is broken.",
-      "tags": [
-        "api-handler",
-        "events",
-        "graph",
-        "recursive-cte"
-      ],
-      "complexity": "complex"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
-      "type": "function",
-      "name": "get_actor_summary",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        482,
-        518
-      ],
-      "summary": "Per-actor-kind event totals since a duration cutoff, grouped with unique-actor counts.",
-      "tags": [
-        "api-handler",
-        "metrics",
-        "sqlite"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
-      "type": "function",
-      "name": "get_skill_usage_summary",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        521,
-        575
-      ],
-      "summary": "Aggregates events by actor_name with count, last-used timestamp, optional prefix filter — the closest skill-usage proxy in the events schema.",
-      "tags": [
-        "api-handler",
-        "metrics",
-        "skill-usage"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
-      "type": "function",
-      "name": "get_skill_invocation_history",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        578,
-        614
-      ],
-      "summary": "Returns per-actor invocation history from events.sqlite with a JSONL fallback for legacy events stores that persisted a skill field.",
-      "tags": [
-        "api-handler",
-        "events",
-        "history"
-      ],
-      "complexity": "moderate"
-    },
-    {
-      "id": "function:agent-learning-compounder/bin/alc_query.py:_parse_since",
-      "type": "function",
-      "name": "_parse_since",
-      "filePath": "agent-learning-compounder/bin/alc_query.py",
-      "lineRange": [
-        176,
-        212
-      ],
-      "summary": "Parses since= filter values across multiple types: None, ISO strings, epoch numbers, datetime, or short duration strings (e.g. 7d, 24h, 30m) into a UTC ISO cutoff string.",
-      "tags": [
-        "utility",
-        "parsing",
-        "datetime"
-      ],
-      "complexity": "moderate"
-    },
-    {
       "id": "file:agent-learning-compounder/bin/state_handle.py",
       "type": "file",
       "name": "state_handle.py",
@@ -21499,6 +21122,911 @@
         "regression"
       ],
       "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "type": "file",
+      "name": "alc_bootstrap_pipeline.py",
+      "filePath": "agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "summary": "Python-import symlink to bin/alc_bootstrap_pipeline; orchestrates Stop-hook warm-loop by replaying hook-events.jsonl through collect_hook_event then advancing the events.sqlite indexer.",
+      "tags": [
+        "symlink",
+        "warm-loop",
+        "orchestrator",
+        "hook-pipeline"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Per repo's dual-name convention: bin/<name>.py is a symlink to bin/<name> so Python's import machinery can resolve cross-script imports."
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:run",
+      "type": "function",
+      "name": "run",
+      "filePath": "agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "lineRange": [
+        55,
+        75
+      ],
+      "summary": "Orchestrates the warm-loop bootstrap for a repo: ensures state dir, optionally replays hook-events.jsonl into events.sqlite, then advances index_events.",
+      "tags": [
+        "orchestrator",
+        "warm-loop",
+        "idempotent"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:_run_replay",
+      "type": "function",
+      "name": "_run_replay",
+      "filePath": "agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "lineRange": [
+        34,
+        52
+      ],
+      "summary": "Invokes replay_hook_events as a subprocess with explicit log and events.jsonl paths; surfaces non-zero exit codes with stderr context.",
+      "tags": [
+        "subprocess",
+        "hook-replay",
+        "internal"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "type": "file",
+      "name": "alc_next_action.py",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "summary": "Backend for the M11 next_action MCP tool: collects recent signals (pending patches, recommendations, gates, apply log, outcomes, activity) and runs a rung-based heuristic to synthesise a session-lifecycle suggestion (start/end/recap/leftoff/auto).",
+      "tags": [
+        "mcp-backend",
+        "session-lifecycle",
+        "recommender",
+        "synthesizer",
+        "next-action"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Heuristic ladder: each _rung_* function probes one signal class; _synthesise_* functions compose the human-facing message and cache it as latest-next-action.json."
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
+      "type": "function",
+      "name": "next_action",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        582,
+        632
+      ],
+      "summary": "Public entry point — normalises the intent, collects signals via alc_query, dispatches to the matching _synthesise_* handler, builds the result, and writes the cache.",
+      "tags": [
+        "api",
+        "entry-point",
+        "dispatcher"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "type": "function",
+      "name": "_collect_signals",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        105,
+        191
+      ],
+      "summary": "Aggregates pending patches, recommendations, gates, apply log, outcomes (with verdict counts) and actor summary into a single signals dict for the synthesisers.",
+      "tags": [
+        "aggregator",
+        "signals",
+        "alc-query-client"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_start_next",
+      "type": "function",
+      "name": "_synthesise_start_next",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        346,
+        357
+      ],
+      "summary": "Runs the priority ladder of rungs (pending patches > recent rejects > stale recs > orphan commits > idle) and returns the first non-empty suggestion.",
+      "tags": [
+        "synthesizer",
+        "rung-ladder",
+        "priority"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_end",
+      "type": "function",
+      "name": "_synthesise_end",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        360,
+        410
+      ],
+      "summary": "Composes a session-end summary covering recent commits, apply-log activity, verdict totals, and pending follow-ups for the operator.",
+      "tags": [
+        "synthesizer",
+        "session-end",
+        "summary"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_recap",
+      "type": "function",
+      "name": "_synthesise_recap",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        413,
+        459
+      ],
+      "summary": "Builds the 7-day recap with verdict counts (good/bad/neutral) and high-signal items, biasing toward operator-readable summaries over raw rows.",
+      "tags": [
+        "synthesizer",
+        "recap",
+        "weekly-summary"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_leftoff",
+      "type": "function",
+      "name": "_synthesise_leftoff",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        462,
+        505
+      ],
+      "summary": "Answers \"where did I leave off\" by surfacing the most recent applied patch, latest gate decision, and pending work.",
+      "tags": [
+        "synthesizer",
+        "leftoff",
+        "context-recovery"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_auto",
+      "type": "function",
+      "name": "_synthesise_auto",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        508,
+        517
+      ],
+      "summary": "Fallback synthesiser when intent is unknown — defers to _synthesise_start_next.",
+      "tags": [
+        "synthesizer",
+        "fallback",
+        "auto"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_build_result",
+      "type": "function",
+      "name": "_build_result",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        524,
+        557
+      ],
+      "summary": "Normalises a synthesiser output into the public result schema (intent, message, action, citations, signals snapshot) the MCP tool returns to callers.",
+      "tags": [
+        "result-builder",
+        "schema",
+        "mcp-payload"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_write_cache",
+      "type": "function",
+      "name": "_write_cache",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        564,
+        575
+      ],
+      "summary": "Atomically persists the last next_action result to latest-next-action.json under the repo state dir so hooks and dashboards can read it without re-running.",
+      "tags": [
+        "cache",
+        "atomic-write",
+        "report-output"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_pending_patches",
+      "type": "function",
+      "name": "_rung_pending_patches",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        198,
+        224
+      ],
+      "summary": "Rung 1: if any patch bundles are unapplied, recommend reviewing the freshest one with the propose_apply CLI hint.",
+      "tags": [
+        "rung",
+        "pending-patches",
+        "heuristic"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_recent_rejects",
+      "type": "function",
+      "name": "_rung_recent_rejects",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        227,
+        249
+      ],
+      "summary": "Rung 2: surfaces recommendations that were rejected so the operator can decide whether to revise or retire them.",
+      "tags": [
+        "rung",
+        "rejects",
+        "heuristic"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_stale_recommendations",
+      "type": "function",
+      "name": "_rung_stale_recommendations",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        252,
+        270
+      ],
+      "summary": "Rung 3: nudges the operator to re-distill if recommendations are older than the freshness window.",
+      "tags": [
+        "rung",
+        "freshness",
+        "heuristic"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_recent_commits_no_plan",
+      "type": "function",
+      "name": "_rung_recent_commits_no_plan",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        273,
+        292
+      ],
+      "summary": "Rung 4: detects recent commits unattached to a planning artifact and suggests writing one.",
+      "tags": [
+        "rung",
+        "orphan-commits",
+        "heuristic"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_idle",
+      "type": "function",
+      "name": "_rung_idle",
+      "filePath": "agent-learning-compounder/bin/alc_next_action.py",
+      "lineRange": [
+        295,
+        339
+      ],
+      "summary": "Rung 5 (terminal): when no other signal fires, offers a generic exploratory suggestion appropriate for an idle session start.",
+      "tags": [
+        "rung",
+        "idle",
+        "fallback"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/bin/alc_query.py",
+      "type": "file",
+      "name": "alc_query.py",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "summary": "Canonical read-only API (KTD-21) for the learning system — exposes get_gates, get_recommendations, get_pending_patches, get_outcomes, get_apply_log, get_event_dag, get_actor_summary, and skill-usage queries against repo-local SQLite + JSON state.",
+      "tags": [
+        "read-api",
+        "query-seam",
+        "sqlite",
+        "facade"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses a contextmanager (_with_conn) over read-only sqlite connections and a deterministic since-parser supporting ISO timestamps, epoch seconds, and duration shorthand (Nd/Nh/Nm/Ns)."
+    },
+    {
+      "id": "class:agent-learning-compounder/bin/alc_query.py:QueryError",
+      "type": "class",
+      "name": "QueryError",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        32,
+        33
+      ],
+      "summary": "Exception type for invalid scope, missing artifacts, or malformed query inputs.",
+      "tags": [
+        "exception",
+        "error-type"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
+      "type": "function",
+      "name": "get_gates",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        96,
+        135
+      ],
+      "summary": "Returns approved gates parsed from latest-approved-gates.md across repo and user scopes, optionally filtered by domain.",
+      "tags": [
+        "read-api",
+        "gates",
+        "markdown-parse"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
+      "type": "function",
+      "name": "get_skill_context",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        138,
+        167
+      ],
+      "summary": "Concatenates user-scope and project-scope latest-skill-context.md outputs for agents that need durable skill routing.",
+      "tags": [
+        "read-api",
+        "skill-context",
+        "markdown"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
+      "type": "function",
+      "name": "get_apply_log",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        265,
+        306
+      ],
+      "summary": "Reads the apply-log SQLite table with optional since-filter and validated kind allowlist; returns dict rows.",
+      "tags": [
+        "read-api",
+        "apply-log",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
+      "type": "function",
+      "name": "get_outcomes",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        309,
+        336
+      ],
+      "summary": "Fetches outcome rows (verdict + payload) from the outcomes SQLite table with optional since-filter.",
+      "tags": [
+        "read-api",
+        "outcomes",
+        "sqlite"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
+      "type": "function",
+      "name": "get_recommendations",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        339,
+        361
+      ],
+      "summary": "Loads recommender output rows from latest-recommendations.json with type validation.",
+      "tags": [
+        "read-api",
+        "recommendations",
+        "json"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
+      "type": "function",
+      "name": "get_pending_patches",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        364,
+        393
+      ],
+      "summary": "Enumerates unapplied patch bundles in the configured patch directory and returns them sorted by mtime descending.",
+      "tags": [
+        "read-api",
+        "patches",
+        "filesystem"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
+      "type": "function",
+      "name": "get_event_dag",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        396,
+        479
+      ],
+      "summary": "Reconstructs the parent/child event DAG for a session from events.sqlite with deterministic ordering for replay/visualisation.",
+      "tags": [
+        "read-api",
+        "event-dag",
+        "sqlite",
+        "session"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
+      "type": "function",
+      "name": "get_actor_summary",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        482,
+        526
+      ],
+      "summary": "Aggregates event counts per actor with an optional since-filter and returns the latest activity timestamp.",
+      "tags": [
+        "read-api",
+        "actor-summary",
+        "aggregation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
+      "type": "function",
+      "name": "get_skill_usage_summary",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        529,
+        583
+      ],
+      "summary": "Counts skill-actor invocations with optional since-filter and actor-prefix filter for ranking skill usage.",
+      "tags": [
+        "read-api",
+        "skill-usage",
+        "aggregation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
+      "type": "function",
+      "name": "get_skill_invocation_history",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        586,
+        622
+      ],
+      "summary": "Returns chronological invocation rows for a single skill (sqlite-first, JSON fallback) for drill-down views.",
+      "tags": [
+        "read-api",
+        "skill-history",
+        "drilldown"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:_parse_since",
+      "type": "function",
+      "name": "_parse_since",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        176,
+        212
+      ],
+      "summary": "Normalises an int/float/str/datetime since-value into a UTC ISO timestamp, supporting Nd/Nh/Nm/Ns duration shorthand.",
+      "tags": [
+        "parser",
+        "since",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:_parse_gates_markdown",
+      "type": "function",
+      "name": "_parse_gates_markdown",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        73,
+        93
+      ],
+      "summary": "Parses the latest-approved-gates.md blocks into gate dicts (id, summary, domain) tagged with their source path.",
+      "tags": [
+        "parser",
+        "gates-markdown",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:agent-learning-compounder/bin/alc_query.py:_normalize_kind_filter",
+      "type": "function",
+      "name": "_normalize_kind_filter",
+      "filePath": "agent-learning-compounder/bin/alc_query.py",
+      "lineRange": [
+        242,
+        257
+      ],
+      "summary": "Validates a kind-filter input against an allowlist regex to keep apply-log SQL injection-free.",
+      "tags": [
+        "validation",
+        "security",
+        "sql-safety"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py",
+      "type": "file",
+      "name": "test_collect_hook_event_session_id.py",
+      "filePath": "agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py",
+      "summary": "Unit + end-to-end tests verifying that collect_hook_event hashes raw UUID session_ids cross-runtime, keeps the result idempotent, and never leaks the raw value into hook-events.jsonl.",
+      "tags": [
+        "test",
+        "hook-events",
+        "session-id",
+        "security"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "class:agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py:SessionIdHashing",
+      "type": "class",
+      "name": "SessionIdHashing",
+      "filePath": "agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py",
+      "lineRange": [
+        25,
+        132
+      ],
+      "summary": "TestCase exercising safe_session both via unit imports and a subprocess e2e path; asserts stable prefixed-token hashing, idempotency on already-hashed input, and distinguishability of distinct UUIDs.",
+      "tags": [
+        "unittest",
+        "hashing",
+        "e2e"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:agent-learning-compounder/hooks/warm_loop_index.py",
+      "type": "file",
+      "name": "warm_loop_index.py",
+      "filePath": "agent-learning-compounder/hooks/warm_loop_index.py",
+      "summary": "Stop-hook entry point that shells out to bin/alc_bootstrap_pipeline for the current working directory, warming events.sqlite from any rows the collector adapter just wrote into hook-events.jsonl.",
+      "tags": [
+        "hook",
+        "warm-loop",
+        "stop-hook",
+        "entry-point"
+      ],
+      "complexity": "simple",
+      "languageNotes": "Module top-level raise SystemExit propagates the subprocess returncode — there are no defined functions; the file IS the hook."
+    },
+    {
+      "id": "file:agent-learning-compounder/scripts/alc_bootstrap_pipeline.py",
+      "type": "file",
+      "name": "alc_bootstrap_pipeline.py",
+      "filePath": "agent-learning-compounder/scripts/alc_bootstrap_pipeline.py",
+      "summary": "Compatibility-path symlink to ../bin/alc_bootstrap_pipeline so external invocations and SKILL.md examples can resolve scripts/alc_bootstrap_pipeline.py.",
+      "tags": [
+        "symlink",
+        "compatibility-path",
+        "warm-loop"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "type": "file",
+      "name": "render_unified_report.py",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "summary": "End-to-end driver behind /alc-report — chains baseline build, hook indexing, distillation, gate export, skill export, dashboard refresh, and optionally serves the HTML dashboard.",
+      "tags": [
+        "entry-point",
+        "pipeline",
+        "report",
+        "orchestrator"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:agent-learning-compounder/scripts/render_unified_report.py:CommandError",
+      "type": "class",
+      "name": "CommandError",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        30,
+        34
+      ],
+      "summary": "Exception capturing the failing command, exit code, stdout, and stderr from a pipeline step for surfaced operator errors.",
+      "tags": [
+        "exception",
+        "pipeline-error"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
+      "type": "function",
+      "name": "run_unified_report",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        180,
+        225
+      ],
+      "summary": "Resolves repo and state, builds the pipeline command list, executes each step, and optionally loads + serves the dashboard with browser-open support.",
+      "tags": [
+        "pipeline-driver",
+        "orchestrator",
+        "dashboard"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:_pipeline_commands",
+      "type": "function",
+      "name": "_pipeline_commands",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        106,
+        177
+      ],
+      "summary": "Declarative command list for the report pipeline (baseline → hook index → distill → export gates → export skill context → refresh dashboard) with conditional skill-map/usage/impact extensions.",
+      "tags": [
+        "pipeline-spec",
+        "declarative",
+        "report"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:_run_command",
+      "type": "function",
+      "name": "_run_command",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        47,
+        58
+      ],
+      "summary": "Runs a single pipeline step via subprocess.run with captured output; raises CommandError on non-zero exit.",
+      "tags": [
+        "subprocess",
+        "step-runner"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:_load_dashboard_server",
+      "type": "function",
+      "name": "_load_dashboard_server",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        37,
+        44
+      ],
+      "summary": "Dynamically loads bin/serve_dashboard as a module via SourceFileLoader so the optional FastAPI dashboard stays a soft dependency.",
+      "tags": [
+        "dynamic-import",
+        "optional-dep",
+        "dashboard"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:_state_env",
+      "type": "function",
+      "name": "_state_env",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        72,
+        84
+      ],
+      "summary": "Context manager that temporarily sets AGENT_LEARNING_STATE_DIR so child processes share the resolved state root.",
+      "tags": [
+        "context-manager",
+        "env-var",
+        "state"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:agent-learning-compounder/scripts/render_unified_report.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "agent-learning-compounder/scripts/render_unified_report.py",
+      "lineRange": [
+        242,
+        262
+      ],
+      "summary": "CLI entry point — parses args and invokes run_unified_report; pretty-prints CommandError with captured stdout/stderr on failure.",
+      "tags": [
+        "cli",
+        "entry-point"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "type": "file",
+      "name": "test_pr5_install_warm_loop.py",
+      "filePath": "agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "summary": "Smoke + integration tests for the PR5 warm-loop bootstrap path — covers empty-state no-op, dual-path legacy vs fresh-row indexing, idempotent re-runs, and the skip-replay flag.",
+      "tags": [
+        "test",
+        "warm-loop",
+        "integration",
+        "pr5"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:agent-learning-compounder/tests/test_pr5_install_warm_loop.py:WarmLoopBootstrapTests",
+      "type": "class",
+      "name": "WarmLoopBootstrapTests",
+      "filePath": "agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "lineRange": [
+        33,
+        189
+      ],
+      "summary": "TestCase that drives alc_bootstrap_pipeline.run end-to-end against a temp repo and asserts events land in events.sqlite via alc_query.get_actor_summary and direct sqlite reads.",
+      "tags": [
+        "unittest",
+        "integration",
+        "bootstrap-pipeline"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/merge_dev_hooks.py",
+      "type": "file",
+      "name": "merge_dev_hooks.py",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "summary": "Dev-session setup utility that merges the full ALC + understand-anything hook stack into <repo>/.claude/settings.local.json so a freshly-started claude here picks up warm-loop, dashboard refresh, session-report, and auto-update hooks.",
+      "tags": [
+        "dev-tooling",
+        "hook-merger",
+        "setup",
+        "claude-settings"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Discovers the understand-anything plugin's hook command by globbing ~/.claude/plugins/cache for its hooks.json — necessary because the plugin loader doesn't reliably merge into the active session."
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:apply",
+      "type": "function",
+      "name": "apply",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        164,
+        184
+      ],
+      "summary": "Idempotently appends each expected hook row to settings.local.json — skips any matcher/event slot whose command already contains the needle substring.",
+      "tags": [
+        "idempotent",
+        "hook-install",
+        "settings-write"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:verify",
+      "type": "function",
+      "name": "verify",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        187,
+        209
+      ],
+      "summary": "Reads settings.local.json and reports which expected hooks are present vs missing for the --verify flow.",
+      "tags": [
+        "verification",
+        "diagnostics"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:expected_hooks",
+      "type": "function",
+      "name": "expected_hooks",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        70,
+        117
+      ],
+      "summary": "Returns the canonical list of (event, matcher, command, needle) entries the dev session needs — collector adapter, warm-loop, dashboard refresh, session-report, plus understand-anything auto-update.",
+      "tags": [
+        "spec",
+        "declarative",
+        "hook-config"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:understand_anything_hook_command",
+      "type": "function",
+      "name": "understand_anything_hook_command",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        40,
+        67
+      ],
+      "summary": "Locates the understand-anything plugin's PostToolUse hook command by scanning ~/.claude/plugins/cache for hooks.json and rewriting ${CLAUDE_PLUGIN_ROOT} to an absolute path.",
+      "tags": [
+        "plugin-discovery",
+        "hook-resolution"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:write_settings",
+      "type": "function",
+      "name": "write_settings",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        133,
+        139
+      ],
+      "summary": "Atomically writes the merged settings JSON via os.open with O_WRONLY|O_CREAT|O_TRUNC and a trailing newline.",
+      "tags": [
+        "atomic-write",
+        "settings-write"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:load_settings",
+      "type": "function",
+      "name": "load_settings",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        120,
+        130
+      ],
+      "summary": "Loads settings.local.json with strict error handling and ensures a hooks dict is present.",
+      "tags": [
+        "loader",
+        "settings-read"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/merge_dev_hooks.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/merge_dev_hooks.py",
+      "lineRange": [
+        212,
+        223
+      ],
+      "summary": "CLI entry point — supports --repo, --verify, default apply-then-verify flow.",
+      "tags": [
+        "cli",
+        "entry-point"
+      ],
+      "complexity": "simple"
     }
   ],
   "edges": [
@@ -27789,13 +28317,6 @@
       "weight": 0.5
     },
     {
-      "source": "document:agent-learning-compounder/AGENTS.md",
-      "target": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
       "source": "document:agent-learning-compounder/CLAUDE.md",
       "target": "config:agent-learning-compounder/.mcp.json",
       "type": "documents",
@@ -27812,13 +28333,6 @@
     {
       "source": "document:agent-learning-compounder/CLAUDE.md",
       "target": "file:agent-learning-compounder/bin/alc_propose.py",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
-    },
-    {
-      "source": "document:agent-learning-compounder/CLAUDE.md",
-      "target": "file:agent-learning-compounder/scripts/render_unified_report.py",
       "type": "documents",
       "direction": "forward",
       "weight": 0.5
@@ -31205,34 +31719,6 @@
       "weight": 1
     },
     {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:_pipeline_commands",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:main",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
       "source": "file:agent-learning-compounder/scripts/run_pressure_tests.py",
       "target": "function:agent-learning-compounder/scripts/run_pressure_tests.py:scenario_handoff_and_evergreen",
       "type": "contains",
@@ -31301,34 +31787,6 @@
       "type": "depends_on",
       "direction": "forward",
       "weight": 0.6
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "file:agent-learning-compounder/scripts/index_events.py",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "file:agent-learning-compounder/scripts/correlate_events.py",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "target": "file:agent-learning-compounder/scripts/render_state_surface.py",
-      "type": "depends_on",
-      "direction": "forward",
-      "weight": 0.6
-    },
-    {
-      "source": "document:agent-learning-compounder/skills/alc-core/SKILL.md",
-      "target": "file:agent-learning-compounder/scripts/render_unified_report.py",
-      "type": "documents",
-      "direction": "forward",
-      "weight": 0.5
     },
     {
       "source": "file:agent-learning-compounder/tests/test_agents.py",
@@ -31878,258 +32336,6 @@
       "weight": 0.5
     },
     {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_start_next",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_end",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_recap",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_leftoff",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "file:agent-learning-compounder/bin/state_handle.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
-      "target": "file:agent-learning-compounder/bin/alc_query.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:_parse_since",
-      "type": "contains",
-      "direction": "forward",
-      "weight": 1
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
-      "type": "exports",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "file:agent-learning-compounder/bin/alc_query.py",
-      "target": "file:agent-learning-compounder/bin/state_handle.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
       "source": "file:agent-learning-compounder/bin/state_handle.py",
       "target": "class:agent-learning-compounder/bin/state_handle.py:StateHandle",
       "type": "contains",
@@ -32201,13 +32407,6 @@
     },
     {
       "source": "file:agent-learning-compounder/dashboard/__init__.py",
-      "target": "file:agent-learning-compounder/bin/alc_query.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/dashboard/__init__.py",
       "target": "file:agent-learning-compounder/bin/state_handle.py",
       "type": "imports",
       "direction": "forward",
@@ -32226,20 +32425,6 @@
       "type": "imports",
       "direction": "forward",
       "weight": 0.7
-    },
-    {
-      "source": "function:agent-learning-compounder/dashboard/__init__.py:build_app",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/dashboard/__init__.py:build_app",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
     },
     {
       "source": "function:agent-learning-compounder/dashboard/__init__.py:build_app",
@@ -32306,59 +32491,10 @@
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
-      "target": "file:agent-learning-compounder/bin/alc_query.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/skills/alc-dashboard/server.py",
       "target": "file:agent-learning-compounder/bin/state_handle.py",
       "type": "imports",
       "direction": "forward",
       "weight": 0.7
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
-    },
-    {
-      "source": "function:agent-learning-compounder/skills/alc-dashboard/server.py:build_data_blob",
-      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
-      "type": "calls",
-      "direction": "forward",
-      "weight": 0.8
     },
     {
       "source": "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
@@ -32859,13 +32995,6 @@
     },
     {
       "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
-      "target": "file:agent-learning-compounder/bin/alc_query.py",
-      "type": "imports",
-      "direction": "forward",
-      "weight": 0.7
-    },
-    {
-      "source": "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
       "target": "file:agent-learning-compounder/bin/collect_hook_event.py",
       "type": "imports",
       "direction": "forward",
@@ -32898,6 +33027,517 @@
       "type": "tested_by",
       "direction": "forward",
       "weight": 0.5
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "target": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:run",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "target": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:_run_replay",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "target": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:run",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_start_next",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_end",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_recap",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_leftoff",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_synthesise_auto",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_build_result",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_write_cache",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_pending_patches",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_recent_rejects",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_stale_recommendations",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_recent_commits_no_plan",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:_rung_idle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "function:agent-learning-compounder/bin/alc_next_action.py:next_action",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_next_action.py",
+      "target": "file:agent-learning-compounder/bin/alc_query.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:agent-learning-compounder/bin/alc_next_action.py:_collect_signals",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "class:agent-learning-compounder/bin/alc_query.py:QueryError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:_parse_since",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:_parse_gates_markdown",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:_normalize_kind_filter",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "class:agent-learning-compounder/bin/alc_query.py:QueryError",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_gates",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_context",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_apply_log",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_outcomes",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_recommendations",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_pending_patches",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_event_dag",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_usage_summary",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_query.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_skill_invocation_history",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py",
+      "target": "class:agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py:SessionIdHashing",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/hooks/warm_loop_index.py",
+      "target": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/alc_bootstrap_pipeline.py",
+      "target": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "class:agent-learning-compounder/scripts/render_unified_report.py:CommandError",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:_pipeline_commands",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:_run_command",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:_load_dashboard_server",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:_state_env",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:run_unified_report",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/scripts/render_unified_report.py",
+      "target": "function:agent-learning-compounder/scripts/render_unified_report.py:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "target": "class:agent-learning-compounder/tests/test_pr5_install_warm_loop.py:WarmLoopBootstrapTests",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+      "target": "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "target": "function:agent-learning-compounder/bin/alc_bootstrap_pipeline.py:run",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py",
+      "target": "function:agent-learning-compounder/bin/alc_query.py:get_actor_summary",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:apply",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:verify",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:expected_hooks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:understand_anything_hook_command",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:write_settings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:load_settings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/merge_dev_hooks.py",
+      "target": "function:scripts/merge_dev_hooks.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
     }
   ],
   "layers": [
@@ -32907,16 +33547,13 @@
       "description": "Install orchestration (install.sh, bootstrap.sh, alc-install.mjs), marketplace and plugin manifests, package metadata, optional-dependency declarations — everything that lets a fresh repo or runtime adopt the skill.",
       "nodeIds": [
         "config:MANIFEST.json",
-        "file:bootstrap.sh",
         "file:install.sh",
         "config:package.json",
         "config:agent-learning-compounder/.mcp.json",
         "document:agent-learning-compounder/requirements-optional.txt",
         "config:.claude-plugin/marketplace.json",
         "config:agent-learning-compounder/.claude-plugin/plugin.json",
-        "file:scripts/alc-install.mjs",
-        "file:scripts/build_release.sh",
-        "file:scripts/sanitize_skill_tree.sh"
+        "file:scripts/merge_dev_hooks.py"
       ]
     },
     {
@@ -32938,7 +33575,6 @@
         "file:agent-learning-compounder/scripts/backfill_transcripts.py",
         "file:agent-learning-compounder/scripts/build_repo_baseline.py",
         "file:agent-learning-compounder/scripts/causal_probe.py",
-        "file:agent-learning-compounder/scripts/collect_hook_event.py",
         "file:agent-learning-compounder/scripts/distill_learning.py",
         "file:agent-learning-compounder/scripts/evaluate_classifier.py",
         "file:agent-learning-compounder/scripts/extract_skill_usage.py",
@@ -32946,7 +33582,6 @@
         "file:agent-learning-compounder/scripts/gates_promote.py",
         "file:agent-learning-compounder/scripts/ingest_new_transcripts.py",
         "file:agent-learning-compounder/scripts/init_learning_system.py",
-        "file:agent-learning-compounder/scripts/install_runtime_hooks.py",
         "file:agent-learning-compounder/scripts/evaluate_gate_effectiveness.py",
         "file:agent-learning-compounder/scripts/evaluate_skill_impact.py",
         "file:agent-learning-compounder/scripts/evaluate_skill_routing.py",
@@ -32968,7 +33603,6 @@
         "file:agent-learning-compounder/bin/alc_query.py",
         "file:agent-learning-compounder/bin/analyst_anomalies.py",
         "file:agent-learning-compounder/bin/analyst_correlations.py",
-        "file:agent-learning-compounder/bin/install_runtime_hooks.py",
         "file:agent-learning-compounder/bin/propose_domain_rules.py",
         "file:agent-learning-compounder/bin/queue_dedup.py",
         "file:agent-learning-compounder/bin/recommender_render.py",
@@ -32976,7 +33610,6 @@
         "file:agent-learning-compounder/bin/replay_hook_events.py",
         "file:agent-learning-compounder/bin/state_paths.py",
         "file:agent-learning-compounder/bin/causal_probe.py",
-        "file:agent-learning-compounder/bin/collect_hook_event.py",
         "file:agent-learning-compounder/bin/evaluate_gate_effectiveness.py",
         "file:agent-learning-compounder/bin/evaluate_skill_impact.py",
         "file:agent-learning-compounder/bin/evaluate_skill_routing.py",
@@ -33025,7 +33658,6 @@
         "file:agent-learning-compounder/bin/build_repo_baseline",
         "file:agent-learning-compounder/bin/causal_probe",
         "file:agent-learning-compounder/bin/ce_playbook",
-        "file:agent-learning-compounder/bin/collect_hook_event",
         "file:agent-learning-compounder/bin/correlate_events",
         "file:agent-learning-compounder/bin/distill_learning",
         "file:agent-learning-compounder/bin/evaluate_classifier",
@@ -33045,7 +33677,6 @@
         "file:agent-learning-compounder/bin/index_events.py",
         "file:agent-learning-compounder/bin/ingest_new_transcripts",
         "file:agent-learning-compounder/bin/init_learning_system",
-        "file:agent-learning-compounder/bin/install_runtime_hooks",
         "file:agent-learning-compounder/bin/map_active_skills",
         "file:agent-learning-compounder/bin/propose_domain_rules",
         "file:agent-learning-compounder/bin/queue_dedup",
@@ -33089,7 +33720,19 @@
         "file:agent-learning-compounder/scripts/validate_artifacts.py",
         "file:agent-learning-compounder/bin/event_schema.py",
         "file:agent-learning-compounder/bin/event_writer.py",
-        "file:agent-learning-compounder/bin/sandbox_run_state.py"
+        "file:agent-learning-compounder/bin/sandbox_run_state.py",
+        "file:bootstrap.sh",
+        "file:agent-learning-compounder/assets/report-template",
+        "file:agent-learning-compounder/data-contracts/manifests/.gitkeep",
+        "file:agent-learning-compounder/skills/alc-dashboard/static/style.css",
+        "file:agent-learning-compounder/skills/alc-dashboard/templates/dashboard.html",
+        "file:scripts/alc-install.mjs",
+        "file:scripts/build_release.sh",
+        "file:scripts/sanitize_skill_tree.sh",
+        "file:agent-learning-compounder/skills/alc-dashboard/server.py",
+        "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
+        "file:agent-learning-compounder/bin/alc_bootstrap_pipeline.py",
+        "file:agent-learning-compounder/scripts/alc_bootstrap_pipeline.py"
       ]
     },
     {
@@ -33135,7 +33778,6 @@
         "file:agent-learning-compounder/dashboard/web/src/components/ui/card.tsx",
         "file:agent-learning-compounder/dashboard/web/src/components/ui/separator.tsx",
         "file:agent-learning-compounder/dashboard/web/src/components/ui/tabs.tsx",
-        "file:agent-learning-compounder/dashboard/web/src/hooks/useConnection.ts",
         "file:agent-learning-compounder/dashboard/web/src/lib/data.ts",
         "file:agent-learning-compounder/dashboard/web/src/lib/utils.ts",
         "file:agent-learning-compounder/dashboard/web/src/main.tsx",
@@ -33144,11 +33786,7 @@
         "file:agent-learning-compounder/dashboard/web/tsconfig.app.tsbuildinfo",
         "file:agent-learning-compounder/dashboard/web/tsconfig.node.tsbuildinfo",
         "config:agent-learning-compounder/dashboard/web/vite.config.ts",
-        "file:agent-learning-compounder/skills/alc-dashboard/server.py",
         "document:agent-learning-compounder/skills/alc-dashboard/SKILL.md",
-        "file:agent-learning-compounder/skills/alc-dashboard/static/app.js",
-        "file:agent-learning-compounder/skills/alc-dashboard/static/style.css",
-        "file:agent-learning-compounder/skills/alc-dashboard/templates/dashboard.html",
         "file:agent-learning-compounder/dashboard/web/src/components/ScopedGatesPanel.tsx"
       ]
     },
@@ -33163,7 +33801,6 @@
         "schema:agent-learning-compounder/data-contracts/manifests/u8-analyst.json",
         "schema:agent-learning-compounder/data-contracts/manifests/u9-recommender.json",
         "config:agent-learning-compounder/data-contracts/base.json",
-        "file:agent-learning-compounder/data-contracts/manifests/.gitkeep",
         "document:agent-learning-compounder/data-contracts/README.md"
       ]
     },
@@ -33175,7 +33812,6 @@
         "document:agent-learning-compounder/agents/alc-reviewer.md",
         "config:agent-learning-compounder/agents/claude.yaml",
         "config:agent-learning-compounder/agents/openai.yaml",
-        "file:agent-learning-compounder/assets/report-template",
         "document:agent-learning-compounder/assets/report-template.md",
         "document:agent-learning-compounder/commands/alc-report.md",
         "config:agent-learning-compounder/domain-rules/generic.json",
@@ -33184,7 +33820,15 @@
         "file:agent-learning-compounder/hooks/refresh_dashboard.py",
         "file:agent-learning-compounder/hooks/session-start",
         "document:agent-learning-compounder/skills/alc-core/SKILL.md",
-        "document:agent-learning-compounder/skills/alc-next/SKILL.md"
+        "document:agent-learning-compounder/skills/alc-next/SKILL.md",
+        "file:agent-learning-compounder/scripts/collect_hook_event.py",
+        "file:agent-learning-compounder/scripts/install_runtime_hooks.py",
+        "file:agent-learning-compounder/bin/install_runtime_hooks.py",
+        "file:agent-learning-compounder/bin/collect_hook_event.py",
+        "file:agent-learning-compounder/bin/collect_hook_event",
+        "file:agent-learning-compounder/bin/install_runtime_hooks",
+        "file:agent-learning-compounder/dashboard/web/src/hooks/useConnection.ts",
+        "file:agent-learning-compounder/hooks/warm_loop_index.py"
       ]
     },
     {
@@ -33289,7 +33933,9 @@
         "file:agent-learning-compounder/tests/test_exec_sandbox_read.py",
         "file:agent-learning-compounder/tests/test_exec_sandbox_security.py",
         "file:agent-learning-compounder/tests/test_exec_sandbox_worktree.py",
-        "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py"
+        "file:agent-learning-compounder/tests/test_pipeline_b1_b3_b12.py",
+        "file:agent-learning-compounder/fixtures/tests/test_collect_hook_event_session_id.py",
+        "file:agent-learning-compounder/tests/test_pr5_install_warm_loop.py"
       ]
     },
     {
