@@ -12,7 +12,7 @@ import pathlib
 import re
 import sys
 
-from state_paths import atomic_rewrite
+from state_handle import atomic_rewrite
 from validate_outputs import validate
 
 

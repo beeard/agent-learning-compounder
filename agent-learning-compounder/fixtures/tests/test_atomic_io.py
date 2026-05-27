@@ -1,4 +1,4 @@
-"""Tests for the durable-write primitives in bin/state_paths.
+"""Tests for the durable-write primitives in bin/state_handle.
 
 Pre-fix: three locations (refresh_learning_state.write_json,
 refresh_learning_state._post_dedup, causal_probe._locked_probes) rewrote
@@ -23,7 +23,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "bin"))
-from state_paths import atomic_rewrite, atomic_write_text  # noqa: E402
+from state_handle import atomic_rewrite, atomic_write_text  # noqa: E402
 
 
 def _concurrent_append_worker(args):
@@ -33,7 +33,7 @@ def _concurrent_append_worker(args):
     # Re-import inside the worker; spawn does not inherit sys.path mutations.
     bin_dir = Path(__file__).resolve().parents[2] / "bin"
     sys.path.insert(0, str(bin_dir))
-    from state_paths import atomic_rewrite as worker_atomic_rewrite  # noqa: E402
+    from state_handle import atomic_rewrite as worker_atomic_rewrite  # noqa: E402
     path = Path(path_str)
     with worker_atomic_rewrite(path) as (current, commit):
         commit((current.rstrip("\n") + "\n" if current else "") + marker + "\n")

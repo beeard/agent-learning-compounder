@@ -20,9 +20,9 @@ except ImportError:
     from bin.scrub_secrets import scrub
 
 try:
-    from state_paths import resolve_state_dir
+    from state_handle import resolve_state_dir
 except ImportError:
-    from bin.state_paths import resolve_state_dir
+    from bin.state_handle import resolve_state_dir
 
 try:
     from state_handle import StateHandle

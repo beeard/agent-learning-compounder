@@ -54,7 +54,7 @@ FIXTURE_REPO = REPO_ROOT / "fixtures" / "eval-fixtures" / "mini-repo"
 SEED = FIXTURE_REPO / "seed"
 
 sys.path.insert(0, str(REPO_ROOT / "bin"))
-from state_paths import repo_id  # noqa: E402
+from state_handle import repo_id  # noqa: E402
 
 
 def _setup_repo_with_events(td: Path, *, events_filename: str) -> tuple[Path, Path, Path]:

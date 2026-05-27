@@ -17,7 +17,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from state_paths import atomic_write_text
+from state_handle import atomic_write_text
 
 WILDCARD_RE = re.compile(r"[\\*\\?\[]")
 

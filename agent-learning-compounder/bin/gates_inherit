@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 from export_gates import _gate_id  # noqa: E402
-from state_paths import atomic_rewrite  # noqa: E402
+from state_handle import atomic_rewrite  # noqa: E402
 
 
 GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")

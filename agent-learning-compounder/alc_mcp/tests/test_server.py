@@ -41,8 +41,8 @@ class McpServerTools(unittest.TestCase):
 
         # Build a minimal valid .agent-learning state
         sys.path.insert(0, str(REPO_ROOT / "bin"))
-        import state_paths  # type: ignore
-        rid = state_paths.repo_id(self.repo)
+        import state_handle  # type: ignore
+        rid = state_handle.repo_id(self.repo)
         state_dir = self.repo / ".agent-learning" / "repos" / rid
         state_dir.mkdir(parents=True, exist_ok=True)
         seed = fixture_src / "seed"
@@ -174,8 +174,8 @@ class McpServerHandlerHardening(unittest.TestCase):
             from alc_mcp.server import TOOL_HANDLERS  # noqa: F401
         except ImportError as e:
             self.skipTest(f"alc_mcp.server not importable: {e}")
-        import state_paths  # type: ignore
-        self._state_paths = state_paths
+        import state_handle  # type: ignore
+        self._state_handle = state_handle
 
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -190,7 +190,7 @@ class McpServerHandlerHardening(unittest.TestCase):
         repo.mkdir(parents=True)
         # repo_state_dir resolves via resolve_state_dir(None, None, repo) which
         # returns <repo>/.agent-learning, then appends /repos/<repo_id>.
-        rsd = self._state_paths.repo_state_dir(repo)
+        rsd = self._state_handle.repo_state_dir(repo)
         rsd.mkdir(parents=True, exist_ok=True)
         (rsd / "improvement-queue.jsonl").write_text("", encoding="utf-8")
         (rsd / "hook-events.jsonl").write_text("", encoding="utf-8")
@@ -208,8 +208,8 @@ class McpServerHandlerHardening(unittest.TestCase):
         repo_b = self._make_repo("bravo")
 
         # Sanity: distinct state dirs.
-        rsd_a = self._state_paths.repo_state_dir(repo_a)
-        rsd_b = self._state_paths.repo_state_dir(repo_b)
+        rsd_a = self._state_handle.repo_state_dir(repo_a)
+        rsd_b = self._state_handle.repo_state_dir(repo_b)
         self.assertNotEqual(rsd_a, rsd_b)
 
         # propose_gate should land in repo_b's queue only.
@@ -246,7 +246,7 @@ class McpServerHandlerHardening(unittest.TestCase):
         report_outcome_handler = TOOL_HANDLERS["report_outcome"]
 
         repo = self._make_repo("nlrepo")
-        rsd = self._state_paths.repo_state_dir(repo)
+        rsd = self._state_handle.repo_state_dir(repo)
         log = rsd / "events.jsonl"
 
         payload = {

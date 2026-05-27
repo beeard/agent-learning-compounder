@@ -23,7 +23,7 @@ from agent_dispatch import (
     telemetry_config_from_payload,
 )
 from scrub_secrets import scrub
-from state_paths import repo_id, repo_state_dir, resolve_state_dir
+from state_handle import repo_id, repo_state_dir, resolve_state_dir
 
 
 DEFAULT_MAX_HOOK_EVENT_BYTES = 5_000_000

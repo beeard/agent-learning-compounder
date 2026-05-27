@@ -107,13 +107,13 @@ class RefreshWiresDomainRuleProposer(unittest.TestCase):
         seed = fixture_src / "seed"
 
         sys.path.insert(0, str(REPO_ROOT / "bin"))
-        import state_paths  # type: ignore
+        import state_handle  # type: ignore
 
         with tempfile.TemporaryDirectory() as td:
             repo = Path(td) / "repo"
             shutil.copytree(fixture_src, repo, ignore=shutil.ignore_patterns("seed"))
 
-            rid = state_paths.repo_id(repo)
+            rid = state_handle.repo_id(repo)
             state_root = repo / ".agent-learning"
             state_dir = state_root / "repos" / rid
             state_dir.mkdir(parents=True, exist_ok=True)

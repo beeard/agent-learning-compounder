@@ -28,7 +28,7 @@ from map_active_skills import build_map
 from propose_domain_rules import parse_chunks, score_terms
 from queue_dedup import find_duplicates, order_by_keep
 from scrub_secrets import scrub
-from state_paths import atomic_rewrite, atomic_write_text, repo_state_dir, resolve_state_dir
+from state_handle import atomic_rewrite, atomic_write_text, repo_state_dir, resolve_state_dir
 
 
 def write_json(path: pathlib.Path, payload: dict[str, Any]) -> pathlib.Path:

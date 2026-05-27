@@ -6,7 +6,7 @@ These cover four lock / parsing gaps the convergent reviewers surfaced:
    otherwise two different-origin promoters both observe absence and
    silently last-writer-wins the shared registry. The H5 fix narrowed
    the race window via atomic_write_json; B-5 closes it via shared
-   sidecar lock (state_paths.atomic_rewrite).
+   sidecar lock (state_handle.atomic_rewrite).
 
 2. export_gates render + write must use the same sidecar lock that
    gates_inherit uses. Pre-B-5 a concurrent inherit between export's

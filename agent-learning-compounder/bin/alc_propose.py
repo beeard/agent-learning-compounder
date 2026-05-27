@@ -37,9 +37,9 @@ except ImportError:  # pragma: no cover
     from bin.event_writer import write_event, EventV4
 
 try:
-    from state_paths import atomic_rewrite
+    from state_handle import atomic_rewrite
 except ImportError:  # pragma: no cover
-    from bin.state_paths import atomic_rewrite
+    from bin.state_handle import atomic_rewrite
 
 
 MAX_GATE_TEXT_LEN = 200

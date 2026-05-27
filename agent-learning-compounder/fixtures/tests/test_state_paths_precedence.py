@@ -19,7 +19,7 @@ import unittest
 BIN = pathlib.Path(__file__).resolve().parents[2] / "bin"
 sys.path.insert(0, str(BIN))
 
-from state_paths import resolve_state_dir  # noqa: E402
+from state_handle import resolve_state_dir  # noqa: E402
 
 
 class StatePathsPrecedenceTests(unittest.TestCase):

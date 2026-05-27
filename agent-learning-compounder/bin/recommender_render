@@ -11,8 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from state_handle import StateHandle
-from state_paths import atomic_write_text
+from state_handle import StateHandle, atomic_write_text
 
 try:
     from recommender_generators import GENERATORS, render as render_bundle

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import pathlib
@@ -8,7 +7,6 @@ import subprocess
 import sys
 import tempfile
 import unittest
-import warnings
 from pathlib import Path
 
 
@@ -77,7 +75,7 @@ class StateHandleTests(unittest.TestCase):
             os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_dir)
 
             handle = self.StateHandle.for_repo(repo)
-            from state_paths import repo_state_dir
+            from state_handle import repo_state_dir
 
             self.assertEqual(handle.repo_state_dir, repo_state_dir(repo))
             self.assertEqual(handle.state_root, state_dir.resolve())
@@ -132,25 +130,6 @@ class StateHandleTests(unittest.TestCase):
             payload = json.loads((repo / ".agent-learning.json").read_text(encoding="utf-8"))
             self.assertEqual(payload["state_dir"], str(state_root.resolve()))
 
-    def test_state_paths_compat_layer_still_works(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            tmp_path = Path(tmp)
-            repo = tmp_path / "repo"
-            repo.mkdir()
-            if "state_paths" in sys.modules:
-                del sys.modules["state_paths"]
-
-            with warnings.catch_warnings(record=True) as caught:
-                warnings.simplefilter("always")
-                state_paths = importlib.import_module("state_paths")
-
-            handle = self.StateHandle.for_repo(repo)
-            self.assertEqual(handle.repo_state_dir, state_paths.repo_state_dir(repo))
-            self.assertTrue(any(issubclass(item.category, DeprecationWarning) for item in caught))
-
-            import state_paths as reloaded
-            self.assertEqual(state_paths, reloaded)
-
     def test_mcp_dashboard_orchestrator_converge(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -159,7 +138,7 @@ class StateHandleTests(unittest.TestCase):
 
             sys.path.insert(0, str(REPO_ROOT))
             from collect_hook_event import default_output  # noqa: E402
-            from state_paths import repo_state_dir  # noqa: E402
+            from state_handle import repo_state_dir  # noqa: E402
 
             sys.path.insert(0, str(REPO_ROOT / "alc_mcp"))
             from alc_mcp import server as mcp_server  # noqa: E402
@@ -170,7 +149,7 @@ class StateHandleTests(unittest.TestCase):
             callback.write_text("", encoding="utf-8")
 
             paths = {
-                "state_paths": repo_state_dir(repo),
+                "state_handle": repo_state_dir(repo),
                 "collect": default_output(repo, None, None).parent,
                 "mcp": mcp_server._improvement_queue_path(repo).parent,
             }

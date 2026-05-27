@@ -16,7 +16,7 @@ import subprocess
 import sys
 from typing import Any
 
-from state_paths import repo_state_dir
+from state_handle import repo_state_dir
 
 
 DEFAULT_EVENTS = [

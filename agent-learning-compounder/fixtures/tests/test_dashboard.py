@@ -27,14 +27,14 @@ class Dashboard(unittest.TestCase):
         sys.path.insert(0, str(REPO_ROOT))
         sys.path.insert(0, str(REPO_ROOT / "bin"))
         from dashboard import build_app
-        import state_paths
+        import state_handle
 
         self.tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self.tmp.name) / "repo"
         fixture_src = REPO_ROOT / "fixtures" / "eval-fixtures" / "mini-repo"
         shutil.copytree(fixture_src, self.repo, ignore=shutil.ignore_patterns("seed"))
 
-        rid = state_paths.repo_id(self.repo)
+        rid = state_handle.repo_id(self.repo)
         state_dir = self.repo / ".agent-learning" / "repos" / rid
         state_dir.mkdir(parents=True, exist_ok=True)
         seed = fixture_src / "seed"
@@ -108,6 +108,27 @@ class Dashboard(unittest.TestCase):
             any(row.get("gate_id") == "abcdef012345" for row in project_rows),
             f"expected seeded project gate to surface; got rows={scoped['rows']}",
         )
+
+    def test_api_data_includes_canonical_read_surface(self):
+        r = self.client.get("/api/data")
+        self.assertEqual(r.status_code, 200)
+        payload = r.json()
+        self.assertIn("read_surface", payload)
+        read_surface = payload["read_surface"]
+        self.assertIsInstance(read_surface, dict)
+        for key in (
+            "actor_summary",
+            "recommendations",
+            "pending_patches",
+            "apply_log",
+            "outcomes",
+            "skill_usage",
+            "diagnostics",
+        ):
+            self.assertIn(key, read_surface)
+        diagnostics = read_surface["diagnostics"]
+        self.assertIn("repo_state", diagnostics)
+        self.assertIn("events_sqlite_present", diagnostics)
 
 
 if __name__ == "__main__":

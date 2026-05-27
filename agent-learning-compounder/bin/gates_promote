@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 from gates_inherit import REQUIRED_RECORD_FIELDS  # noqa: E402
-from state_paths import atomic_rewrite  # noqa: E402
+from state_handle import atomic_rewrite  # noqa: E402
 
 
 # Distinct from "not found" (3) and "block missing fields" (4) so callers can

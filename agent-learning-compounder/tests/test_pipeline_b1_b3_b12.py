@@ -98,7 +98,7 @@ class PipelineRoundTripTests(unittest.TestCase):
         # token (not /home/...). The boundary check used to reject this; the
         # fix moved the enforce to a copy of the row that drops `repo`.
         from event_schema import EventV4
-        from state_paths import repo_id
+        from state_handle import repo_id
 
         row = {
             "ts": "2026-05-27T12:00:00+00:00",
