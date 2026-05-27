@@ -34,6 +34,7 @@ for _p in (_PLUGIN_ROOT / "bin", _PLUGIN_ROOT):
 
 from state_handle import StateHandle  # noqa: E402
 import dashboard_read_model  # noqa: E402
+import dashboard_url_publisher  # noqa: E402
 
 
 SKILL_ROOT = pathlib.Path(__file__).resolve().parent
@@ -172,7 +173,8 @@ def _build_server(handler_class: type[_DashboardHandler], host: str, port: int, 
     requested_port = port
     while True:
         try:
-            return _ThreadingHTTPServer((host, requested_port), handler_class), requested_port
+            httpd = _ThreadingHTTPServer((host, requested_port), handler_class)
+            return httpd, int(httpd.server_address[1])
         except OSError as exc:
             if requested_port == 8765 and port == 8765:
                 requested_port = 0
@@ -190,6 +192,7 @@ def create_server(
 ) -> tuple[socketserver.ThreadingHTTPServer, int]:
     actual = _resolve_state(repo=repo, state=state, personal=personal)
     server, selected = _build_server(_DashboardHandler, host, port, actual)
+    server.alc_state = actual  # type: ignore[attr-defined]
     return server, selected
 
 
@@ -202,12 +205,19 @@ def run_server(
     port: int = 0,
 ) -> None:
     httpd, selected = create_server(repo=repo, state=state, personal=personal, host=host, port=port)
+    token = dashboard_url_publisher.publish_live_url(
+        httpd.alc_state,  # type: ignore[attr-defined]
+        host=host,
+        port=selected,
+        surface="stdlib",
+    )
     print(f"[alc-dashboard] listening on http://{host}:{selected}/")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
+        dashboard_url_publisher.clear_live_url(httpd.alc_state, token)  # type: ignore[attr-defined]
         httpd.server_close()
 
 
@@ -230,6 +240,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    httpd = None
+    token = None
     try:
         httpd, selected = create_server(
             repo=args.repo,
@@ -238,6 +250,12 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
         )
+        token = dashboard_url_publisher.publish_live_url(
+            httpd.alc_state,  # type: ignore[attr-defined]
+            host=args.host,
+            port=selected,
+            surface="stdlib",
+        )
         print(f"[alc-dashboard] listening on http://{args.host}:{selected}/")
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -245,6 +263,10 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as error:
         print(str(error))
         return 1
+    finally:
+        if httpd is not None:
+            dashboard_url_publisher.clear_live_url(httpd.alc_state, token)  # type: ignore[attr-defined]
+            httpd.server_close()
 
 
 if __name__ == "__main__":

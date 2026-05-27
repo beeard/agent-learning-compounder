@@ -57,6 +57,10 @@ meta tool.
 - `bin/release_layout.py` owns release archive/package layout. Build scripts,
   sanitizer policy, npm files, manifest docs/exclusions, and release fixture
   archive checks are adapters guarded by `tests/test_release_layout.py`.
+- `bin/dashboard_url_publisher.py` owns dashboard live marker schema,
+  loopback validation, owner-token cleanup, and static fallback order. FastAPI,
+  stdlib serving, static rendering, `state_handle.dashboard_url`, and MCP
+  `get_dashboard_url` are adapters around that policy.
 
 ## Operating rules
 

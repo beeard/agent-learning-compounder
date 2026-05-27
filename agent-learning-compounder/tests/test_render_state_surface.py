@@ -126,6 +126,12 @@ class HtmlFormatTests(unittest.TestCase):
             html = (printed_path / "dashboard.html").read_text(encoding="utf-8")
             self.assertIn("Agent Learning Dashboard", html)
 
+            from dashboard_url_publisher import dashboard_url
+            from state_handle import StateHandle
+
+            handle = StateHandle.for_repo(repo, state_dir=state)
+            self.assertEqual(dashboard_url(handle), (printed_path / "dashboard.html").resolve().as_uri())
+
     def test_html_data_json_has_expected_keys(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

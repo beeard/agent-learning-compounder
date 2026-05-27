@@ -62,8 +62,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return p.parse_args(argv)
 
 
-def main():
-    args = parse_args()
+def main(argv: list[str] | None = None):
+    args = parse_args(argv)
     err = validate_host(args.host, args.insecure_public)
     if err is not None:
         print(err, file=sys.stderr)
@@ -78,18 +78,41 @@ def main():
             file=sys.stderr,
         )
         return 2
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from dashboard import build_app
+    from dashboard_url_publisher import clear_live_url, publish_live_url
+    from state_handle import StateHandle
+
+    repo = args.repo.resolve() if args.repo else None
     app = build_app(
         personal=args.personal.resolve() if args.personal else None,
-        repo=args.repo.resolve() if args.repo else None,
+        repo=repo,
     )
+    marker_state = None
+    marker_token = None
+    if repo is not None:
+        try:
+            marker_state = StateHandle.for_repo(repo)
+            marker_token = publish_live_url(
+                marker_state,
+                host=args.host,
+                port=args.port,
+                surface="fastapi",
+            )
+        except Exception:
+            marker_state = None
+            marker_token = None
     print(
         f"[serve_dashboard] dashboard on http://{args.host}:{args.port}/  "
         f"personal={args.personal or '(auto)'}",
         file=sys.stderr,
     )
-    uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    try:
+        uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
+    finally:
+        if marker_state is not None:
+            clear_live_url(marker_state, marker_token)
 
 
 if __name__ == "__main__":

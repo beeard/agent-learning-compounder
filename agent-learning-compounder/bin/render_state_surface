@@ -40,6 +40,7 @@ PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
 
 import alc_query  # noqa: E402
+import dashboard_url_publisher  # noqa: E402
 from state_handle import StateHandle, project_state  # noqa: E402
 
 _FORMATS = ("markdown", "html", "session-report", "json")
@@ -114,7 +115,7 @@ def render_html(state: StateHandle) -> pathlib.Path:
         encoding="utf-8",
     )
     html = server._inject_payload(server._read_template(), payload)
-    (state.dashboard_dir / "dashboard.html").write_text(html, encoding="utf-8")
+    (state.dashboard_dir / dashboard_url_publisher.DASHBOARD_HTML).write_text(html, encoding="utf-8")
     return state.dashboard_dir
 
 

@@ -137,6 +137,58 @@ class DashboardReadonlyTests(unittest.TestCase):
             thread.join(timeout=2)
             httpd.server_close()
 
+    def test_create_server_returns_actual_bound_port_for_zero(self) -> None:
+        try:
+            httpd, selected = SERVER.create_server(repo=self.repo, state=self.state.repo_state_dir, host="127.0.0.1", port=0)
+        except OSError as exc:
+            raise unittest.SkipTest(f"network unavailable: {exc}") from exc
+        try:
+            self.assertNotEqual(selected, 0)
+            self.assertEqual(selected, httpd.server_address[1])
+        finally:
+            httpd.server_close()
+
+    def test_run_server_publishes_selected_port_and_clears_marker(self) -> None:
+        observed: list[str] = []
+        fake_httpd = SimpleNamespace(alc_state=self.state, server_close=lambda: None)
+
+        def fake_serve_forever():
+            payload = json.loads((self.state.dashboard_dir / "server.json").read_text(encoding="utf-8"))
+            observed.append(payload["url"])
+            raise KeyboardInterrupt
+
+        fake_httpd.serve_forever = fake_serve_forever
+
+        with patch.object(SERVER, "create_server", return_value=(fake_httpd, 41021)):
+            SERVER.run_server(repo=self.repo, state=self.state.repo_state_dir, host="127.0.0.1", port=0)
+
+        self.assertEqual(observed, ["http://127.0.0.1:41021/"])
+        self.assertFalse((self.state.dashboard_dir / "server.json").exists())
+
+    def test_run_server_cleanup_keeps_replaced_marker(self) -> None:
+        replacement_tokens: list[str | None] = []
+        fake_httpd = SimpleNamespace(alc_state=self.state, server_close=lambda: None)
+
+        def fake_serve_forever():
+            replacement_tokens.append(
+                SERVER.dashboard_url_publisher.publish_live_url(
+                    self.state,
+                    host="127.0.0.1",
+                    port=41023,
+                    surface="stdlib",
+                )
+            )
+            raise KeyboardInterrupt
+
+        fake_httpd.serve_forever = fake_serve_forever
+
+        with patch.object(SERVER, "create_server", return_value=(fake_httpd, 41022)):
+            SERVER.run_server(repo=self.repo, state=self.state.repo_state_dir, host="127.0.0.1", port=0)
+
+        self.assertTrue((self.state.dashboard_dir / "server.json").exists())
+        self.assertEqual(SERVER.dashboard_url_publisher.dashboard_url(self.state), "http://127.0.0.1:41023/")
+        SERVER.dashboard_url_publisher.clear_live_url(self.state, replacement_tokens[0])
+
     def test_static_assets_served_and_local(self) -> None:
         httpd, port, thread = _start_server(self.repo, self.state.repo_state_dir)
         try:

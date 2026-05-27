@@ -172,6 +172,10 @@ What we're actively investing in vs. parked.
   `bin/release_metadata.py`; archive/package inclusion policy is owned by
   `bin/release_layout.py`. Manifest, npm, plugin, marketplace, README, shell,
   and fixture-test surfaces stay shallow adapters with parity tests.
+- **Dashboard URL ownership.** `bin/dashboard_url_publisher.py` owns live
+  dashboard marker schema, loopback validation, token-safe cleanup, and static
+  fallback order. FastAPI, stdlib serving, static rendering, and MCP exposure
+  remain adapters around that URL policy.
 
 ### Deferred (not "ideated and rejected" — just not now)
 

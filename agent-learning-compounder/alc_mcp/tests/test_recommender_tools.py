@@ -52,8 +52,23 @@ class RecommenderToolTests(unittest.TestCase):
         (self.state.dashboard_dir / "server.json").write_text(json.dumps({"url": "http://127.0.0.1:8765/"}), encoding="utf-8")
         self.assertEqual(asyncio.run(server.TOOL_HANDLERS["get_dashboard_url"]({"repo": str(self.repo)})), "http://127.0.0.1:8765/")
         (self.state.dashboard_dir / "server.json").unlink()
-        (self.state.dashboard_dir / "index.html").write_text("<html></html>", encoding="utf-8")
-        self.assertTrue(asyncio.run(server.TOOL_HANDLERS["get_dashboard_url"]({"repo": str(self.repo)})).startswith("file://"))
+        dashboard = self.state.dashboard_dir / "dashboard.html"
+        dashboard.write_text("<html></html>", encoding="utf-8")
+        self.assertEqual(
+            asyncio.run(server.TOOL_HANDLERS["get_dashboard_url"]({"repo": str(self.repo)})),
+            dashboard.resolve().as_uri(),
+        )
+
+    def test_get_dashboard_url_ignores_unsafe_marker(self):
+        self.state.dashboard_dir.mkdir(parents=True)
+        dashboard = self.state.dashboard_dir / "dashboard.html"
+        dashboard.write_text("<html></html>", encoding="utf-8")
+        (self.state.dashboard_dir / "server.json").write_text(json.dumps({"url": "http://0.0.0.0:8765/"}), encoding="utf-8")
+
+        self.assertEqual(
+            asyncio.run(server.TOOL_HANDLERS["get_dashboard_url"]({"repo": str(self.repo)})),
+            dashboard.resolve().as_uri(),
+        )
 
     def test_report_outcome_delegates_to_alc_propose(self):
         with mock.patch.object(server.alc_propose, "report_outcome", return_value="evt-1") as write:

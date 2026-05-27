@@ -131,6 +131,11 @@ the stdlib fallback. Keep project reads behind `alc_query`/`StateHandle`, and
 keep promote/mute/distill/proposal writes in the FastAPI action or propose
 layers.
 
+`bin/dashboard_url_publisher.py` is the Dashboard URL Publisher module: it owns
+live `dashboard/server.json` marker schema, loopback validation, marker cleanup,
+and static fallback ordering. FastAPI/stdlib servers publish through it;
+`state_handle.dashboard_url` and MCP `get_dashboard_url` read through it.
+
 `bin/proposal_lifecycle.py` is the Proposal Lifecycle module. It owns proposal
 identity, lifecycle records, proposal event payloads, and normalized read
 mirrors over improvement queue, patch, and suggestion artifacts. Keep CLI/MCP

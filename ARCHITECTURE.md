@@ -244,6 +244,12 @@ for dashboard-specific behavior. Proposal-specific queue, patch, suggestion,
 eval, and outcome state belongs to `bin/proposal_lifecycle.py` and read mirrors
 exposed through `alc_query`.
 
+`bin/dashboard_url_publisher.py` is the Dashboard URL Publisher module. It owns
+project-scoped live `dashboard/server.json` markers, loopback URL validation,
+owner-token cleanup, and static fallback order (`dashboard.html`, then legacy
+`index.html`, then the dashboard directory). FastAPI and stdlib launchers are
+publication adapters; `state_handle.dashboard_url` is a compatibility wrapper.
+
 > **Naming history.** The env var was `AGENT_LEARNING_PERSONAL` before
 > `2026.05.27+review7-plus3`. The old name still works for one minor
 > release as a compatibility shim. New code and docs should use

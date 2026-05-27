@@ -334,15 +334,9 @@ class StateHandle:
 
 
 def dashboard_url(repo: str | pathlib.Path) -> str:
-    handle = StateHandle.for_repo(pathlib.Path(repo))
-    marker = handle.dashboard_dir / "server.json"
-    payload = _read_json_or_none(marker)
-    if payload:
-        url = payload.get("url")
-        if isinstance(url, str) and url.startswith(("http://127.0.0.1:", "http://localhost:")):
-            return url
-    index = handle.dashboard_dir / "index.html"
-    return index.resolve().as_uri() if index.exists() else handle.dashboard_dir.resolve().as_uri()
+    from dashboard_url_publisher import dashboard_url as _dashboard_url
+
+    return _dashboard_url(repo)
 
 
 # --- module-level helpers ----------------------------------------------------

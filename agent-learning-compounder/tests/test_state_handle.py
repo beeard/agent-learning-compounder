@@ -113,6 +113,20 @@ class StateHandleTests(unittest.TestCase):
             self.assertEqual(handle.repo_state_dir, explicit.resolve() / "repos" / self.StateHandle.repo_id(repo))
             self.assertEqual(handle.events_jsonl, handle.repo_state_dir / "events.jsonl")
 
+    def test_dashboard_url_delegates_to_publisher(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+
+            from unittest.mock import patch
+            import state_handle
+
+            with patch("dashboard_url_publisher.dashboard_url", return_value="file:///tmp/dashboard.html") as mock_url:
+                result = state_handle.dashboard_url(repo)
+
+            mock_url.assert_called_once_with(repo)
+            self.assertEqual(result, "file:///tmp/dashboard.html")
+
     def test_project_state_helper_accepts_explicit_state_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)

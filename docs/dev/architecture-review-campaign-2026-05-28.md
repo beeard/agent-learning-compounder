@@ -12,8 +12,8 @@ coherent slice and leave this queue current.
 |---|---|---|---|
 | 1 | Release Metadata Module | Complete | `agent-learning-compounder/bin/release_metadata.py`; parity in `agent-learning-compounder/tests/test_release_metadata.py` |
 | 2 | Release Layout Module | Complete | `agent-learning-compounder/bin/release_layout.py`; parity in `agent-learning-compounder/tests/test_release_layout.py` and archive fixture coverage in `agent-learning-compounder/fixtures/tests/test_contracts.py` |
-| 3 | Dashboard URL Publisher Module | Queued | Next plan/build slice. Own live server marker state and static fallback policy across FastAPI, stdlib serving, static rendering, and MCP exposure. |
-| 4 | Analyst Query Catalog Module | Queued | Make query id, shape, callable, consumer, and generated reference output one catalog contract. |
+| 3 | Dashboard URL Publisher Module | Complete | `agent-learning-compounder/bin/dashboard_url_publisher.py`; parity in `agent-learning-compounder/tests/test_dashboard_url_publisher.py`, launcher coverage in `agent-learning-compounder/tests/test_serve_dashboard.py`, and stdlib coverage in `agent-learning-compounder/tests/test_dashboard_readonly.py`. |
+| 4 | Analyst Query Catalog Module | Queued | Next plan/build slice. Make query id, shape, callable, consumer, and generated reference output one catalog contract. |
 | 5 | Runtime Install Target Module | Queued | Move release install target selection behind runtime topology depth while keeping `install.sh` as execution adapter. |
 | 6 | Recommender Generator Registry Seam | Queued | Make the generator registry the execution seam for identity, validation, reference output, and rendering. |
 
@@ -24,11 +24,15 @@ coherent slice and leave this queue current.
 - Release layout now has one canonical policy for shipped top-level archive
   contents, build-pruned paths, sanitizer exclusions, npm files, manifest docs,
   and manifest package exclusions.
+- Dashboard URL publication now has one canonical policy for loopback live
+  markers, token-safe cleanup, and static fallback ordering. FastAPI and stdlib
+  launchers publish through the same module; `state_handle.dashboard_url` and
+  MCP `get_dashboard_url` consume it.
 - Public command names and runtime install semantics were not changed.
 
 ## Next Planning Rule
 
-The next plan should start at order 3 unless a later architecture review
+The next plan should start at order 4 unless a later architecture review
 explicitly supersedes this campaign. Re-read the source review and current code
 before planning; do not assume this file captures implementation details for
 the queued items.
