@@ -124,8 +124,12 @@ This trips up grep-based exploration if you don't know it:
 - `scripts/<name>.py` — **symlink to `../bin/<name>`**, the stable compatibility path
   documented in `SKILL.md` and used by external invocations
 - `reference-lib/<name>` — canonical markdown reference (no extension)
-- `references/<name>.md` — **symlink to `../reference-lib/<name>`**, the presentation
-  surface
+- `skills/alc-core/references/<name>.md` — **symlink to `../../reference-lib/<name>`**,
+  the presentation surface that the SKILL.md `References` section points at
+- `skills/reference-lib` — **symlink to `../reference-lib`**. **Load-bearing**: each
+  `skills/alc-core/references/<name>.md → ../../reference-lib/<name>` resolves through
+  `skills/<reference-lib>/<name>`, so removing this symlink silently breaks all 27
+  reference docs. Do not delete it even though no code directly references the path.
 
 When editing a script or reference, **edit the canonical file** in `bin/` or
 `reference-lib/`, not the symlink.

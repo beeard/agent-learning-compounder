@@ -26,13 +26,11 @@ class McpServerTools(unittest.TestCase):
             self.skipTest("mcp SDK not installed")
 
         # Import alc_mcp.server lazily so the import error from mcp surfaces
-        # as a skip, not a hard import failure at module load.
+        # as a skip, not a hard import failure at module load. Handlers now
+        # live in TOOL_HANDLERS rather than as module-level *_handler symbols.
         sys.path.insert(0, str(REPO_ROOT))
         try:
-            from alc_mcp.server import (  # noqa: F401
-                get_gates_handler, propose_gate_handler,
-                report_agent_event_handler, report_outcome_handler, get_skill_context_handler,
-            )
+            from alc_mcp.server import TOOL_HANDLERS  # noqa: F401
         except ImportError as e:
             self.skipTest(f"alc_mcp.server not importable: {e}")
 
@@ -79,7 +77,8 @@ class McpServerTools(unittest.TestCase):
             self.tmp.cleanup()
 
     def test_get_gates_returns_list(self):
-        from alc_mcp.server import get_gates_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        get_gates_handler = TOOL_HANDLERS["get_gates"]
         result = asyncio.run(get_gates_handler({"repo": str(self.repo)}))
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
@@ -87,13 +86,15 @@ class McpServerTools(unittest.TestCase):
         self.assertEqual(result[0]["domain"], "tests")
 
     def test_get_skill_context_returns_string(self):
-        from alc_mcp.server import get_skill_context_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        get_skill_context_handler = TOOL_HANDLERS["get_skill_context"]
         result = asyncio.run(get_skill_context_handler({"repo": str(self.repo)}))
         self.assertIsInstance(result, str)
         self.assertIn("required_at_session_start", result)
 
     def test_propose_gate_appends_queue_row(self):
-        from alc_mcp.server import propose_gate_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        propose_gate_handler = TOOL_HANDLERS["propose_gate"]
         payload = {
             "repo": str(self.repo),
             "domain": "tests",
@@ -109,7 +110,8 @@ class McpServerTools(unittest.TestCase):
         self.assertTrue(any(r.get("id") == result["queue_id"] for r in rows))
 
     def test_report_outcome_appends_event(self):
-        from alc_mcp.server import report_outcome_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        report_outcome_handler = TOOL_HANDLERS["report_outcome"]
 
         events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "events.jsonl"
 
@@ -128,7 +130,8 @@ class McpServerTools(unittest.TestCase):
         self.assertEqual(rows[0]["payload"]["verdict"], "loaded_helpful")
 
     def test_report_agent_event_appends_bounded_dispatch_event(self):
-        from alc_mcp.server import report_agent_event_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        report_agent_event_handler = TOOL_HANDLERS["report_agent_event"]
 
         events_log = next((self.repo / ".agent-learning" / "repos").iterdir()) / "events.jsonl"
 
@@ -168,9 +171,7 @@ class McpServerHandlerHardening(unittest.TestCase):
         sys.path.insert(0, str(REPO_ROOT))
         sys.path.insert(0, str(REPO_ROOT / "bin"))
         try:
-            from alc_mcp.server import (  # noqa: F401
-                propose_gate_handler, report_outcome_handler,
-            )
+            from alc_mcp.server import TOOL_HANDLERS  # noqa: F401
         except ImportError as e:
             self.skipTest(f"alc_mcp.server not importable: {e}")
         import state_paths  # type: ignore
@@ -199,7 +200,9 @@ class McpServerHandlerHardening(unittest.TestCase):
         """When the same state root contains multiple repos, handlers must
         operate on the repo identified by the call args — not the lexicographic
         first one found via rglob/iterdir."""
-        from alc_mcp.server import propose_gate_handler, report_outcome_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        propose_gate_handler = TOOL_HANDLERS["propose_gate"]
+        report_outcome_handler = TOOL_HANDLERS["report_outcome"]
 
         repo_a = self._make_repo("alpha")
         repo_b = self._make_repo("bravo")
@@ -239,7 +242,8 @@ class McpServerHandlerHardening(unittest.TestCase):
     def test_report_outcome_newline_in_outcome_keeps_jsonl_parseable(self):
         """A newline in outcome must not break the line-per-event invariant —
         either the row is rejected or the newline is sanitized away."""
-        from alc_mcp.server import report_outcome_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        report_outcome_handler = TOOL_HANDLERS["report_outcome"]
 
         repo = self._make_repo("nlrepo")
         rsd = self._state_paths.repo_state_dir(repo)
@@ -271,7 +275,8 @@ class McpServerHandlerHardening(unittest.TestCase):
     def test_propose_gate_uninitialized_repo_returns_descriptive_error(self):
         """When .agent-learning/repos/ doesn't exist, the handler must raise
         a descriptive error rather than yielding an empty error string."""
-        from alc_mcp.server import propose_gate_handler
+        from alc_mcp.server import TOOL_HANDLERS
+        propose_gate_handler = TOOL_HANDLERS["propose_gate"]
 
         repo = self.root / "uninit"
         repo.mkdir()

@@ -1,6 +1,6 @@
-# MCP Capability Catalog (M1-M10)
+# MCP Capability Catalog (M1-M18)
 
-`alc_mcp.catalog.MCP_TOOLS` is the canonical machine-readable catalog. This file is the human-readable reference for agents.
+`alc_mcp.catalog.MCP_TOOLS` is the canonical machine-readable catalog. This file is the human-readable reference for agents. Drift tests (`tests/test_mcp_catalog_doc.py`, `tests/test_catalog_mcp_parity.py`) assert every catalog entry has a row here and that every UQ/UP catalog entry has an MCP partner (or is on the explicit CLI-only allowlist).
 
 | ID | Tool | Kind | Backing | Notes |
 | --- | --- | --- | --- | --- |
@@ -14,5 +14,13 @@
 | M8 | `report_outcome` | observe | `alc_propose.report_outcome` | Emits `outcome_reported` via `event_writer.write_event`. |
 | M9 | `report_agent_event` | observe | `alc_propose.report_agent_event` | Emits `agent_dispatch_*` via `event_writer.write_event`. |
 | M10 | `exec_sandbox` | exec | `exec_sandbox.run` | Runs bounded read/worktree/eval commands through the sandbox primitive. |
+| M11 | `next_action` | read | `alc_next_action.next_action` | Session-lifecycle synthesiser (start/end/recap/leftoff/auto); collates signals across pending patches, recommendations, gates, apply log, outcomes, and activity. Backs the `/alc-next` slash command and writes `latest-next-action.json` cache. |
+| M12 | `get_apply_log` | read | `alc_query.get_apply_log` | Patch apply events from project-scope `events.sqlite` (UQ1). |
+| M13 | `get_outcomes` | read | `alc_query.get_outcomes` | Eval-verdict outcomes from project-scope `events.sqlite` (UQ2). Lets agents check whether a previously loaded gate was helpful. |
+| M14 | `get_event_dag` | read | `alc_query.get_event_dag` | Session event DAG via recursive CTE (UQ5). Use to trace what happened in a specific session. |
+| M15 | `get_actor_summary` | read | `alc_query.get_actor_summary` | Per-actor event counts from project-scope `events.sqlite` (UQ6). |
+| M16 | `get_skill_invocation_history` | read | `alc_query.get_skill_invocation_history` | Historical invocation events for a specific skill (UQ7). |
+| M17 | `get_skill_usage_summary` | read | `alc_query.get_skill_usage_summary` | Aggregate `actor_name` counts in indexed events, sorted by count desc (UQ8). Used by dashboard skill-routing signals. |
+| M18 | `mark_patch_status` | propose | `alc_propose.mark_patch_status` | Mark a pending patch deferred/rejected and emit a status event (UP5). Closes the M6 propose_apply asymmetry. |
 
-Agents should call `list_capabilities(repo)` first and compare each returned `version` and `min_compatible_version` against their known client contract.
+In addition to the catalog tools, the server exposes a meta tool `list_capabilities(repo)` that returns the live catalog plus per-tool `version` and `min_compatible_version`. Agents should call it first and compare against their known client contract before invoking other tools.

@@ -31,21 +31,52 @@ session-start instructions.
 
 ## ALC MCP Usage
 
-When user-level MCP server `alc` is configured, LLMs can use the same state
-without parsing files by hand:
+When the `alc` MCP server is configured, LLMs use the same state without
+parsing files by hand. The server exposes 18 tools (M1–M18) plus a
+`list_capabilities` meta tool. The authoritative catalog is
+`alc_mcp/catalog.py::MCP_TOOLS`; the human-readable mirror is
+`references/mcp-catalog.md`. Always call `list_capabilities(repo)` first and
+compare `version` / `min_compatible_version` against your client contract.
 
-- `get_gates(repo, scope?)`: read approved gates for current repo/scope.
-- `get_skill_context(repo)`: read current skill-health and routing context.
-- `report_agent_event(repo, ...)`: record bounded subagent/background-worker
-  lifecycle events such as start, complete, blocked, or validation outcome.
-- `report_outcome(repo, gate_id, outcome, correlation_id?)`: record whether a
+**Read surface** (M1–M5, M11–M17, backed by `bin/alc_query.py` and friends):
+
+- `get_gates(repo, scope?, domain?)` — approved gates for the repo/scope.
+- `get_skill_context(repo, scope?)` — current skill-health and routing context.
+- `get_recommendations(repo, scope?)` — recommender output rows.
+- `list_pending_patches(repo, scope?)` — patch bundles not yet applied.
+- `get_dashboard_url(repo)` — localhost dashboard URL when known.
+- `next_action(repo, intent?)` — session-lifecycle synthesiser (start / end /
+  recap / leftoff / auto).
+- `get_apply_log(repo, since?)` — patch apply events from `events.sqlite`.
+- `get_outcomes(repo, since?)` — eval-verdict outcomes; check whether a gate
+  was helpful before re-loading it.
+- `get_event_dag(repo, session_id)` — session event DAG for a specific session.
+- `get_actor_summary(repo, since?)` — per-actor event counts.
+- `get_skill_invocation_history(repo, skill_name)` — history for a specific skill.
+- `get_skill_usage_summary(repo, since?, prefix_filter?)` — aggregate actor
+  counts sorted by use; same data the dashboard uses for routing signals.
+
+**Propose / observe surface** (M6–M9, M18, backed by `bin/alc_propose.py`):
+
+- `propose_apply(repo, patch_id)` — return apply CLI command; does not mutate.
+- `propose_gate(repo, domain, category, gate, evidence?)` — queue a candidate
+  gate for review (does not approve or install).
+- `report_outcome(repo, gate_id, outcome, correlation_id?)` — record whether a
   loaded gate was helpful, unhelpful, or skipped.
-- `propose_gate(repo, domain, category, gate, evidence?)`: queue a new candidate
-  gate for review; this does not approve or install the gate.
+- `report_agent_event(repo, ...)` — record bounded subagent/background-worker
+  lifecycle (start, complete, blocked, validation outcome).
+- `mark_patch_status(repo, patch_id, status)` — defer or reject a pending
+  patch; the write-side counterpart of `propose_apply`.
 
-Use MCP calls for structured state, not for transcript storage. Payloads must
-stay bounded and scrubbed: no prompts, tool outputs, raw diffs, transcript
-chunks, secrets, tokens, or broad environment dumps.
+**Exec surface** (M10):
+
+- `exec_sandbox(repo, scope, cmd)` — bounded `read | worktree | eval` command
+  execution. See `references/sandbox-tiers.md` for allowed prefixes and limits.
+
+Use MCP calls for structured state, not for transcript storage. Synthesise
+results into prose before placing them in agent context — never dump raw rows
+or JSON. Payloads must stay bounded and scrubbed: no prompts, tool outputs,
+raw diffs, transcript chunks, secrets, tokens, or broad environment dumps.
 
 ## Subagent Dispatch Telemetry
 

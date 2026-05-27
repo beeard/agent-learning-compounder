@@ -1,6 +1,6 @@
 ---
 name: alc-core
-description: Core skill for compiling repo sessions, telemetry, and durable agent-learning recommendations.
+description: This skill should be used when the user asks to "initialize agent learning", "set up alc", "run the learning report", "distill sessions", "build a baseline", "extract gates", "compile durable memory", "evaluate skill impact", "review approved gates", "propose a gate", "report an outcome", or any variant referencing the agent-learning-compounder pipeline. Use it whenever work touches `.agent-learning.json`, `latest-approved-gates.md`, `latest-skill-context.md`, the MCP tools M1–M18, hook telemetry, or the durable-write pressure tests. Also use whenever a fresh session enters an ALC-initialized repo, before forming opinions about the repo's state — the skill defines the read-only operating contract (KTD-21 read/write seams, synthesis discipline, three-tier progressive disclosure) every agent must follow before invoking the read or propose surfaces.
 ---
 
 # Agent Learning Compounder
@@ -98,23 +98,53 @@ When an LLM/main agent starts work in an initialized repo, read
 `latest-skill-context.md`. Treat them as compact routing/context, not as raw
 memory.
 
-When the `alc` MCP server is available, use it for structured operations:
+### Read/write seams (KTD-21)
 
-- `get_gates`: fetch approved gates for the current repo/scope.
-- `get_skill_context`: fetch current skill-routing context.
-- `report_agent_event`: record bounded subagent/background-worker lifecycle.
-- `report_outcome`: record whether a loaded gate helped.
-- `propose_gate`: queue a candidate gate for review; it does not approve memory.
+All durable state I/O routes through two seams. Do not reimplement SQLite or
+JSONL reads/writes inline.
 
-Never send prompts, tool output, transcript chunks, diffs, secrets, or broad
-environment dumps to ALC MCP/hook telemetry. Record only bounded identifiers,
+- **Reads** — `bin/alc_query.py` is the canonical read API. Hooks, dashboard,
+  MCP server, slash commands, and `alc_init` all consume it. See
+  `references/query-catalog.md` (UQ1–UQ7) for the named queries.
+- **Writes/proposals** — `bin/alc_propose.py` is the symmetric propose/write
+  API for the improvement queue and event writer. See
+  `references/propose-catalog.md` (UP1–UP5) for the named propose ops.
+
+### MCP tools
+
+The `alc` MCP server exposes 18 stdio tools (M1–M18) plus a `list_capabilities`
+meta tool. The authoritative catalog lives at `alc_mcp/catalog.py::MCP_TOOLS`
+and is mirrored for humans at `references/mcp-catalog.md`. Call
+`list_capabilities(repo)` first and compare `version` / `min_compatible_version`
+against the known client contract before invoking other tools.
+
+### Synthesis discipline
+
+Synthesise `alc_query` / MCP results into prose summaries before placing them
+in agent context. Never dump raw event rows, JSON payloads, transcript
+fragments, or unbounded environment data into the main thread. The same rule
+applies to MCP and hook telemetry payloads: record only bounded identifiers,
 roles, outcomes, and repo-relative scope fields permitted by repo telemetry
-flags.
+flags — no prompts, tool output, transcript chunks, diffs, or secrets.
 
 ## Commands
 
 `scripts/*.py` are stable compatibility paths backed by lean runtime files in `bin/`.
 For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
+
+### Slash commands (Claude Code plugin)
+
+- `/alc-report` — run the full learning report pipeline via `scripts/render_unified_report.py`. The canonical entry point that wraps baseline → corpus → distill → export.
+- `/alc-next` — run the M11 session-lifecycle synthesiser (`bin/alc_next_action.py`); returns "what's next / session start / end / where I left off" recommendations and writes `latest-next-action.json`.
+
+### First-run profiler
+
+- `bin/alc_init` — per-repo bootstrap profiler. Detects the host repo's
+  language/framework profile, ensures MCP dependencies are installed, smokes
+  the MCP server, and renders the per-session `latest-session-context.md`
+  surface future agents load on entry.
+
+### Pipeline stages (manual invocation)
 
 - Baseline: `python3 ../../bin/build_repo_baseline.py --repo "$PWD" --output "$RUN_DIR/baseline.json"`
 - Corpus: `python3 ../../bin/extract_sessions.py --path ~/.codex/sessions --path ~/.claude/projects --cwd "$PWD" --days 7 --max-sessions 50 --output "$RUN_DIR/corpus.txt"`
@@ -122,12 +152,25 @@ For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
   - Emits a self-contained graphical HTML report alongside the markdown (`report.html` next to `report.md`). Override path with `--html-output`, or pass `--no-html` to skip.
   - With `--write`, also archives `YYYY-MM-DD.html` and `latest-report.html` under `personal/reports/agent-learning/`.
 - Standalone HTML: `python3 ../../bin/render_html_report.py --corpus ... --baseline ... --output report.html [--payload-json payload.json]` (same inputs as distill, HTML only).
-- Auto-distill on session end: `bin/auto_distill_session` is a non-blocking wrapper that forks the full pipeline and writes to `$AGENT_LEARNING_USER` (compat: `$AGENT_LEARNING_PERSONAL`; default `~/.agent-learning`). Wire it into a Claude Code `Stop` hook (or Codex equivalent). With `--write`, `learning.md` gets one dated line per gate at level ≥ 2 in addition to the summary entry in `insights.md`.
 - Custom domains: add `--domain-rules <json>` or `--domain-preset tm-norge`; initialized repos auto-read `.agent-learning.json`.
 - Gates/context: `export_gates.py`, `map_active_skills.py`, `extract_skill_usage.py`, `evaluate_skill_impact.py`, `export_skill_context.py`.
-- Refresh/hooks: `refresh_learning_state.py`, `collect_hook_event.py`, `install_runtime_hooks.py --dry-run` then `--apply`.
-- Write archive: rerun `distill_learning.py` with `--write --user <user-root>` (alias: `--personal`, deprecated) or `AGENT_LEARNING_USER` (compat: `AGENT_LEARNING_PERSONAL`).
-- Verify: `python3 -m unittest discover -s fixtures/tests`, `python3 -m unittest discover -s tests`, `python3 ../../bin/run_pressure_tests.py`.
+
+### Hook wiring (Claude Code plugin)
+
+The plugin's `hooks/hooks.json` wires two events:
+
+- `SessionStart` → `hooks/session-start` — renders the read-surface block (gates, skill context, recommendations) for the entering agent via `bin/alc_query`.
+- `Stop` → `hooks/warm_loop_index.py` — replays `hook-events.jsonl` through `collect_hook_event` and advances the `events.sqlite` indexer via `bin/alc_bootstrap_pipeline`. This is what runs at session end in this repo; the older `bin/auto_distill_session` is an alternative manual wrapper for runtimes that don't load the plugin's hook stack.
+
+Refresh / hook install: `refresh_learning_state.py`, `collect_hook_event.py`, `install_runtime_hooks.py --dry-run` then `--apply`.
+
+### Write archive
+
+Rerun `distill_learning.py` with `--write --user <user-root>` (alias: `--personal`, deprecated) or `AGENT_LEARNING_USER` (compat: `AGENT_LEARNING_PERSONAL`).
+
+### Verify
+
+`python3 -m unittest discover -s fixtures/tests`, `python3 -m unittest discover -s tests`, `python3 ../../bin/run_pressure_tests.py`. The capability-map / capability-parity / mcp-catalog-doc tests catch silent drift between the catalog (`alc_mcp/catalog.py`) and its human-readable mirrors.
 
 ## Health Contract
 
@@ -142,15 +185,47 @@ If they are missing, stale, or unreadable, treat the repo as uninitialized.
 
 ## References
 
-- `references/architecture.md`: production architecture, trust boundaries, and
+References are split into two tiers. **Contract indexes** are human-readable
+mirrors of code-level sources of truth — load these to verify a seam before
+invoking or extending it. **Topic references** are deeper documentation for
+individual subsystems — load these when working inside that subsystem.
+
+### Contract indexes (load to verify a seam)
+
+- `references/mcp-catalog.md` — mirror of `alc_mcp/catalog.py::MCP_TOOLS`. The
+  18 MCP tools (M1–M18) and their backings.
+- `references/capability-map.md` — every user action mapped to dashboard
+  section, slash command, MCP tool, and CLI invocation.
+- `references/capability-parity.md` — every M-ID mapped to its query / propose
+  / generator / analyst partner. Enforced by `test_capability_parity.py`.
+- `references/query-catalog.md` — `bin/alc_query.py` named queries (UQ1–UQ7).
+- `references/propose-catalog.md` — `bin/alc_propose.py` named propose ops (UP1–UP5).
+- `references/generator-catalog.md` — `bin/recommender_generators.GENERATORS`
+  rows (G1–G5).
+- `references/analyst-queries-catalog.md` — analyst signal queries (Q1–Qn).
+- `references/sandbox-tiers.md` — `bin/exec_sandbox` read / worktree / eval scopes.
+- `references/hermes-dsl-spec.md` — apply/revert DSL grammar.
+
+### Topic references (load when working on a subsystem)
+
+- `references/architecture.md` — production architecture, trust boundaries,
   runtime contracts.
-- `references/agent-quickstart.md`: agent-facing operating guide.
-- `references/baseline-repo.md`: repo baseline behavior.
-- `references/distill-sessions.md`: transcript mining and quote rules.
-- `references/capability-rubric.md`: AI-dependence levels.
-- `references/output-schema.md`: report shape and append behavior.
-- `references/gate-registry.md`: approved-gate export and next-session loading.
-- `references/pressure-tests.md`: durable write readiness.
-- `references/source-adapters.md`: new agent runtimes.
-- `references/threat-model.md`: writes, network access, and trust policy.
-- `assets/report-template.md`: report skeleton.
+- `references/agent-quickstart.md` — agent-facing operating guide for
+  consumers of the installed skill.
+- `references/baseline-repo.md` — repo baseline behavior.
+- `references/distill-sessions.md` — transcript mining and quote rules.
+- `references/capability-rubric.md` — AI-dependence levels (0–4).
+- `references/output-schema.md` — report shape and append behavior.
+- `references/gate-registry.md` — approved-gate export, federation, next-session loading.
+- `references/cross-repo-gates.md` — gates_promote / gates_inherit, derived_from provenance.
+- `references/gate-effectiveness.md` — correlation-only signals per gate_id.
+- `references/domain-rules-learning.md` — n-gram mining of correction-correlated rules.
+- `references/queue-dedup.md` — trigram / embedding dedup of the improvement queue.
+- `references/pressure-tests.md` — durable-write readiness suite.
+- `references/source-adapters.md` — new agent-runtime adapters.
+- `references/threat-model.md` — writes, network access, trust policy.
+- `references/hook-telemetry.md` — allowed event fields, symlink rejection, dual-runtime wiring.
+- `references/event-schema-evolution.md` — hook-event schema versions and replay migration.
+- `references/skill-health.md` — failure rates, retries, skill-map updates.
+- `references/analyst-methods.md` — frequency / anomaly / correlation / ranking signal classes.
+- `assets/report-template.md` — report skeleton.

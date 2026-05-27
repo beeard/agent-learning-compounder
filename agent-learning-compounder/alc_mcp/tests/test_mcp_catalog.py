@@ -9,10 +9,22 @@ from alc_mcp import MCP_TOOLS, MCPToolSpec
 from alc_mcp import server
 
 
+# Handlers that intentionally exceed the thin-wrapper budget because they need
+# arg-aliasing or payload normalisation. Keep this list short and documented —
+# adding here is the explicit decision point for "this handler has a reason to
+# carry logic." See the "Explicit overrides" block in alc_mcp/server.py.
+EXPLICIT_OVERRIDES = {
+    "report_outcome": "aliases recommendation_id/gate_id and verdict/outcome",
+    "report_agent_event": "normalises agent kind and constructs telemetry sub-object",
+    "exec_sandbox": "coerces repo to Path, injects default actor, reshapes ExecResult",
+}
+
+
 class McpCatalogTests(unittest.TestCase):
     def test_catalog_ids_are_unique_sequential_and_complete(self):
         ids = [spec.id for spec in MCP_TOOLS.values()]
-        self.assertEqual(ids, [f"M{i}" for i in range(1, 11)])
+        expected = [f"M{i}" for i in range(1, len(MCP_TOOLS) + 1)]
+        self.assertEqual(ids, expected)
         self.assertEqual(len(ids), len(set(ids)))
         for spec in MCP_TOOLS.values():
             self.assertIsInstance(spec, MCPToolSpec)
@@ -30,9 +42,11 @@ class McpCatalogTests(unittest.TestCase):
         self.assertEqual(registered, set(MCP_TOOLS) | {"list_capabilities"})
         self.assertEqual(schemas, registered)
 
-    def test_list_capabilities_returns_m1_to_m10_metadata(self):
-        rows = asyncio.run(server.list_capabilities_handler({"repo": "/tmp/repo"}))
-        self.assertEqual([row["id"] for row in rows], [f"M{i}" for i in range(1, 11)])
+    def test_list_capabilities_returns_full_catalog_metadata(self):
+        handler = server.TOOL_HANDLERS["list_capabilities"]
+        rows = asyncio.run(handler({"repo": "/tmp/repo"}))
+        expected = [f"M{i}" for i in range(1, len(MCP_TOOLS) + 1)]
+        self.assertEqual([row["id"] for row in rows], expected)
         self.assertNotIn("handler", rows[0])
         self.assertIn("parameters_schema", rows[0])
 
@@ -42,12 +56,24 @@ class McpCatalogTests(unittest.TestCase):
         self.assertNotIn("handle_apply_patch", source)
 
     def test_tool_handlers_are_thin_wrappers(self):
+        # Auto-wired handlers must be ≤5 executable lines (pure delegation).
+        # Explicit overrides may exceed but are bounded to ≤15 lines.
         for name, handler in server.TOOL_HANDLERS.items():
             if name == "list_capabilities":
                 continue
             body = inspect.getsource(handler).splitlines()[1:]
             executable = [line for line in body if line.strip() and not line.strip().startswith("#")]
-            self.assertLessEqual(len(executable), 5, name)
+            budget = 15 if name in EXPLICIT_OVERRIDES else 5
+            self.assertLessEqual(
+                len(executable),
+                budget,
+                f"{name}: {len(executable)} executable lines (budget {budget}). "
+                + (
+                    f"Override reason: {EXPLICIT_OVERRIDES[name]}"
+                    if name in EXPLICIT_OVERRIDES
+                    else "Add to EXPLICIT_OVERRIDES with a one-line reason if intentional."
+                ),
+            )
 
 
 if __name__ == "__main__":

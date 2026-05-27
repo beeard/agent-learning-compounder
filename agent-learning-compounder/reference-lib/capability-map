@@ -16,3 +16,10 @@
 | Inspect patterns | patterns | `/alc-report` | M3 get_recommendations | `bin/analyst_patterns --state <state>` |
 | Inspect correlations | correlations | `/alc-report` | M3 get_recommendations | `bin/analyst_correlations --state <state>` |
 | Session lifecycle synthesiser | recommendations | `/alc-next` | M11 next_action | `python3 bin/alc_next_action.py --repo <repo>` |
+| Inspect patch apply log | apply_log | `/alc-report` | M12 get_apply_log | `bin/alc_query apply-log --repo <repo>` |
+| Inspect eval outcomes | recommendations | `/alc-report` | M13 get_outcomes | `bin/alc_query outcomes --repo <repo>` |
+| Trace session event DAG | apply_log | `/alc-report` | M14 get_event_dag | `bin/alc_query event-dag --repo <repo> --session-id <id>` |
+| Per-actor event summary | patterns | `/alc-report` | M15 get_actor_summary | `bin/alc_query actor-summary --repo <repo>` |
+| Skill invocation history | patterns | `/alc-report` | M16 get_skill_invocation_history | `bin/alc_query skill-history --repo <repo> --skill <name>` |
+| Skill usage summary | patterns | `/alc-report` | M17 get_skill_usage_summary | `bin/alc_query skill-usage --repo <repo>` |
+| Defer or reject a pending patch | pending_patches | `/alc-report` | M18 mark_patch_status | `bin/alc_propose patch-status --repo <repo> --patch-id <id> --status deferred` |

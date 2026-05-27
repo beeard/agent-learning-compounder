@@ -36,6 +36,13 @@ PARITY_PARTNERS = {
     "M9": ["alc_propose.report_agent_event"],
     "M10": ["analyst_queries.QUERIES"],
     "M11": ["alc_next_action.next_action"],
+    "M12": ["alc_query.get_apply_log"],
+    "M13": ["alc_query.get_outcomes"],
+    "M14": ["alc_query.get_event_dag"],
+    "M15": ["alc_query.get_actor_summary"],
+    "M16": ["alc_query.get_skill_invocation_history"],
+    "M17": ["alc_query.get_skill_usage_summary"],
+    "M18": ["alc_propose.mark_patch_status"],
 }
 
 

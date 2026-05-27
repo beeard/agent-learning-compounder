@@ -13,5 +13,12 @@
 | M9 | report_agent_event | alc_propose.report_agent_event | alc_propose.report_agent_event |
 | M10 | exec_sandbox | exec_sandbox.run | analyst_queries.QUERIES |
 | M11 | next_action | alc_next_action.next_action | alc_query (multi-surface synthesiser) |
+| M12 | get_apply_log | alc_query.get_apply_log | alc_query.get_apply_log (UQ1) |
+| M13 | get_outcomes | alc_query.get_outcomes | alc_query.get_outcomes (UQ2) |
+| M14 | get_event_dag | alc_query.get_event_dag | alc_query.get_event_dag (UQ5) |
+| M15 | get_actor_summary | alc_query.get_actor_summary | alc_query.get_actor_summary (UQ6) |
+| M16 | get_skill_invocation_history | alc_query.get_skill_invocation_history | alc_query.get_skill_invocation_history (UQ7) |
+| M17 | get_skill_usage_summary | alc_query.get_skill_usage_summary | alc_query.get_skill_usage_summary (UQ8) |
+| M18 | mark_patch_status | alc_propose.mark_patch_status | alc_propose.mark_patch_status (UP5) |
 
-Deletion check, local only: temporarily remove one row from this table or one catalog registration backing an M-ID, then run `python3 -m unittest tests.test_capability_map tests.test_capability_parity -v`. The map/parity tests should fail before any consumer can silently bypass the catalog.
+Deletion check, local only: temporarily remove one row from this table or one catalog registration backing an M-ID, then run `python3 -m unittest tests.test_capability_map tests.test_capability_parity tests.test_catalog_mcp_parity tests.test_mcp_catalog_doc -v`. The map/parity/doc tests should fail before any consumer can silently bypass the catalog.

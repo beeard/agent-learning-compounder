@@ -164,7 +164,7 @@ TOOL_SCHEMAS = [
 ] + [
     _schema(
         "list_capabilities",
-        "Return M1-M10 MCP capability metadata.",
+        "Return live MCP capability metadata for all catalog entries.",
         {"type": "object", "required": ["repo"], "properties": {"repo": {"type": "string"}}},
     )
 ]
