@@ -45,11 +45,12 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+command -v python3 >/dev/null 2>&1 || {
+  echo "python3 required to read release metadata and layout" >&2
+  exit 1
+}
+
 if [ -z "$version" ]; then
-  command -v python3 >/dev/null 2>&1 || {
-    echo "python3 required to read MANIFEST.json (or pass --version)" >&2
-    exit 1
-  }
   version=$(python3 -c 'import json; print(json.load(open("MANIFEST.json"))["version"])')
 fi
 
@@ -58,14 +59,10 @@ command -v gzip >/dev/null 2>&1 || { echo "gzip required" >&2; exit 1; }
 command -v zip >/dev/null 2>&1 || { echo "zip required" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum required" >&2; exit 1; }
 
-# Top-level layout shipped in the release. Matches the existing tarball.
-top_files=".gitignore CHANGES.md MANIFEST.json README.md install.sh"
-# `docs` ships so README and CHANGES references to
-# docs/history/PLAN-eight-upgrade.md and docs/llm-install-prompt.md
-# resolve inside a freshly-extracted tarball. docs/dev is pruned below
-# because A-3 moved those internal release-process docs out of the
-# user-facing surface on purpose.
-top_dirs="agent-learning-compounder scripts docs"
+release_layout_py="$repo_root/agent-learning-compounder/bin/release_layout.py"
+top_files=$(python3 "$release_layout_py" --shell top-files)
+top_dirs=$(python3 "$release_layout_py" --shell top-dirs)
+build_pruned_paths=$(python3 "$release_layout_py" --shell build-pruned-paths)
 
 for f in $top_files; do
   [ -e "$repo_root/$f" ] || { echo "missing $f at repo root" >&2; exit 1; }
@@ -95,9 +92,9 @@ done
 # .agent-learning.json. Same exclusion set install.sh enforces at install time.
 sanitize_skill_tree "$stage_root/agent-learning-compounder"
 
-# docs/dev/ holds internal release-process notes that A-3 moved out of
-# the shipped skill. Keep them in the source tree but not in the tarball.
-rm -rf "$stage_root/docs/dev"
+for path in $build_pruned_paths; do
+  rm -rf "$stage_root/$path"
+done
 
 # Normalize on-disk mtimes so the zip archive (which records per-file
 # mtimes from the filesystem) is reproducible. tar --mtime overrides

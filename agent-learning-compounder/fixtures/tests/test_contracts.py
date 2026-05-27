@@ -4,9 +4,16 @@ import subprocess
 import tempfile
 import unittest
 import zipfile
+import sys
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
+BIN = ROOT / "bin"
+if str(BIN) not in sys.path:
+    sys.path.insert(0, str(BIN))
+
+import release_layout
+
 MANIFEST_PATH = None
 PACKAGE_ROOT = ROOT
 INSTALL_SCRIPT = None
@@ -89,24 +96,13 @@ class ContractTests(unittest.TestCase):
             self.skipTest("MANIFEST not available in this runtime (bootstrap package copy)")
         manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
         package_name = f"{manifest['name']}-{manifest['version']}"
-        excludes = set(manifest.get("excluded_from_package", []))
+        source_root = MANIFEST_PATH.parent
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
             zip_path = root / f"{package_name}.zip"
             with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-                source_root = PACKAGE_ROOT
-                for path in source_root.rglob("*"):
-                    if not path.is_file() and not path.is_symlink():
-                        continue
-                    relative = path.relative_to(source_root)
-                    if any(part == "__pycache__" for part in relative.parts):
-                        continue
-                    if any(part == ".pytest_cache" for part in relative.parts):
-                        continue
-                    if any(pattern in str(relative) for pattern in excludes):
-                        continue
-                    if path.suffix == ".pyc":
-                        continue
+                for relative in release_layout.iter_release_files(source_root):
+                    path = source_root / relative
                     zf.write(path, arcname=str(pathlib.Path(package_name) / relative))
 
             with zipfile.ZipFile(zip_path, "r") as zf:
@@ -120,6 +116,7 @@ class ContractTests(unittest.TestCase):
             self.assertFalse(any("__pycache__" in entry for entry in entries))
             self.assertFalse(any(entry.endswith(".pyc") for entry in entries))
             self.assertFalse(any("/.pytest_cache/" in entry for entry in entries))
+            self.assertFalse(any("/docs/dev/" in entry for entry in entries))
 
     def test_install_excludes_cached_artifacts_from_source_tree(self):
         if INSTALL_SCRIPT is None:

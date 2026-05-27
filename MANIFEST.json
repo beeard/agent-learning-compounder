@@ -49,8 +49,14 @@
   ],
   "excluded_from_package": [
     "__pycache__",
+    ".pytest_cache",
+    ".agent-learning",
+    "node_modules",
+    "dist",
     "*.pyc",
+    "*.pyo",
     ".agent-learning.json",
+    "docs/dev",
     "review-patches.diff",
     "runtime state"
   ]

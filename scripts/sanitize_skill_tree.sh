@@ -8,6 +8,9 @@
 #   . "$dir/scripts/sanitize_skill_tree.sh"
 #   sanitize_skill_tree /path/to/agent-learning-compounder
 
+SANITIZE_DIR_EXCLUDES='__pycache__ .pytest_cache .agent-learning node_modules dist'
+SANITIZE_FILE_EXCLUDES='*.pyc *.pyo .agent-learning.json'
+
 sanitize_skill_tree() {
   root="$1"
   if [ -z "$root" ] || [ ! -d "$root" ]; then
