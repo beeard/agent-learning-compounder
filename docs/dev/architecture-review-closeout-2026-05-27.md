@@ -42,3 +42,8 @@ work from `architecture-review-20260527-183248`.
   behavior becomes operator-visible drift.
 - Package/distribution bundle review if release artifacts or dashboard bundles
   start diverging across install paths.
+
+Follow-up review `.runtime/reports/architecture-review-20260527-215034.md`
+turned the package/distribution concern into a six-item architecture campaign.
+Track that campaign in `docs/dev/architecture-review-campaign-2026-05-28.md`;
+this closeout remains closed for the earlier five boundaries.

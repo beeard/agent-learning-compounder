@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is the **source tree of a portable skill package**, not an app. It builds and ships
 `agent-learning-compounder/` as a self-contained Codex/Claude skill that other repos install
 via `install.sh` (or, increasingly, `npx alc-install` / `curl … | sh` / `/plugin install`).
-Production version string is `2026.05.27+review7-plus2.2`. When changing behavior, assume the
+Production version string is `2026.05.27+review7-plus2.3`. When changing behavior, assume the
 consumer is a fresh repo that just installed the package — paths, imports, and entrypoints
 must work from the installed location, not just from this working tree.
 
@@ -178,6 +178,12 @@ State root precedence (first match wins): `--state-dir` → `AGENT_LEARNING_STAT
 State Scope lives in `bin/state_handle.py`; use it for project handles,
 user report paths, read-scope validation, background targets, and event
 write-target classification instead of duplicating scope logic in callers.
+Release Metadata lives in `bin/release_metadata.py`; release-facing identity
+values in MANIFEST, npm package metadata, Claude plugin metadata, marketplace
+metadata, and README badges/notes must match that contract. Release Layout
+lives in `bin/release_layout.py`; build/archive top-level contents, npm files,
+manifest docs/exclusions, sanitizer policy, and release fixture expectations
+must match that layout contract.
 
 Trust model the code enforces — preserve these when changing things:
 

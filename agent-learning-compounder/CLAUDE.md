@@ -81,6 +81,11 @@ meta tool.
   target selection for dev, release install, and drift audit. Dev hooks stay
   repo-local; release install still requires `--apply`; drift checks are read-only
   unless explicitly requested.
+- Release metadata in `bin/release_metadata.py` owns package-visible identity
+  for MANIFEST, npm, Claude plugin, marketplace, and README surfaces. Release
+  layout in `bin/release_layout.py` owns archive/package inclusion and
+  exclusion policy for build scripts, sanitizer, npm files, manifest policy,
+  and release fixture tests.
 
 ### Output policy
 

@@ -4,8 +4,8 @@
 > Short and durable — peer of README.md. Downstream CE skills read this as
 > grounding (`/ce-ideate`, `/ce-brainstorm`, `/ce-plan`).
 
-Version: `2026.05.27+review7-plus2.1`
-Last reviewed: 2026-05-27
+Version: `2026.05.27+review7-plus2.3`
+Last reviewed: 2026-05-28
 
 ---
 
@@ -168,6 +168,10 @@ What we're actively investing in vs. parked.
   sync via the same end-to-end validation suite. Symlink-vs-copy
   pitfalls (npm strips symlinks on pack — see `plus2.1` hotfix) are
   the failure mode to keep guarded.
+- **Release contract ownership.** Package-visible identity is owned by
+  `bin/release_metadata.py`; archive/package inclusion policy is owned by
+  `bin/release_layout.py`. Manifest, npm, plugin, marketplace, README, shell,
+  and fixture-test surfaces stay shallow adapters with parity tests.
 
 ### Deferred (not "ideated and rejected" — just not now)
 

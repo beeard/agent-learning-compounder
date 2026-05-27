@@ -51,6 +51,12 @@ meta tool.
   proposal event payloads, and normalized read mirrors. Keep `alc_propose.py`
   as the CLI/MCP adapter and expose read-side lifecycle state through
   `alc_query.py`.
+- `bin/release_metadata.py` owns package-visible release identity. Manifest,
+  npm, Claude plugin, marketplace, and README release strings are adapters
+  guarded by `tests/test_release_metadata.py`.
+- `bin/release_layout.py` owns release archive/package layout. Build scripts,
+  sanitizer policy, npm files, manifest docs/exclusions, and release fixture
+  archive checks are adapters guarded by `tests/test_release_layout.py`.
 
 ## Operating rules
 
