@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import tempfile
 import unittest
@@ -13,6 +14,25 @@ if str(BIN_DIR) not in sys.path:
 
 from state_handle import StateHandle
 import proposal_lifecycle
+
+
+def _called_names(function: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+    return names
+
+
+def _function_from(path: Path, name: str) -> ast.FunctionDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{path} has no function named {name}")
 
 
 class ProposalLifecycleTests(unittest.TestCase):
@@ -101,6 +121,16 @@ class ProposalLifecycleTests(unittest.TestCase):
         self.assertIn(("gate", "q1"), kinds)
         self.assertIn(("patch", "p1"), kinds)
         self.assertIn(("workflow_chain", "r2"), kinds)
+
+    def test_proposal_adapters_delegate_lifecycle_identity_and_reads(self) -> None:
+        alc_propose = REPO_ROOT / "bin" / "alc_propose.py"
+        alc_query = REPO_ROOT / "bin" / "alc_query.py"
+
+        self.assertIn("build_gate_proposal", _called_names(_function_from(alc_propose, "propose_gate")))
+        self.assertIn("build_apply_proposal", _called_names(_function_from(alc_propose, "propose_apply")))
+        self.assertIn("build_outcome_event", _called_names(_function_from(alc_propose, "report_outcome")))
+        self.assertIn("read_proposal_queue", _called_names(_function_from(alc_query, "get_proposal_queue")))
+        self.assertIn("read_lifecycle_state", _called_names(_function_from(alc_query, "get_proposal_lifecycle")))
 
 
 if __name__ == "__main__":

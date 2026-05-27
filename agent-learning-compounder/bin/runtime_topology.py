@@ -77,7 +77,7 @@ def _runtime_config_target(repo: pathlib.Path, runtime: str, scope: str) -> path
 
 def _adapter_command(repo: pathlib.Path, runtime: str, event: str) -> str:
     _normalize_runtime(runtime)
-    script = pathlib.Path(__file__).resolve()
+    script = pathlib.Path(__file__).resolve().parent / "install_runtime_hooks"
     parts = [
         sys.executable,
         str(script),

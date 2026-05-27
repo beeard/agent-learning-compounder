@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import os
 import pathlib
@@ -15,6 +16,25 @@ BIN = REPO_ROOT / "bin"
 INIT = BIN / "init_learning_system"
 
 sys.path.insert(0, str(BIN))
+
+
+def _called_names(function: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+    return names
+
+
+def _function_from(path: pathlib.Path, name: str) -> ast.FunctionDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{path} has no function named {name}")
 
 
 def _run_init(*args, cwd=None):
@@ -236,6 +256,16 @@ class StateHandleTests(unittest.TestCase):
 
             for value in paths.values():
                 self.assertEqual(value, canonical)
+
+    def test_scope_adapters_delegate_to_state_handle_vocabulary(self):
+        alc_query = REPO_ROOT / "bin" / "alc_query.py"
+        event_writer = REPO_ROOT / "bin" / "event_writer.py"
+        mcp_server = REPO_ROOT / "alc_mcp" / "server.py"
+
+        self.assertIn("validate_read_scope", _called_names(_function_from(alc_query, "_validate_scope")))
+        self.assertIn("user_reports_dir", _called_names(_function_from(alc_query, "get_gates")))
+        self.assertIn("event_write_target", _called_names(_function_from(event_writer, "write_events_batch")))
+        self.assertIn("project_state", _called_names(_function_from(mcp_server, "_state")))
 
 
 if __name__ == "__main__":

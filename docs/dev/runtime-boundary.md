@@ -108,4 +108,5 @@ and domain-rule stages under the repo `.refresh.lock`.
 
 `bin/refresh_learning_state` stays as the operator-facing CLI adapter. Do not
 route dashboard read-model construction or proposal lifecycle ranking through
-Refresh Run; those remain later module boundaries.
+Refresh Run; those completed boundaries live in `bin/dashboard_read_model.py`
+and `bin/proposal_lifecycle.py`.

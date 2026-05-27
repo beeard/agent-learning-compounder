@@ -25,6 +25,10 @@ should be resurrected by anyone running the next architecture review.
 > step: `bin/proposal_lifecycle.py` now owns proposal identity, lifecycle
 > records, proposal event payloads, and read mirrors over queue, patch, and
 > suggestion artifacts while `bin/alc_propose.py` remains the CLI/MCP adapter.
+> Closeout evidence is captured in
+> `docs/dev/architecture-review-closeout-2026-05-27.md`; the
+> `architecture-review-20260527-183248` report is closed and should not be
+> treated as a live backlog.
 
 ## #05 — Pipeline-protocol for the analyst quartet
 
@@ -91,8 +95,9 @@ exposes proposal queue and lifecycle read mirrors, backed by MCP tools M19 and
 M20. Recommender-rendered patches/suggestions and eval verdicts now carry
 lifecycle correlation metadata when source recommendation identity is known.
 
-**Still deferred:** analyst quartet pipeline protocol (#05), dashboard URL
-server-marker hardening, and package distribution bundle work.
+**Still deferred:** analyst quartet pipeline protocol (#05). Dashboard URL
+server-marker hardening and package distribution bundle work are future-review
+candidates, not carryover from the closed 20260527 architecture sequence.
 
 **Verification:** `tests/test_proposal_lifecycle.py`,
 `tests/test_alc_propose.py`, `tests/test_alc_query.py`,

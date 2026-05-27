@@ -124,16 +124,16 @@ render_dashboard.build_     readDashboardData() reads  bin/alc_query.* (KTD-21)
      muted-domains.json
 ```
 
-**Key observation:** surface 3 is the only one that consumes the canonical
-KTD-21 read API. Surfaces 1 and 2 reimplement reads inline (grep
-`alc-payload`-injected HTML, parse a regex-matched `report-payload`,
-walk `metrics.jsonl`) — they don't go through `alc_query.py` at all.
+**2026-05-27 closeout:** all three surfaces now consume
+`bin/dashboard_read_model.py`. Archive history still comes from the historical
+report payload and `metrics.jsonl`, but project-scoped dashboard data routes
+through `alc_query.py`/`StateHandle` instead of each adapter assembling its own
+read shape.
 
-The implication is that any future evolution of the read seam (new tables,
-new aggregates, gate effectiveness, causal probe outputs, queue dedup,
-domain rules learning) **does not reach the React UI** until somebody
-updates `distill_learning.py`'s payload shape or
-`render_dashboard.build_dashboard_data()`.
+The implication for future work is narrower: widen the shared read model first,
+then teach the React and stdlib views to render the added fields. Do not add
+new dashboard-local parsing paths for recommendations, events, proposal state,
+or project diagnostics.
 
 ---
 

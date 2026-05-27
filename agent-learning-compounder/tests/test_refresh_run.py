@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import json
 import os
 import pathlib
@@ -17,6 +18,25 @@ import collect_hook_event
 import refresh_learning_state
 import refresh_run
 from state_handle import StateHandle
+
+
+def _called_names(function: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+    return names
+
+
+def _function_from(path: pathlib.Path, name: str) -> ast.FunctionDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{path} has no function named {name}")
 
 
 class RefreshRunTests(unittest.TestCase):
@@ -211,6 +231,13 @@ class RefreshRunTests(unittest.TestCase):
             "stages",
         ):
             self.assertIn(key, result)
+
+    def test_refresh_adapters_delegate_to_refresh_run(self) -> None:
+        refresh_adapter = _function_from(REPO_ROOT / "bin" / "refresh_learning_state", "refresh")
+        bootstrap_adapter = _function_from(REPO_ROOT / "bin" / "alc_bootstrap_pipeline", "run")
+
+        self.assertIn("run_full", _called_names(refresh_adapter))
+        self.assertIn("run_warm", _called_names(bootstrap_adapter))
 
 
 if __name__ == "__main__":

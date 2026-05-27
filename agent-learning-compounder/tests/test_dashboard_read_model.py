@@ -45,6 +45,25 @@ CREATE TABLE IF NOT EXISTS events (
 """
 
 
+def _called_names(function: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+    return names
+
+
+def _function_from(path: pathlib.Path, name: str) -> ast.FunctionDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{path} has no function named {name}")
+
+
 class DashboardReadModelTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp = tempfile.TemporaryDirectory()
@@ -186,6 +205,15 @@ class DashboardReadModelTests(unittest.TestCase):
             "sqlite3",
         }
         self.assertFalse(imports & forbidden, imports & forbidden)
+
+    def test_dashboard_adapters_delegate_payload_assembly_to_read_model(self) -> None:
+        fastapi_adapter = _function_from(REPO_ROOT / "dashboard" / "__init__.py", "_build_dashboard_payload")
+        static_adapter = _function_from(REPO_ROOT / "bin" / "render_dashboard", "build_dashboard_data")
+        stdlib_adapter = _function_from(REPO_ROOT / "skills" / "alc-dashboard" / "server.py", "build_data_blob")
+
+        self.assertIn("build_fastapi_payload", _called_names(fastapi_adapter))
+        self.assertIn("build_static_payload", _called_names(static_adapter))
+        self.assertIn("build_stdlib_payload", _called_names(stdlib_adapter))
 
 
 if __name__ == "__main__":

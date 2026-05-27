@@ -6,11 +6,31 @@ import pathlib
 import subprocess
 import tempfile
 import unittest
+import ast
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CHECK = ROOT / "bin" / "check_runtime_drift"
 MERGE_DEV_HOOKS = ROOT.parent / "scripts" / "merge_dev_hooks.py"
+
+
+def _called_names(function: ast.FunctionDef) -> set[str]:
+    names: set[str] = set()
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                names.add(node.func.id)
+            elif isinstance(node.func, ast.Attribute):
+                names.add(node.func.attr)
+    return names
+
+
+def _function_from(path: pathlib.Path, name: str) -> ast.FunctionDef:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == name:
+            return node
+    raise AssertionError(f"{path} has no function named {name}")
 
 
 class RuntimeBoundaryTests(unittest.TestCase):
@@ -208,6 +228,21 @@ class RuntimeBoundaryTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("profile: user-audit", result.stdout)
             self.assertIn(str(user_runtime), result.stdout)
+
+    def test_runtime_adapters_delegate_target_and_command_selection_to_topology(self) -> None:
+        install_hooks = ROOT / "bin" / "install_runtime_hooks"
+        merge_runtime_hooks = _function_from(install_hooks, "merge_runtime_hooks")
+        self.assertGreaterEqual(
+            _called_names(merge_runtime_hooks),
+            {
+                "config_for_runtime",
+                "runtime_adapter_command",
+                "runtime_warm_loop_command",
+            },
+        )
+
+        expected_hooks = _function_from(MERGE_DEV_HOOKS, "expected_hooks")
+        self.assertIn("dev_hook_specs", _called_names(expected_hooks))
 
 
 if __name__ == "__main__":

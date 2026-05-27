@@ -1,7 +1,7 @@
 ---
 title: "refactor: Complete dashboard read model module"
 type: "refactor"
-status: "active"
+status: "completed"
 date: "2026-05-27"
 ---
 
@@ -303,4 +303,3 @@ git diff --check
 - Existing dashboard payload keys remain compatible.
 - Docs identify Dashboard Read Model as complete and Proposal Lifecycle as next.
 - Targeted and broader verification commands pass, except for any explicitly documented unrelated pre-existing failures.
-

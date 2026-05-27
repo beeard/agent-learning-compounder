@@ -12,6 +12,7 @@ if str(BIN) not in sys.path:
 
 from runtime_topology import (
     RuntimeTopology,
+    adapter_command,
     build_runtime_drift_plan,
     build_runtime_topology,
     config_for_runtime,
@@ -62,6 +63,17 @@ class RuntimeTopologyTests(unittest.TestCase):
             self.assertIn("AGENT_LEARNING_PERSONAL=", command)
             self.assertIn("AGENT_LEARNING_USER=", command)
             self.assertIn("auto_distill_session", command)
+
+    def test_adapter_command_renders_install_runtime_hooks_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            command = adapter_command(repo, "codex", "SessionStart")
+
+            self.assertIn("install_runtime_hooks", command)
+            self.assertIn("--adapter", command)
+            self.assertIn("--runtime codex", command)
+            self.assertIn("--event SessionStart", command)
+            self.assertNotIn("runtime_topology.py --adapter", command)
 
     def test_drift_plans_are_mode_distinct(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
