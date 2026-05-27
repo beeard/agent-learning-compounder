@@ -190,6 +190,43 @@ copy_skill() {
   sanitize_skill_tree "$dest"
 }
 
+# Build the React dashboard bundle so consumers don't land on the
+# missing-bundle fallback. sanitize_skill_tree always strips dist/, so
+# any pre-built bundle in the source tree never makes it past install --
+# we have to (re)build here.
+build_dashboard_bundle() {
+  dest="$1"
+  bundle_root="$dest/dashboard/web"
+  bundle_file="$bundle_root/dist/index.html"
+
+  if [ ! -d "$bundle_root" ]; then
+    return 0
+  fi
+
+  if ! command -v pnpm >/dev/null 2>&1; then
+    echo "skipping dashboard build: pnpm not found in PATH." >&2
+    echo "  the dashboard will show the fallback HTML until you run:" >&2
+    echo "    cd \"$bundle_root\" && pnpm install && pnpm build" >&2
+    return 0
+  fi
+
+  echo "building dashboard React bundle (pnpm install + pnpm build)..." >&2
+  if (cd "$bundle_root" && pnpm install --silent && pnpm build) >&2; then
+    if [ -f "$bundle_file" ]; then
+      echo "  built $bundle_file" >&2
+    else
+      echo "  pnpm build completed but $bundle_file is missing" >&2
+    fi
+    # node_modules is dev-only at this point; the built dist is all the
+    # dashboard needs at runtime. Drop it to save ~200MB per install.
+    rm -rf "$bundle_root/node_modules"
+  else
+    echo "  pnpm build failed; the dashboard will show the fallback HTML." >&2
+    echo "  retry with: cd \"$bundle_root\" && pnpm install && pnpm build" >&2
+    rm -rf "$bundle_root/node_modules"
+  fi
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --codex)
@@ -346,6 +383,11 @@ if [ -n "$bootstrap_repo" ]; then
     sanitize_skill_tree "$bootstrap_dest"
   fi
 
+  for mode in $(runtime_targets "$runtime"); do
+    dest_root="$(runtime_root "$repo_root" "$mode")"
+    build_dashboard_bundle "$dest_root/agent-learning-compounder"
+  done
+
   python3 "$bootstrap_dest/bin/init_learning_system.py" \
     --repo "$repo_root" \
     --runtime "$runtime" \
@@ -425,6 +467,8 @@ if [ "$verify" -eq 1 ]; then
   (cd "$dest" && python3 scripts/run_pressure_tests.py)
   sanitize_skill_tree "$dest"
 fi
+
+build_dashboard_bundle "$dest"
 
 if [ "$plugin_mode" = 1 ]; then
   cat <<EOF
