@@ -8,7 +8,7 @@
 
 <br/>
 
-[![Release](https://img.shields.io/badge/release-2026.05.27%2Breview7--plus2.2-2563eb?style=flat-square)](CHANGES.md)
+[![Release](https://img.shields.io/badge/release-2026.05.27%2Breview7--plus2.3-2563eb?style=flat-square)](CHANGES.md)
 [![npm](https://img.shields.io/npm/v/agent-learning-compounder?label=npm&color=cb3837&style=flat-square)](https://www.npmjs.com/package/agent-learning-compounder)
 [![MCP](https://img.shields.io/badge/MCP-12_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
 [![License](https://img.shields.io/badge/license-MIT-15803d?style=flat-square)](LICENSE)
@@ -170,7 +170,7 @@ from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 | [`STRATEGY.md`](STRATEGY.md) | Target problem · users · success signals · active tracks |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Five-minute mental model with diagrams |
 | [`CONTEXT.md`](CONTEXT.md) | For LLM agents landing in this repo |
-| [`CHANGES.md`](CHANGES.md) | Release notes (latest: `2026.05.27+review7-plus2.2`) |
+| [`CHANGES.md`](CHANGES.md) | Release notes (latest: `2026.05.27+review7-plus2.3`) |
 | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | First-time install walk-through |
 | [`agent-learning-compounder/reference-lib/`](agent-learning-compounder/reference-lib/) | Per-subsystem deep dives (architecture, threat-model, output-schema, gate-registry, hook-telemetry, …) |
 
