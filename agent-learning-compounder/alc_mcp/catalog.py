@@ -379,4 +379,43 @@ MCP_TOOLS: dict[str, MCPToolSpec] = {
         version=1,
         min_compatible_version=1,
     ),
+    "get_proposal_queue": MCPToolSpec(
+        id="M19",
+        kind="read",
+        summary="Return operator proposal queue rows from improvement-queue.jsonl as normalized lifecycle records (UQ10).",
+        backing="alc_query.get_proposal_queue",
+        parameters_schema={
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": _REPO_PARAM,
+                "scope": _SCOPE_PARAM,
+                "status": {"type": ["string", "null"], "description": "Optional queue status filter, e.g. 'open'."},
+                "limit": {"type": "integer", "default": 100, "description": "Maximum rows to return."},
+            },
+        },
+        returns_schema={"type": "array", "items": {"type": "object"}},
+        examples=[{"repo": "/path/to/repo"}, {"repo": "/path/to/repo", "status": "open"}],
+        version=1,
+        min_compatible_version=1,
+    ),
+    "get_proposal_lifecycle": MCPToolSpec(
+        id="M20",
+        kind="read",
+        summary="Return normalized proposal lifecycle rows across queue, patch, and suggestion artifacts (UQ11).",
+        backing="alc_query.get_proposal_lifecycle",
+        parameters_schema={
+            "type": "object",
+            "required": ["repo"],
+            "properties": {
+                "repo": _REPO_PARAM,
+                "scope": _SCOPE_PARAM,
+                "limit": {"type": "integer", "default": 200, "description": "Maximum rows to return."},
+            },
+        },
+        returns_schema={"type": "array", "items": {"type": "object"}},
+        examples=[{"repo": "/path/to/repo"}],
+        version=1,
+        min_compatible_version=1,
+    ),
 }

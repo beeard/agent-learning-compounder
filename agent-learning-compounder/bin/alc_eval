@@ -19,12 +19,14 @@ try:
     from alc_query import get_recommendations
     from event_schema import EventV4
     from event_writer import write_event
+    import proposal_lifecycle
     from state_handle import StateHandle
 except Exception:  # pragma: no cover
     from bin.alc_invoke import invoke
     from bin.alc_query import get_recommendations
     from bin.event_schema import EventV4
     from bin.event_writer import write_event
+    from bin import proposal_lifecycle
     from bin.state_handle import StateHandle
 
 
@@ -149,6 +151,19 @@ def run(*, repo: pathlib.Path, window: str, limit: int, judge: str) -> tuple[int
                 "verdict": verdict,
                 "judge_reason": reason,
                 "recommendation_kind": str(rec.get("kind") or rec.get("recommendation_kind") or "unknown"),
+                "lifecycle": proposal_lifecycle.lifecycle_ref(
+                    proposal_kind="eval",
+                    status="evaluated",
+                    artifact_id=rec_id,
+                    artifact_type="recommendation",
+                    recommendation_id=rec_id,
+                    event_id=event_id,
+                    ts=verdict_ts,
+                    metadata={
+                        "verdict": verdict,
+                        "recommendation_kind": str(rec.get("kind") or rec.get("recommendation_kind") or "unknown"),
+                    },
+                ),
             },
         }
         write_event(row, source="eval", auto_id_fallback=False, state=state)

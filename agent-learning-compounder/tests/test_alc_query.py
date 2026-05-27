@@ -216,6 +216,52 @@ class AlcQueryTests(unittest.TestCase):
 
         self.assertEqual(alc_query.get_suggestions(self.state, scope="user"), [])
 
+    def test_get_proposal_queue_reads_improvement_queue(self) -> None:
+        queue = self.state.repo_state_dir / "improvement-queue.jsonl"
+        queue.write_text(
+            "\n".join(
+                [
+                    json.dumps({"id": "q1", "kind": "operator_proposed_gate", "status": "open", "ts": "2"}),
+                    json.dumps({"id": "q2", "kind": "operator_proposed_gate", "status": "closed", "ts": "1"}),
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        rows = alc_query.get_proposal_queue(self.state, status="open")
+        self.assertEqual([row["queue_id"] for row in rows], ["q1"])
+        self.assertEqual(rows[0]["proposal_kind"], "gate")
+
+    def test_get_proposal_lifecycle_returns_queue_patch_and_suggestion_rows(self) -> None:
+        (self.state.repo_state_dir / "improvement-queue.jsonl").write_text(
+            json.dumps({"id": "q1", "kind": "operator_proposed_gate", "status": "open", "ts": "1"}) + "\n",
+            encoding="utf-8",
+        )
+        patch_dir = self.state.repo_state_dir / "patches"
+        patch_dir.mkdir()
+        (patch_dir / "p1.json").write_text(
+            json.dumps({"patch_id": "p1", "status": "pending", "recommendation_id": "r1"}),
+            encoding="utf-8",
+        )
+        (self.state.repo_state_dir / "suggestions.json").write_text(
+            json.dumps({"suggestions": [{"recommendation_id": "r2", "kind": "workflow_chain"}]}),
+            encoding="utf-8",
+        )
+
+        rows = alc_query.get_proposal_lifecycle(self.state)
+        self.assertEqual(
+            {(row["proposal_kind"], row["artifact_id"]) for row in rows},
+            {("gate", "q1"), ("patch", "p1"), ("workflow_chain", "r2")},
+        )
+
+    def test_get_proposal_reads_user_scope_return_empty(self) -> None:
+        (self.state.repo_state_dir / "improvement-queue.jsonl").write_text(
+            json.dumps({"id": "q1", "kind": "operator_proposed_gate", "status": "open"}) + "\n",
+            encoding="utf-8",
+        )
+        self.assertEqual(alc_query.get_proposal_queue(self.state, scope="user"), [])
+        self.assertEqual(alc_query.get_proposal_lifecycle(self.state, scope="user"), [])
+
     def test_get_event_dag_builds_hierarchy(self) -> None:
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         self._insert_rows([

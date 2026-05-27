@@ -23,3 +23,5 @@
 | Skill invocation history | patterns | `/alc-report` | M16 get_skill_invocation_history | `bin/alc_query skill-history --repo <repo> --skill <name>` |
 | Skill usage summary | patterns | `/alc-report` | M17 get_skill_usage_summary | `bin/alc_query skill-usage --repo <repo>` |
 | Defer or reject a pending patch | pending_patches | `/alc-report` | M18 mark_patch_status | `bin/alc_propose patch-status --repo <repo> --patch-id <id> --status deferred` |
+| Inspect proposal queue | suggestions | `/alc-report` | M19 get_proposal_queue | `bin/alc_query proposal-queue --repo <repo>` |
+| Inspect proposal lifecycle | recommendations | `/alc-report` | M20 get_proposal_lifecycle | `bin/alc_query proposal-lifecycle --repo <repo>` |

@@ -3,12 +3,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import secrets
 import threading
-import time
 from pathlib import Path
 from typing import Any, Literal
 import fcntl
@@ -40,27 +38,29 @@ try:
 except ImportError:  # pragma: no cover
     from bin.state_handle import atomic_rewrite
 
+try:
+    import proposal_lifecycle
+except ImportError:  # pragma: no cover
+    from bin import proposal_lifecycle
 
-MAX_GATE_TEXT_LEN = 200
-MAX_EVIDENCE_LEN = 500
-MAX_REASON_LEN = 500
-MAX_DOMAIN_LEN = 80
-MAX_CATEGORY_LEN = 80
-MAX_KIND_LEN = 80
-MAX_NAME_LEN = 80
+
+MAX_GATE_TEXT_LEN = proposal_lifecycle.MAX_GATE_TEXT_LEN
+MAX_EVIDENCE_LEN = proposal_lifecycle.MAX_EVIDENCE_LEN
+MAX_REASON_LEN = proposal_lifecycle.MAX_REASON_LEN
+MAX_DOMAIN_LEN = proposal_lifecycle.MAX_DOMAIN_LEN
+MAX_CATEGORY_LEN = proposal_lifecycle.MAX_CATEGORY_LEN
+MAX_KIND_LEN = proposal_lifecycle.MAX_KIND_LEN
+MAX_NAME_LEN = proposal_lifecycle.MAX_NAME_LEN
 ABSOLUTE_PATH_PREFIXES = ("/home/", "/Users/", "C:\\Users\\", "/etc/")
 _EVENT_WRITER_LOCK = threading.RLock()
 
 
 def _timestamp() -> str:
-    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    return proposal_lifecycle.timestamp()
 
 
 def _require(value: Any, name: str, limit: int = 200) -> str:
-    text = bounded(value, limit)
-    if not text:
-        raise ValueError(f"{name} is required")
-    return text
+    return proposal_lifecycle.require_text(value, name, limit)
 
 
 def _emit(state: StateHandle, row: dict[str, Any], *, source: str, auto_id_fallback: bool = True) -> str:
@@ -113,48 +113,21 @@ def _append_jsonl_locked(path: Path, row: dict[str, Any]) -> None:
 def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evidence: str | None = None) -> dict[str, str]:
     if not state.repo_state_dir.is_dir():
         raise FileNotFoundError("improvement queue missing; run init_learning_system first")
-    domain = _require(domain, "domain", MAX_DOMAIN_LEN)
-    category = _require(category, "category", MAX_CATEGORY_LEN)
-    gate_text = _require(gate, "gate", MAX_GATE_TEXT_LEN)
-    evidence_text = bounded(evidence, MAX_EVIDENCE_LEN) if evidence else ""
-    if evidence and evidence_text is None:
-        raise ValueError("evidence contains secret-like content")
-
-    digest = hashlib.sha256(f"{domain}|{category}|{gate_text}".encode("utf-8")).hexdigest()[:12]
-    queue_id = f"proposed-{digest}-{int(time.time())}"
-
-    row = {
-        "id": queue_id,
-        "kind": "operator_proposed_gate",
-        "domain": domain,
-        "category": category,
-        "text": gate_text,
-        "evidence": evidence_text,
-        "ts": _timestamp(),
-        "status": "open",
-    }
+    proposal = proposal_lifecycle.build_gate_proposal(
+        domain=domain,
+        category=category,
+        gate=gate,
+        evidence=evidence,
+    )
 
     queue = state.repo_state_dir / "improvement-queue.jsonl"
-    _append_jsonl_locked(queue, row)
+    _append_jsonl_locked(queue, proposal.queue_row)
+    _emit(state, proposal.event, source="background")
 
-    event = {
-        "event": "gate_proposed",
-        "actor": {"kind": "operator", "name": "alc_propose"},
-        "ts": _timestamp(),
-        "payload": {
-            "queue_id": queue_id,
-            "domain": domain,
-            "category": category,
-            "text": gate_text,
-        },
-    }
-    _emit(state, event, source="background")
-
-    return {"queue_id": queue_id}
+    return {"queue_id": proposal.queue_id}
 
 
 def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
-    patch_id = _require(patch_id, "patch_id", MAX_CATEGORY_LEN)
     # Command matches the actual alc_apply CLI surface (--patch + --write).
     # An audit nonce is emitted only in the apply_proposed event payload so a
     # future correlator can pair a proposal with the eventual apply via
@@ -162,56 +135,26 @@ def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
     # has no token-validation surface and exposing a "token" would suggest a
     # security guarantee that doesn't exist (see PR review round 2).
     audit_nonce = secrets.token_urlsafe(16)
-    command = f"bin/alc_apply --patch {patch_id} --write"
-
-    event = {
-        "event": "apply_proposed",
-        "actor": {"kind": "operator", "name": "alc_propose"},
-        "ts": _timestamp(),
-        "payload": {
-            "patch_id": patch_id,
-            "audit_nonce": audit_nonce,
-            "command": command,
-        },
-    }
-    _emit(state, event, source="apply")
-
-    return {"command": command}
+    proposal = proposal_lifecycle.build_apply_proposal(patch_id=patch_id, audit_nonce=audit_nonce)
+    _emit(state, proposal.event, source="apply")
+    return {"command": proposal.command}
 
 
 def report_outcome(state: StateHandle, recommendation_id: str, verdict: str, reason: str) -> str:
-    recommendation_id = _require(recommendation_id, "recommendation_id", MAX_REASON_LEN)
-    verdict = _require(verdict, "verdict", MAX_REASON_LEN)
-    reason_text = _require(reason, "reason", MAX_REASON_LEN)
-
-    key = f"{recommendation_id}:{verdict}:{reason_text}"
-    event_id = EventV4.deterministic_id("eval_judge", "outcome_reported", key)
-    ts = _timestamp()
-    payload = {
-        "event_id": event_id,
-        "event": "outcome_reported",
-        "schema_version": 4,
-        "actor": {"kind": "eval_judge", "name": "alc_propose"},
-        "telemetry": {},
-        "ts": ts,
-        "payload": {
-            "recommendation_id": recommendation_id,
-            "verdict": verdict,
-            "reason": reason_text,
-        },
-    }
+    payload = proposal_lifecycle.build_outcome_event(
+        recommendation_id=recommendation_id,
+        verdict=verdict,
+        reason=reason,
+    )
     return _emit(state, payload, source="eval", auto_id_fallback=False)
 
 
 def report_agent_event(state: StateHandle, kind: str, actor_name: str, telemetry: dict[str, Any] | None = None) -> str:
-    kind = _require(kind, "kind", MAX_KIND_LEN)
-    actor_name = _require(actor_name, "actor_name", MAX_NAME_LEN)
-    payload = {
-        "event": f"agent_dispatch_{kind}",
-        "actor": {"kind": "mcp_server", "name": actor_name},
-        "ts": _timestamp(),
-        "telemetry": _safe_telemetry(dict(telemetry or {})),
-    }
+    payload = proposal_lifecycle.build_agent_event(
+        kind=kind,
+        actor_name=actor_name,
+        telemetry=_safe_telemetry(dict(telemetry or {})),
+    )
     return _emit(state, payload, source="background")
 
 
@@ -233,14 +176,6 @@ def mark_patch_status(state: StateHandle, patch_id: str, status: Literal["deferr
     except FileNotFoundError as exc:
         raise FileNotFoundError(f"patch bundle not found: {path}") from exc
 
-    event = {
-        "event": f"patch_{status}",
-        "actor": {"kind": "operator", "name": "alc_propose"},
-        "ts": _timestamp(),
-        "payload": {
-            "patch_id": patch_id,
-            "status": status,
-        },
-    }
+    event = proposal_lifecycle.build_patch_status_event(patch_id=patch_id, status=status)
     _emit(state, event, source="apply")
     return {"patch_id": patch_id, "status": status}

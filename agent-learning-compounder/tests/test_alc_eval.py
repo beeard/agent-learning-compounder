@@ -50,6 +50,8 @@ class AlcEvalTests(unittest.TestCase):
         self.assertEqual(events[0]["actor"]["kind"], "eval_judge")
         self.assertEqual(events[0]["actor"]["name"], "rec-quality-judge")
         self.assertEqual(events[0]["correlation_chain"], [{"role": "evaluated_rec", "id": "r1"}])
+        self.assertEqual(events[0]["payload"]["lifecycle"]["proposal_kind"], "eval")
+        self.assertEqual(events[0]["payload"]["lifecycle"]["recommendation_id"], "r1")
 
     def test_rerun_skips_existing_deterministic_events(self):
         recs = [{"id": "r1", "kind": "skill", "ts": "2026-05-25T00:00:00+00:00"}]

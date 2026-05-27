@@ -20,5 +20,7 @@
 | M16 | get_skill_invocation_history | alc_query.get_skill_invocation_history | alc_query.get_skill_invocation_history (UQ7) |
 | M17 | get_skill_usage_summary | alc_query.get_skill_usage_summary | alc_query.get_skill_usage_summary (UQ8) |
 | M18 | mark_patch_status | alc_propose.mark_patch_status | alc_propose.mark_patch_status (UP5) |
+| M19 | get_proposal_queue | alc_query.get_proposal_queue | alc_query.get_proposal_queue (UQ10) |
+| M20 | get_proposal_lifecycle | alc_query.get_proposal_lifecycle | alc_query.get_proposal_lifecycle (UQ11) |
 
 Deletion check, local only: temporarily remove one row from this table or one catalog registration backing an M-ID, then run `python3 -m unittest tests.test_capability_map tests.test_capability_parity tests.test_catalog_mcp_parity tests.test_mcp_catalog_doc -v`. The map/parity/doc tests should fail before any consumer can silently bypass the catalog.

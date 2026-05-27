@@ -21,8 +21,10 @@ should be resurrected by anyone running the next architecture review.
 > and structured result reporting while `bin/refresh_learning_state` remains
 > the CLI adapter. Dashboard Read Model is complete as the fourth step:
 > `bin/dashboard_read_model.py` now owns FastAPI, static-render, and stdlib
-> dashboard read payload assembly. Follow-up architecture remains sequenced
-> (`proposal_lifecycle`).
+> dashboard read payload assembly. Proposal Lifecycle is complete as the fifth
+> step: `bin/proposal_lifecycle.py` now owns proposal identity, lifecycle
+> records, proposal event payloads, and read mirrors over queue, patch, and
+> suggestion artifacts while `bin/alc_propose.py` remains the CLI/MCP adapter.
 
 ## #05 — Pipeline-protocol for the analyst quartet
 
@@ -74,6 +76,28 @@ project-scoped `events.jsonl`.
 
 **Manual compatibility:** `bin/replay_hook_events` remains as an operator tool;
 the production warm path is `refresh_run.run_warm(...)`.
+
+## #08 — Proposal Lifecycle module boundary  ✅ addressed 2026-05-27
+
+**Files:** `bin/proposal_lifecycle.py`, `bin/alc_propose.py`,
+`bin/alc_query.py`, `bin/recommender_render`, `bin/alc_eval`,
+`alc_mcp/catalog.py`
+
+**Status:** Addressed by Proposal Lifecycle. Proposal identity, lifecycle
+record construction, status/event payload helpers, and normalized read mirrors
+now live in `bin/proposal_lifecycle.py`. `alc_propose` delegates proposal event
+payload construction while preserving public return shapes. `alc_query`
+exposes proposal queue and lifecycle read mirrors, backed by MCP tools M19 and
+M20. Recommender-rendered patches/suggestions and eval verdicts now carry
+lifecycle correlation metadata when source recommendation identity is known.
+
+**Still deferred:** analyst quartet pipeline protocol (#05), dashboard URL
+server-marker hardening, and package distribution bundle work.
+
+**Verification:** `tests/test_proposal_lifecycle.py`,
+`tests/test_alc_propose.py`, `tests/test_alc_query.py`,
+`tests/test_recommender_render.py`, `tests/test_alc_eval.py`, MCP catalog and
+capability parity tests, plus dashboard read-model tests.
 
 ## Source
 

@@ -61,6 +61,24 @@ class RecommenderToolTests(unittest.TestCase):
         self.assertEqual(result, {"recorded": True, "event_id": "evt-1"})
         self.assertEqual(write.call_args.args[1:], ("rec1", "accepted", "works"))
 
+    def test_get_proposal_queue_reads_improvement_queue(self):
+        queue = self.state.repo_state_dir / "improvement-queue.jsonl"
+        queue.write_text(
+            json.dumps({"id": "q1", "kind": "operator_proposed_gate", "status": "open", "ts": "1"}) + "\n",
+            encoding="utf-8",
+        )
+
+        result = asyncio.run(server.TOOL_HANDLERS["get_proposal_queue"]({"repo": str(self.repo)}))
+        self.assertEqual([row["queue_id"] for row in result], ["q1"])
+
+    def test_get_proposal_lifecycle_reads_existing_artifacts(self):
+        patch_dir = self.state.repo_state_dir / "patches"
+        patch_dir.mkdir()
+        (patch_dir / "p1.json").write_text(json.dumps({"patch_id": "p1", "status": "pending"}), encoding="utf-8")
+
+        result = asyncio.run(server.TOOL_HANDLERS["get_proposal_lifecycle"]({"repo": str(self.repo)}))
+        self.assertEqual([(row["proposal_kind"], row["artifact_id"]) for row in result], [("patch", "p1")])
+
 
 if __name__ == "__main__":
     unittest.main()

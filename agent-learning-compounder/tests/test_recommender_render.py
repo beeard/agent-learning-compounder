@@ -73,6 +73,10 @@ class RecommenderRenderTests(unittest.TestCase):
                 self.assertIn("skill_manage_op", payload)
                 self.assertIn("preflight", payload)
                 self.assertIn("revert_op", payload)
+                self.assertIn("recommendation_id", payload)
+                self.assertEqual(payload["lifecycle"]["proposal_kind"], "patch")
+                self.assertEqual(payload["lifecycle"]["status"], "pending")
+                self.assertEqual(payload["lifecycle"]["artifact_id"], payload["patch_id"])
                 self.assertNotIn("copy_to_clipboard", json.dumps(payload))
 
             suggestions_path = state.repo_state_dir / "suggestions.json"
@@ -81,6 +85,8 @@ class RecommenderRenderTests(unittest.TestCase):
             self.assertEqual(len(suggestion_payload["suggestions"]), 1)
             self.assertEqual(suggestion_payload["suggestions"][0]["title"], "Suggested workflow")
             self.assertEqual(suggestion_payload["suggestions"][0]["kind"], "workflow_chain")
+            self.assertEqual(suggestion_payload["suggestions"][0]["lifecycle"]["proposal_kind"], "workflow_chain")
+            self.assertEqual(suggestion_payload["suggestions"][0]["lifecycle"]["status"], "suggested")
 
             # workflow_chain must never land in patches/
             self.assertFalse(any(name.startswith("workflow_chain") for name in patch_files))

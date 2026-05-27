@@ -131,6 +131,12 @@ the stdlib fallback. Keep project reads behind `alc_query`/`StateHandle`, and
 keep promote/mute/distill/proposal writes in the FastAPI action or propose
 layers.
 
+`bin/proposal_lifecycle.py` is the Proposal Lifecycle module. It owns proposal
+identity, lifecycle records, proposal event payloads, and normalized read
+mirrors over improvement queue, patch, and suggestion artifacts. Keep CLI/MCP
+write entrypoints in `alc_propose.py`; expose read mirrors through
+`alc_query.py`.
+
 `RuntimeTopology` (`bin/runtime_topology.py`) centralizes runtime mode selection
 for hook command rendering, config targets, and drift checks:
 
@@ -153,7 +159,7 @@ implement against the ID.
 |---|---|---|
 | Analyst queries | Q1–Q10 | `reference-lib/analyst-queries-catalog` |
 | Generators (patch emitters) | G1–G5 | `reference-lib/generator-catalog` (`bin.recommender_generators.GENERATORS`) |
-| MCP tools | M1–M10 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
+| MCP tools | M1–M20 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | `reference-lib/propose-catalog` |
 | Hermes-DSL targets | `skill` / `agent` / `command` / `hook` | `reference-lib/hermes-dsl-spec` |
 
@@ -164,8 +170,8 @@ through these, stop.
 
 | Seam | API | Consumers |
 |---|---|---|
-| **Read** | `bin/alc_query.py` | Hooks, dashboards, MCP tools (M1–M5), slash commands, `alc_init`, `ce_playbook` |
-| **Propose / write** | `bin/alc_propose.py` | MCP tools (M6–M9), event writer |
+| **Read** | `bin/alc_query.py` | Hooks, dashboards, MCP read tools, slash commands, `alc_init`, `ce_playbook` |
+| **Propose / write** | `bin/alc_propose.py` | MCP propose/observe tools, event writer |
 
 Writes that mutate target files go through **Hermes-DSL → `bin/alc_apply`.**
 Every op has a `revert_op` (exact inverse) and a `preflight` block

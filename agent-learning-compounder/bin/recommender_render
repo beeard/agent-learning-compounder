@@ -22,6 +22,11 @@ try:
 except ImportError:  # pragma: no cover
     from bin.exec_sandbox import run as run_in_sandbox
 
+try:
+    import proposal_lifecycle
+except ImportError:  # pragma: no cover
+    from bin import proposal_lifecycle
+
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -109,14 +114,25 @@ def _validate_recommendation(rec: dict[str, Any], *, prevalidate: bool, state: S
     return {"kind": kind, "bundle": bundle}, None
 
 
-def _write_patch(state: StateHandle, patch_id: str, payload: dict[str, Any]) -> None:
+def _write_patch(state: StateHandle, patch_id: str, payload: dict[str, Any], *, rec_id: str, kind: str) -> None:
     patches = state.repo_state_dir / "patches"
     patches.mkdir(parents=True, exist_ok=True)
     path = patches / f"{patch_id}.json"
     path_data = dict(payload)
     path_data["patch_id"] = patch_id
+    path_data["recommendation_id"] = rec_id
     path_data["status"] = "pending"
-    path_data["created_at"] = _timestamp()
+    created_at = _timestamp()
+    path_data["created_at"] = created_at
+    path_data["lifecycle"] = proposal_lifecycle.lifecycle_ref(
+        proposal_kind="patch",
+        status="pending",
+        artifact_id=patch_id,
+        artifact_type="patch",
+        recommendation_id=rec_id,
+        ts=created_at,
+        metadata={"kind": kind},
+    )
     atomic_write_text(path, json.dumps(path_data, indent=2, sort_keys=True) + "\n")
 
 
@@ -149,6 +165,18 @@ def run(state: StateHandle, *, prevalidate: bool = False) -> tuple[int, list[dic
             suggestion = dict(bundle_or_note["suggestion"])
             suggestion.setdefault("recommendation_id", bundle_or_note.get("recommendation_id"))
             suggestion.setdefault("kind", bundle_or_note.get("kind"))
+            suggestion.setdefault(
+                "lifecycle",
+                proposal_lifecycle.lifecycle_ref(
+                    proposal_kind=str(suggestion.get("kind") or "suggestion"),
+                    status="suggested",
+                    artifact_id=str(suggestion.get("recommendation_id") or f"suggestion-{len(suggestions)}"),
+                    artifact_type="suggestion",
+                    recommendation_id=suggestion.get("recommendation_id") if isinstance(suggestion.get("recommendation_id"), str) else None,
+                    ts=_timestamp(),
+                    metadata={"title": suggestion.get("title")},
+                ),
+            )
             suggestions.append(suggestion)
             continue
 
@@ -156,7 +184,7 @@ def run(state: StateHandle, *, prevalidate: bool = False) -> tuple[int, list[dic
         bundle = bundle_or_note["bundle"]
         rec_id = _rec_id(rec)
         patch_id = _next_patch_id(kind, rec_id, used)
-        _write_patch(state, patch_id, bundle)
+        _write_patch(state, patch_id, bundle, rec_id=rec_id, kind=kind)
         written += 1
 
     if suggestions:

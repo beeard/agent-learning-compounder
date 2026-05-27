@@ -18,6 +18,11 @@ try:
 except ImportError:  # pragma: no cover
     from bin.state_handle import StateHandle, user_reports_dir, validate_read_scope
 
+try:
+    import proposal_lifecycle
+except ImportError:  # pragma: no cover
+    from bin import proposal_lifecycle
+
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$", re.I)
 _ALLOWED_KIND_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -423,6 +428,41 @@ def get_suggestions(
             safe = _json_safe(row)
             out.append(safe if isinstance(safe, dict) else {})
     return out
+
+
+def get_proposal_queue(
+    state: StateHandle,
+    *,
+    scope: Scope = "project",
+    status: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Operator proposal queue rows from project-scope lifecycle state.
+
+    The improvement queue is written by proposal tools. ``scope="user"``
+    returns ``[]`` because proposal review state is repo-local.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
+    return proposal_lifecycle.read_proposal_queue(state, status=status, limit=limit)
+
+
+def get_proposal_lifecycle(
+    state: StateHandle,
+    *,
+    scope: Scope = "project",
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Normalized proposal lifecycle rows from queue, patch, and suggestion artifacts.
+
+    This is a read mirror over existing artifacts, not a second write source.
+    ``scope="user"`` returns ``[]`` because lifecycle artifacts are project-bound.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
+    return proposal_lifecycle.read_lifecycle_state(state, limit=limit)
 
 
 def get_event_dag(

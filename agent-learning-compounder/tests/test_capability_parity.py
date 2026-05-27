@@ -43,6 +43,8 @@ PARITY_PARTNERS = {
     "M16": ["alc_query.get_skill_invocation_history"],
     "M17": ["alc_query.get_skill_usage_summary"],
     "M18": ["alc_propose.mark_patch_status"],
+    "M19": ["alc_query.get_proposal_queue"],
+    "M20": ["alc_query.get_proposal_lifecycle"],
 }
 
 

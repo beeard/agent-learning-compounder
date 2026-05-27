@@ -1,4 +1,4 @@
-# MCP Capability Catalog (M1-M18)
+# MCP Capability Catalog (M1-M20)
 
 `alc_mcp.catalog.MCP_TOOLS` is the canonical machine-readable catalog. This file is the human-readable reference for agents. Drift tests (`tests/test_mcp_catalog_doc.py`, `tests/test_catalog_mcp_parity.py`) assert every catalog entry has a row here and that every UQ/UP catalog entry has an MCP partner (or is on the explicit CLI-only allowlist).
 
@@ -9,7 +9,7 @@
 | M3 | `get_recommendations` | read | `alc_query.get_recommendations` | Recommender rows from `recommendations.json`. |
 | M4 | `list_pending_patches` | read | `alc_query.get_pending_patches` | Pending patch bundles, excluding rejected/deferred patches. |
 | M5 | `get_dashboard_url` | read | `state_handle.dashboard_url` | Localhost dashboard URL when known, otherwise `file://` dashboard path. |
-| M6 | `propose_apply` | propose | `alc_propose.propose_apply` | Returns an apply command and one-shot token. Does not apply or mutate target files. |
+| M6 | `propose_apply` | propose | `alc_propose.propose_apply` | Returns an apply command. Does not apply or mutate target files. |
 | M7 | `propose_gate` | propose | `alc_propose.propose_gate` | Appends a proposed gate to the review queue and emits proposal telemetry. |
 | M8 | `report_outcome` | observe | `alc_propose.report_outcome` | Emits `outcome_reported` via `event_writer.write_event`. |
 | M9 | `report_agent_event` | observe | `alc_propose.report_agent_event` | Emits `agent_dispatch_*` via `event_writer.write_event`. |
@@ -22,5 +22,7 @@
 | M16 | `get_skill_invocation_history` | read | `alc_query.get_skill_invocation_history` | Historical invocation events for a specific skill (UQ7). |
 | M17 | `get_skill_usage_summary` | read | `alc_query.get_skill_usage_summary` | Aggregate `actor_name` counts in indexed events, sorted by count desc (UQ8). Used by dashboard skill-routing signals. |
 | M18 | `mark_patch_status` | propose | `alc_propose.mark_patch_status` | Mark a pending patch deferred/rejected and emit a status event (UP5). Closes the M6 propose_apply asymmetry. |
+| M19 | `get_proposal_queue` | read | `alc_query.get_proposal_queue` | Operator proposal queue rows from `improvement-queue.jsonl` as normalized lifecycle records (UQ10). |
+| M20 | `get_proposal_lifecycle` | read | `alc_query.get_proposal_lifecycle` | Normalized proposal lifecycle rows across queue, patch, and suggestion artifacts (UQ11). |
 
 In addition to the catalog tools, the server exposes a meta tool `list_capabilities(repo)` that returns the live catalog plus per-tool `version` and `min_compatible_version`. Agents should call it first and compare against their known client contract before invoking other tools.

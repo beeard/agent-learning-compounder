@@ -13,7 +13,8 @@ Codex loads this file for plugin instructions. See `CLAUDE.md` for the full cros
 
 ## MCP tools
 
-12 stdio tools, auto-started via `.mcp.json`.
+20 stdio tools, auto-started via `.mcp.json`, plus the `list_capabilities`
+meta tool.
 
 **Read surface** (backed by `bin/alc_query.py` — the canonical read API per KTD-21):
 
@@ -22,7 +23,9 @@ Codex loads this file for plugin instructions. See `CLAUDE.md` for the full cros
 - `get_recommendations` — recommender output rows
 - `list_pending_patches` — patch bundles not yet applied
 - `get_dashboard_url` — dashboard URL for this repo
-- `list_capabilities` — M1–M11 MCP catalog metadata
+- `get_proposal_queue` — proposal queue rows from `improvement-queue.jsonl`
+- `get_proposal_lifecycle` — normalized queue/patch/suggestion lifecycle rows
+- `list_capabilities` — M1–M20 MCP catalog metadata
 - `next_action` (M11) — synthesise session-lifecycle recommendation (what's next, session start/end, where I left off); backed by `bin/alc_next_action.py`; writes `latest-next-action.json` cache
 
 **Propose / write surface** (backed by `bin/alc_propose.py` — the symmetric propose seam per KTD-21):
@@ -31,6 +34,7 @@ Codex loads this file for plugin instructions. See `CLAUDE.md` for the full cros
 - `propose_apply` — return apply CLI command (no mutation — keeps human in loop)
 - `report_outcome` — record recommendation/gate outcome
 - `report_agent_event` — record bounded agent dispatch telemetry
+- `mark_patch_status` — defer or reject a pending patch bundle
 
 **Sandbox:**
 
@@ -43,6 +47,10 @@ Codex loads this file for plugin instructions. See `CLAUDE.md` for the full cros
   SQLite/JSONL reads inline. This is KTD-21.
 - `bin/alc_propose.py` is the symmetric propose/write API for the queue +
   event writer. Same rule: future propose-style tools register here.
+- `bin/proposal_lifecycle.py` owns proposal identity, lifecycle records,
+  proposal event payloads, and normalized read mirrors. Keep `alc_propose.py`
+  as the CLI/MCP adapter and expose read-side lifecycle state through
+  `alc_query.py`.
 
 ## Operating rules
 

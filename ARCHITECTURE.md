@@ -63,7 +63,7 @@ ALC state goes through it: hooks, dashboards, MCP tools, slash commands,
 flowchart LR
     H[Hooks]
     D[Dashboards]
-    M[MCP tools<br/>M1-M5]
+    M[MCP tools<br/>read tools]
     S[Slash commands]
     I[alc_init]
     P[ce_playbook]
@@ -88,14 +88,20 @@ the invariant that `alc_query` controls schema evolution.
 `bin/alc_propose.py` is the symmetric propose / write seam. Same rule:
 new propose-style tools register here.
 
-Backs the propose surface of the MCP catalog (M6–M9, see § 2.5):
+Backs the propose surface of the MCP catalog (M6–M9, M18; see § 2.5):
 
-- `propose_apply` — returns an apply CLI command with a one-shot token.
+- `propose_apply` — returns an apply CLI command.
   **Does not mutate.** Keeps the human in the loop on every apply.
 - `propose_gate` — appends operator-proposed gate to improvement queue.
 - `report_outcome` — records recommendation/gate outcome.
 - `report_agent_event` — records bounded agent-dispatch telemetry.
 - `mark_patch_status` — updates patch status (deferred/rejected).
+
+`bin/proposal_lifecycle.py` is the shared Proposal Lifecycle module behind
+the proposal seam. It owns lifecycle record construction, proposal identity,
+proposal event payloads, and normalized read mirrors for proposal queue, patch,
+and suggestion artifacts. `alc_propose` remains the adapter surface for CLI/MCP
+callers, while `alc_query` exposes read mirrors for queue/lifecycle state.
 
 Project-state writers should prefer an explicit `StateHandle` when routing events
 rather than mutating `AGENT_LEARNING_STATE_DIR`. State target selection lives in
@@ -144,7 +150,7 @@ ALC uses **stable IDs over cute names**. Five catalogs:
 |---|---|---|---|
 | Analyst queries | Q1–Q10 | What questions the analyst suite answers | `reference-lib/analyst-queries-catalog` |
 | Generators | G1–G5 | Patch-emitting recommenders | `reference-lib/generator-catalog` (`bin.recommender_generators.GENERATORS`) |
-| MCP tools | M1–M10 | Stdio MCP catalog | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
+| MCP tools | M1–M20 | Stdio MCP catalog | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | Write-side propose surface | `reference-lib/propose-catalog` |
 | Hermes-DSL targets | `skill` / `agent` / `command` / `hook` | What `alc_apply` is allowed to write | `reference-lib/hermes-dsl-spec` |
 
@@ -234,7 +240,9 @@ the stdlib fallback dashboard. It may call `alc_query` and `StateHandle`, and
 it may shape archive metrics/history for compatibility, but it must not import
 dashboard actions, event writers, proposal writers, patch mutation, or distill
 job orchestration. Those mutable operations remain in the FastAPI action layer
-until Proposal Lifecycle is implemented.
+for dashboard-specific behavior. Proposal-specific queue, patch, suggestion,
+eval, and outcome state belongs to `bin/proposal_lifecycle.py` and read mirrors
+exposed through `alc_query`.
 
 > **Naming history.** The env var was `AGENT_LEARNING_PERSONAL` before
 > `2026.05.27+review7-plus3`. The old name still works for one minor

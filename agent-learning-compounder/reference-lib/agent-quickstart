@@ -32,13 +32,13 @@ session-start instructions.
 ## ALC MCP Usage
 
 When the `alc` MCP server is configured, LLMs use the same state without
-parsing files by hand. The server exposes 18 tools (M1–M18) plus a
+parsing files by hand. The server exposes 20 tools (M1–M20) plus a
 `list_capabilities` meta tool. The authoritative catalog is
 `alc_mcp/catalog.py::MCP_TOOLS`; the human-readable mirror is
 `references/mcp-catalog.md`. Always call `list_capabilities(repo)` first and
 compare `version` / `min_compatible_version` against your client contract.
 
-**Read surface** (M1–M5, M11–M17, backed by `bin/alc_query.py` and friends):
+**Read surface** (M1–M5, M11–M17, M19–M20, backed by `bin/alc_query.py` and friends):
 
 - `get_gates(repo, scope?, domain?)` — approved gates for the repo/scope.
 - `get_skill_context(repo, scope?)` — current skill-health and routing context.
