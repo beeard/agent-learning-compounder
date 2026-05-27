@@ -19,7 +19,6 @@ import mimetypes
 import os
 import pathlib
 import sys
-import time
 import socketserver
 from typing import Any
 
@@ -34,23 +33,14 @@ for _p in (_PLUGIN_ROOT / "bin", _PLUGIN_ROOT):
         sys.path.insert(0, _ps)
 
 from state_handle import StateHandle  # noqa: E402
-import alc_query  # noqa: E402
+import dashboard_read_model  # noqa: E402
 
 
 SKILL_ROOT = pathlib.Path(__file__).resolve().parent
 TEMPLATE_PATH = SKILL_ROOT / "templates" / "dashboard.html"
 STATIC_ROOT = SKILL_ROOT / "static"
 
-authored_sections = [
-    "recommendations",
-    "pending_patches",
-    "anomalies",
-    "patterns",
-    "correlations",
-    "apply_log",
-    "gates_and_insights",
-    "suggestions",
-]
+authored_sections = list(dashboard_read_model.STDLIB_SECTIONS)
 
 
 class _ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
@@ -95,88 +85,8 @@ def _resolve_state(repo: pathlib.Path | None = None, state: pathlib.Path | None 
     return StateHandle.for_repo(pathlib.Path(repo or pathlib.Path.cwd()))
 
 
-def _read_text(path: pathlib.Path) -> str:
-    if not path.is_file():
-        return ""
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
-
-
-def _read_suggestions(state: StateHandle) -> list[dict[str, Any]]:
-    payload_path = state.repo_state_dir / "suggestions.json"
-    if not payload_path.is_file():
-        return []
-    try:
-        payload = json.loads(payload_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return []
-
-    rows = payload.get("suggestions") if isinstance(payload, dict) else None
-    if not isinstance(rows, list):
-        return []
-
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        if isinstance(row, dict):
-            out.append(row)
-    return out
-
-
-def _bucket_recommendations(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
-    buckets = {name: [] for name in ("anomalies", "patterns", "correlations")}
-    for row in rows:
-        kind = str(row.get("kind", "")).lower()
-        if "anomaly" in kind:
-            buckets["anomalies"].append(row)
-            continue
-        if "pattern" in kind:
-            buckets["patterns"].append(row)
-            continue
-        if "correlation" in kind or "dag" in kind:
-            buckets["correlations"].append(row)
-            continue
-    return buckets
-
-
 def build_data_blob(state: StateHandle) -> dict[str, Any]:
-    recommendations = alc_query.get_recommendations(state)
-    rec_buckets = _bucket_recommendations(recommendations)
-
-    # PR 3: gates + skill context surface both state roots so the operator
-    # sees cross-repo learning (user scope) alongside this project's gates.
-    gates_rows = alc_query.get_gates(state, scope="both")
-    insights_markdown = alc_query.get_skill_context(state, scope="both")
-    # Keep gates_markdown for backwards compatibility (older payloads); the
-    # structured rows above are the canonical surface for new renderers.
-    gates_markdown = _read_text(state.reports_dir / "latest-approved-gates.md")
-    gates_summary = {
-        "total": len(gates_rows),
-        "user": sum(1 for row in gates_rows if row.get("_source_scope") == "user"),
-        "project": sum(1 for row in gates_rows if row.get("_source_scope") == "project"),
-    }
-
-    data = {
-        "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "recommendations": recommendations,
-        "pending_patches": alc_query.get_pending_patches(state),
-        "anomalies": rec_buckets["anomalies"],
-        "patterns": rec_buckets["patterns"],
-        "correlations": rec_buckets["correlations"],
-        "apply_log": alc_query.get_apply_log(state),
-        "gates_and_insights": {
-            "gates_markdown": gates_markdown,
-            "insights_markdown": insights_markdown,
-            "gates_rows": gates_rows,
-            "gates_summary": gates_summary,
-            "actor_summary": alc_query.get_actor_summary(state),
-        },
-        "suggestions": _read_suggestions(state),
-        "sections": authored_sections,
-    }
-
-    return data
+    return dashboard_read_model.build_stdlib_payload(state)
 
 
 def _inject_payload(template: str, payload: dict[str, Any]) -> str:

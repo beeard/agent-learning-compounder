@@ -114,7 +114,7 @@ def _resolve_personal(personal: pathlib.Path) -> pathlib.Path:
     return personal
 
 
-def _read_dashboard_html(personal: pathlib.Path) -> str:
+def _read_dashboard_html(personal: pathlib.Path, data: dict[str, Any] | None = None) -> str:
     """Inject live data into the built dashboard bundle on every request."""
     from render_dashboard import build_dashboard_data, inject, DashboardError  # type: ignore
 
@@ -123,7 +123,8 @@ def _read_dashboard_html(personal: pathlib.Path) -> str:
             f"dashboard bundle missing: {BUNDLE_PATH}\n"
             "  build it: cd dashboard/web && pnpm install && pnpm build"
         )
-    data = build_dashboard_data(personal, history_limit=180)
+    if data is None:
+        data = build_dashboard_data(personal, history_limit=180)
     bundle_text = BUNDLE_PATH.read_text(encoding="utf-8")
     return inject(bundle_text, data)
 
@@ -165,7 +166,7 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
         unmute_domain,
         unpromote_gate,
     )
-    import alc_query  # noqa: E402
+    import dashboard_read_model  # noqa: E402
     from state_handle import StateHandle  # noqa: E402
 
     repo_for_state = repo.resolve() if repo is not None else None
@@ -178,31 +179,14 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
         except Exception:
             return None
 
-    def _build_scoped_gates() -> dict:
-        # PR 3: surface user + project scope reads so the React SPA can
-        # render "this project" vs. "across all your work". When no repo
-        # was passed in, fall back to user-scope only.
-        state = _project_state()
-        user_root = pathlib.Path(personal)
-        try:
-            if state is not None:
-                rows = alc_query.get_gates(state, scope="both", user_root=user_root)
-                skill_context_md = alc_query.get_skill_context(state, scope="both", user_root=user_root)
-            else:
-                rows = alc_query.get_gates(scope="user", user_root=user_root)
-                skill_context_md = alc_query.get_skill_context(scope="user", user_root=user_root)
-        except Exception:
-            rows, skill_context_md = [], ""
-        summary = {
-            "total": len(rows),
-            "user": sum(1 for row in rows if row.get("_source_scope") == "user"),
-            "project": sum(1 for row in rows if row.get("_source_scope") == "project"),
-        }
-        return {
-            "rows": rows,
-            "summary": summary,
-            "skill_context_md": skill_context_md,
-        }
+    def _build_dashboard_payload() -> dict:
+        data = dashboard_read_model.build_fastapi_payload(
+            personal,
+            state=_project_state(),
+            history_limit=180,
+        )
+        data["actions"] = actions_summary(personal)
+        return data
 
     jobs = JobRegistry()
 
@@ -211,7 +195,7 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
     @app.get("/", response_class=HTMLResponse)
     async def root() -> HTMLResponse:
         try:
-            return HTMLResponse(_read_dashboard_html(personal))
+            return HTMLResponse(_read_dashboard_html(personal, _build_dashboard_payload()))
         except Exception as error:
             return HTMLResponse(_fallback_html(str(error)), status_code=503)
 
@@ -228,11 +212,7 @@ def build_app(personal: pathlib.Path | None = None, repo: pathlib.Path | None = 
 
     @app.get("/api/data")
     async def data() -> dict:
-        from render_dashboard import build_dashboard_data  # type: ignore
-        d = build_dashboard_data(personal, history_limit=180)
-        d["actions"] = actions_summary(personal)
-        d["scoped_gates"] = _build_scoped_gates()
-        return d
+        return _build_dashboard_payload()
 
     @app.post("/api/actions/distill")
     async def trigger_distill() -> dict:

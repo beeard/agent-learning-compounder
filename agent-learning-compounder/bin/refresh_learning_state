@@ -411,83 +411,16 @@ def refresh(
     queue: pathlib.Path | None = None,
     corpus: pathlib.Path | None = None,
 ) -> dict[str, Any]:
-    repo = repo.expanduser().resolve()
-    repo_state = repo_state_dir(repo, state_dir, personal)
-    reports = repo_state / "reports"
-    repo_state.mkdir(parents=True, exist_ok=True)
-    reports.mkdir(parents=True, exist_ok=True)
+    import refresh_run
 
-    start_event_id: str | None = None
-    try:
-        from event_emit import event_emit as emit_background_event
-
-        start_event_id = emit_background_event(
-            kind="refresh_start",
-            actor_name="refresh_learning_state",
-            actor_kind="background_agent",
-            repo=repo,
-        )
-    except Exception:
-        start_event_id = None
-
-    started_at = time.time()
-
-    # Top-level mutex so two concurrent refresh() invocations on the same
-    # repo serialize end-to-end. Per-file LOCK_EX guards individual writes,
-    # but releases between them, leaving a window where a sibling refresh
-    # could land a baseline.json from its run interleaved with this run's
-    # skill-map.json. The .refresh.lock sidecar is never renamed, so its
-    # lock is a stable mutex across the writes that this refresh performs.
-    refresh_lock_path = repo_state / ".refresh.lock"
-    refresh_lock_fd = os.open(str(refresh_lock_path), os.O_RDWR | os.O_CREAT, 0o644)
-    error: BaseException | None = None
-    result: dict[str, Any]
-    # Nested try so the outer finally closes the fd even if fcntl.flock
-    # itself raises (EINTR loop, EDEADLK, etc.) -- the previous shape
-    # held the fd outside the try and would leak it on any error
-    # between os.open and the flock that ran on the next line.
-    try:
-        fcntl.flock(refresh_lock_fd, fcntl.LOCK_EX)
-        try:
-            result = _refresh_locked(
-                repo,
-                repo_state,
-                reports,
-                state_dir,
-                personal,
-                events,
-                queue,
-                corpus,
-            )
-        except BaseException as exc:
-            error = exc
-        finally:
-            try:
-                fcntl.flock(refresh_lock_fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
-    finally:
-        os.close(refresh_lock_fd)
-
-    if error is not None:
-        raise error
-
-    duration_ms = int((time.time() - started_at) * 1000)
-    try:
-        from event_emit import event_emit as emit_background_event
-
-        emit_background_event(
-            kind="refresh_end",
-            actor_name="refresh_learning_state",
-            actor_kind="background_agent",
-            parent_event_id=start_event_id,
-            payload={"telemetry": {"duration_ms": duration_ms}},
-            repo=repo,
-        )
-    except Exception:
-        pass
-
-    return result
+    return refresh_run.run_full(
+        repo,
+        state_dir=state_dir,
+        personal=personal,
+        events=events,
+        queue=queue,
+        corpus=corpus,
+    )
 
 
 def _refresh_locked(

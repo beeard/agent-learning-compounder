@@ -16,9 +16,9 @@ import sys
 from collections import defaultdict, deque
 
 try:
-    from state_handle import StateHandle
+    from state_handle import StateHandle, project_state
 except ImportError:
-    from bin.state_handle import StateHandle
+    from bin.state_handle import StateHandle, project_state
 
 from event_writer import write_events_batch
 from event_schema import CORRELATION_CHAIN_MAX, EventV4
@@ -269,19 +269,16 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.repo is not None:
-        state = StateHandle.for_repo(args.repo)
+        state = project_state(args.repo, state_dir=args.state_dir)
         events_path = state.events_jsonl
-        write_repo: pathlib.Path | None = state.repo
+        write_state: StateHandle | None = state
+        write_root: pathlib.Path | None = None
     else:
         state_root, _ = StateHandle.resolve_state_root(state_dir=args.state_dir)
         state_root = pathlib.Path(state_root).expanduser().resolve()
         events_path = state_root / STATE_EVENTS_FILE
-        write_repo = None
-        # Preserve the read-and-write-same-place invariant: route writes to
-        # whatever state root we just read from rather than letting
-        # write_events_batch fall back to env-or-XDG resolution.
-        import os as _os
-        _os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_root)
+        write_state = None
+        write_root = state_root
 
     if not events_path.exists():
         print(f"warn.events_jsonl_missing path={events_path}", file=sys.stderr)
@@ -305,7 +302,8 @@ def main(argv: list[str] | None = None) -> int:
             to_write,
             source=SOURCE,
             auto_id_fallback=False,
-            repo=write_repo,
+            state=write_state,
+            state_root=write_root,
         )
 
     unmatched_starts = sum(len(queue) for queue in pending_tools.values()) + sum(len(queue) for queue in pending_subagents.values())

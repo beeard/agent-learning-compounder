@@ -35,6 +35,8 @@ class StateHandleTests(unittest.TestCase):
     def setUp(self):
         self._saved_env = {
             "AGENT_LEARNING_STATE_DIR": os.environ.pop("AGENT_LEARNING_STATE_DIR", None),
+            "AGENT_LEARNING_USER": os.environ.pop("AGENT_LEARNING_USER", None),
+            "AGENT_LEARNING_PERSONAL": os.environ.pop("AGENT_LEARNING_PERSONAL", None),
             "XDG_STATE_HOME": os.environ.pop("XDG_STATE_HOME", None),
         }
         from state_handle import StateHandle  # noqa: E402
@@ -80,6 +82,30 @@ class StateHandleTests(unittest.TestCase):
             self.assertEqual(handle.repo_state_dir, repo_state_dir(repo))
             self.assertEqual(handle.state_root, state_dir.resolve())
 
+    def test_for_repo_accepts_explicit_state_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            explicit = tmp_path / "state-override"
+            handle = self.StateHandle.for_repo(repo, state_dir=explicit)
+            self.assertEqual(handle.state_root, explicit.resolve())
+            self.assertEqual(handle.repo_state_dir, explicit.resolve() / "repos" / self.StateHandle.repo_id(repo))
+            self.assertEqual(handle.events_jsonl, handle.repo_state_dir / "events.jsonl")
+
+    def test_project_state_helper_accepts_explicit_state_dir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            explicit = tmp_path / "state-override"
+            from state_handle import project_state
+
+            handle = project_state(repo, state_dir=explicit)
+
+            self.assertEqual(handle.state_root, explicit.resolve())
+            self.assertEqual(handle.repo_state_dir, explicit.resolve() / "repos" / self.StateHandle.repo_id(repo))
+
     def test_alc_agents_dirs_has_all_4_keys(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
@@ -91,6 +117,60 @@ class StateHandleTests(unittest.TestCase):
                 set(handle.alc_agents_dirs.keys()),
                 {"dev", "test", "evals", "personal"},
             )
+
+    def test_project_event_write_target_from_state_handle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            state_root = Path(tmp) / "state"
+            handle = self.StateHandle.for_repo(repo, state_dir=state_root)
+
+            target = self.StateHandle.event_write_target(state=handle)
+
+            self.assertEqual(target.event_dir, handle.repo_state_dir)
+            self.assertEqual(target.events_jsonl, handle.events_jsonl)
+            self.assertEqual(target.write_scope, "project_state_handle")
+
+    def test_user_scope_prefers_agent_learning_user(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "user-root"
+            os.environ["AGENT_LEARNING_USER"] = str(root)
+
+            scope = self.StateHandle.user_scope()
+
+            self.assertEqual(scope.root, root.resolve())
+            self.assertEqual(scope.reports_dir, root.resolve() / "reports" / "agent-learning")
+            self.assertEqual(scope.tier, "env_user")
+
+    def test_user_scope_compat_personal_alias_is_classified(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "personal-root"
+            os.environ["AGENT_LEARNING_PERSONAL"] = str(root)
+
+            scope = self.StateHandle.user_scope()
+
+            self.assertEqual(scope.root, root.resolve())
+            self.assertEqual(scope.reports_dir, root.resolve() / "reports" / "agent-learning")
+            self.assertEqual(scope.tier, "legacy_env_personal")
+
+    def test_background_event_write_target_is_not_repo_scoped(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "background"
+
+            target = self.StateHandle.event_write_target(background_root=root)
+
+            self.assertEqual(target.event_dir, root.resolve())
+            self.assertEqual(target.events_jsonl, root.resolve() / "events.jsonl")
+            self.assertEqual(target.write_scope, "background_explicit_root")
+
+    def test_event_write_target_rejects_conflicting_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "repo"
+            repo.mkdir()
+            state = self.StateHandle.for_repo(repo)
+
+            with self.assertRaisesRegex(ValueError, "ambiguous event write target"):
+                self.StateHandle.event_write_target(state=state, repo=repo)
 
     def test_all_paths_are_absolute(self):
         with tempfile.TemporaryDirectory() as tmp:

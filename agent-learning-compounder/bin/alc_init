@@ -367,15 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     ce_installed = ce_playbook.detect_ce_installed()
 
     # Pull from alc_query — synthesized in prose, never raw JSON.
-    state_handle_env = os.environ.copy()
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_root)
-    try:
-        state = StateHandle.for_repo(repo)
-        runtime_summary = collect_runtime_summary(state)
-    finally:
-        # Restore env so we don't leak the override into the parent process.
-        os.environ.clear()
-        os.environ.update(state_handle_env)
+    state = StateHandle.project_state(repo, state_dir=state_root)
+    runtime_summary = collect_runtime_summary(state)
 
     runtime_md = render_runtime_summary_md(runtime_summary)
     ce_usage_md = render_ce_usage_md(runtime_summary.get("ce_usage") or [])

@@ -17,11 +17,12 @@ If the bundle is missing, instructs the operator to build it first:
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import pathlib
 import re
 import sys
+
+import dashboard_read_model
 
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -39,65 +40,15 @@ class DashboardError(RuntimeError):
 
 def find_latest_payload(personal: pathlib.Path) -> dict | None:
     """Read the most recent report's embedded payload."""
-    target_dir = personal / "reports" / "agent-learning"
-    if not target_dir.is_dir():
-        return None
-    candidates = sorted(
-        (
-            p
-            for p in target_dir.glob("*.html")
-            if p.name not in {"latest-report.html", "latest-dashboard.html"}
-        ),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
-    latest_report = target_dir / "latest-report.html"
-    if latest_report.is_file():
-        candidates.insert(0, latest_report)
-    for path in candidates:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        match = re.search(
-            r'<script[^>]*id="report-payload"[^>]*>(.*?)</script>',
-            text,
-            re.DOTALL,
-        )
-        if not match:
-            continue
-        try:
-            return json.loads(match.group(1))
-        except json.JSONDecodeError:
-            continue
-    return None
+    return dashboard_read_model.find_latest_payload(personal)
 
 
 def read_history(personal: pathlib.Path, limit: int) -> list[dict]:
-    metrics = personal / "reports" / "agent-learning" / "metrics.jsonl"
-    if not metrics.is_file():
-        return []
-    rows: list[dict] = []
-    for line in metrics.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            rows.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return rows[-limit:] if limit else rows
+    return dashboard_read_model.read_history(personal, limit)
 
 
 def build_dashboard_data(personal: pathlib.Path, history_limit: int) -> dict:
-    latest = find_latest_payload(personal)
-    history = read_history(personal, history_limit)
-    return {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "personal_root": str(personal),
-        "latest": latest,
-        "history": history,
-    }
+    return dashboard_read_model.build_static_payload(personal, history_limit=history_limit)
 
 
 def inject(bundle_text: str, data: dict) -> str:

@@ -16,6 +16,11 @@ import subprocess
 import sys
 from typing import Any
 
+from runtime_topology import (
+    adapter_command as runtime_adapter_command,
+    config_for_runtime,
+    warm_loop_command as runtime_warm_loop_command,
+)
 from state_handle import repo_state_dir
 
 
@@ -215,51 +220,6 @@ def agent_config(repo: pathlib.Path) -> dict[str, Any]:
     return config
 
 
-def runtime_config_path(repo: pathlib.Path, runtime: str, scope: str) -> pathlib.Path:
-    home = pathlib.Path.home()
-    if runtime == "codex":
-        return repo / ".codex" / "hooks.json" if scope == "repo" else home / ".codex" / "hooks.json"
-    if runtime == "claude":
-        return repo / ".claude" / "settings.local.json" if scope == "repo" else home / ".claude" / "settings.json"
-    raise ValueError(f"unsupported runtime: {runtime}")
-
-
-def adapter_command(repo: pathlib.Path, runtime: str, event: str) -> str:
-    script = pathlib.Path(__file__).resolve()
-    parts = [
-        sys.executable,
-        str(script),
-        "--adapter",
-        "--repo",
-        str(repo),
-        "--runtime",
-        runtime,
-        "--event",
-        event,
-    ]
-    return " ".join(shlex.quote(part) for part in parts)
-
-
-def warm_loop_command(repo: pathlib.Path) -> str:
-    """Command that warms events.sqlite from hook-events.jsonl.
-
-    Installed alongside the collector adapter on the Stop event so every
-    session-end advances the indexer cursor. Same code path the Claude
-    plugin's hooks.json invokes via the warm_loop_index.py wrapper — the
-    wrapper exists so the plugin Stop list can chain in an additional
-    command without re-implementing argument plumbing here.
-    """
-    script = pathlib.Path(__file__).resolve().parent / "alc_bootstrap_pipeline"
-    parts = [
-        sys.executable,
-        str(script),
-        "--repo",
-        str(repo),
-        "--quiet",
-    ]
-    return " ".join(shlex.quote(part) for part in parts)
-
-
 def is_stop_event(runtime: str, event: str, event_sources: list[dict[str, str]]) -> bool:
     """True when ``event`` resolves to the Stop hook in ``runtime``.
 
@@ -386,7 +346,7 @@ def merge_runtime_hooks(
     apply: bool,
     event_sources: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
-    path = runtime_config_path(repo, runtime, scope)
+    path = config_for_runtime(repo, runtime, scope)
     data = load_json(path)
     hooks = data.setdefault("hooks", {})
     if not isinstance(hooks, dict):
@@ -396,9 +356,9 @@ def merge_runtime_hooks(
     already_present: list[str] = []
     warm_loop_added: list[str] = []
     warm_loop_already_present: list[str] = []
-    warm_loop_cmd = warm_loop_command(repo)
+    warm_loop_cmd = runtime_warm_loop_command(repo)
     for event in events:
-        command = adapter_command(repo, runtime, event)
+        command = runtime_adapter_command(repo, runtime, event)
         rows = hooks.setdefault(event, [])
         if not isinstance(rows, list):
             raise ValueError(f"{path} hooks.{event} must be a list")

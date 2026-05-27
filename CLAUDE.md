@@ -13,6 +13,12 @@ must work from the installed location, not just from this working tree.
 
 ## Starting a dev session in this repo
 
+Development must stay source-first. Treat user-scope runtime installs under
+`~/.agents`, `~/.claude`, `~/.codex`, `~/.agent-learning`, and
+`~/.local/state/agent-learning` as read-only evidence while working here.
+Do not patch those runtime copies directly; release/install updates are explicit
+operator steps after source changes pass tests.
+
 Plugin-level hooks (warm-loop on Stop, understand-anything auto-update on
 git commit, the inner skill's session-report renderer) don't reliably
 merge into the active Claude session via the plugin loader. Result: a
@@ -24,9 +30,10 @@ once before starting work** (idempotent — safe to re-run):
 bash scripts/dev-session-setup.sh
 ```
 
-It rewrites `<repo>/.claude/settings.local.json` so `claude` (started
-from the repo root) picks up the full hook stack — collector adapter,
-warm-loop, dashboard refresh, session-report, auto-update. Then:
+It rewrites only `<repo>/.claude/settings.local.json` so `claude` (started
+from the repo root) picks up the repo-local hook stack — collector adapter,
+warm-loop, dashboard refresh, session-report, and auto-distill with outputs
+contained under `<repo>/.runtime/`. Then:
 
 ```bash
 cd /home/tth/work/active/agent-learning-compounder
@@ -35,6 +42,7 @@ claude
 
 Re-run the setup script after pulling, after a plugin update, or any
 time `scripts/dev-session-setup.sh --verify` reports a missing hook.
+For the full boundary contract, see `docs/dev/runtime-boundary.md`.
 
 ## Common commands
 
@@ -73,6 +81,22 @@ End-to-end install verification from the source root:
 ./install.sh --bootstrap-repo /path/to/repo --runtime auto --verify
 ```
 
+Runtime artifact drift check (read-only):
+
+```bash
+python3 agent-learning-compounder/bin/check_runtime_drift
+python3 agent-learning-compounder/bin/check_runtime_drift --include-user-runtimes  # repo default + optional user-audit read mode
+```
+
+By design:
+
+- **Dev mode** (via `scripts/dev-session-setup.sh`): writes to repo-local hook config
+  and `.runtime/*` outputs only.
+- **Install mode** (`install_runtime_hooks`): explicit `--apply` writes runtime
+  manifests in repo or user scope.
+- **Drift mode** (`check_runtime_drift`): read-only comparison, repo-only by default,
+  with explicit user-runtime audit when `--include-user-runtimes` is set.
+
 ## Architecture
 
 ### Layered pipeline
@@ -92,15 +116,18 @@ End-to-end install verification from the source root:
    `latest-skill-context.md`. Never raw logs.
 5. **Hook telemetry** (`bin/collect_hook_event`, `bin/install_runtime_hooks`):
    runtime-agnostic event collector + a two-phase runtime wiring step.
-6. **Refresh** (`bin/refresh_learning_state`): re-derives exports from the current
-   corpus; declarative-only — never registers itself with cron/systemd.
+6. **Refresh Run** (`bin/refresh_run.py` + `bin/refresh_learning_state`): owns
+   warm/full refresh profiles, event ingestion, indexing, stage ordering,
+   locking, and structured results; declarative-only — never registers itself
+   with cron/systemd.
 
 ### Eight review7-plus1 add-ons
 
 These are additive on top of the upstream `review7-production` core and each have a
 reference doc:
 
-- `replay_hook_events` — migrate older hook logs to schema v2 (`references/event-schema-evolution.md`)
+- `replay_hook_events` — manually normalize older hook logs; production warm/full
+  ingestion is owned by `refresh_run.py` and appends via a replay cursor.
 - `queue_dedup` — collapse near-duplicate improvement-queue rows; stdlib trigram or
   optional `sentence-transformers` (`references/queue-dedup.md`)
 - `evaluate_gate_effectiveness` — correlation-only signals per stable 12-char `gate_id`
@@ -110,7 +137,9 @@ reference doc:
 - `causal_probe` — deterministic A/B skip cohorts per gate
 - `gates_promote` / `gates_inherit` — cross-repo federation via a shared registry, with
   `derived_from:` provenance (`references/cross-repo-gates.md`)
-- `serve_dashboard` — localhost FastAPI/Jinja2/HTMX operator view
+- `serve_dashboard` — localhost FastAPI + React operator view; read payloads
+  flow through `bin/dashboard_read_model.py`, while promote/mute/distill actions
+  stay in the FastAPI action layer
 - `alc_mcp/server.py` — stdio MCP server exposing `get_gates`, `report_outcome`,
   `propose_gate`, `get_skill_context`
 
@@ -146,6 +175,9 @@ When editing a script or reference, **edit the canonical file** in `bin/` or
 State root precedence (first match wins): `--state-dir` → `AGENT_LEARNING_STATE_DIR` →
 `--personal` → `<repo>/.agent-learning` (production default) → `$XDG_STATE_HOME/...` →
 `~/.local/state/...`. Repo-local is the recommended default.
+State Scope lives in `bin/state_handle.py`; use it for project handles,
+user report paths, read-scope validation, background targets, and event
+write-target classification instead of duplicating scope logic in callers.
 
 Trust model the code enforces — preserve these when changing things:
 
@@ -173,7 +205,8 @@ Trust model the code enforces — preserve these when changing things:
 | Codex   | `.codex/hooks.json`           | `--runtime codex`   |
 | Claude  | `.claude/settings.local.json` | `--runtime claude`  |
 
-Both runtimes share the same wrapper command and manifest. Adding a new runtime means
+Both runtimes share the same wrapper command and manifest. Command rendering and
+target mapping are now owned by `bin/runtime_topology.py`; adding a new runtime means
 updating `install_runtime_hooks.py` path handling, event mapping, command-integrity
 validation, and regression coverage for both dry-run and apply flows.
 

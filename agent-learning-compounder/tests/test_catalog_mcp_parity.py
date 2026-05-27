@@ -34,6 +34,7 @@ PROPOSE_CATALOG = ROOT / "reference-lib" / "propose-catalog"
 # explicit decision point — it forces a reason and makes the gap discoverable.
 CLI_ONLY_ALLOWLIST: dict[str, str] = {
     # "UQn": "reason this op is intentionally CLI-only",
+    "UQ9": "dashboard-read-model-only helper; not exposed as standalone MCP until an agent use case requires it",
 }
 
 

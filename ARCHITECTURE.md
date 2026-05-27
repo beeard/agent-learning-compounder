@@ -26,7 +26,7 @@ flowchart LR
     D[Distillation +<br/>Scoring<br/>evaluate_gate_effectiveness<br/>queue_dedup<br/>causal_probe<br/>propose_domain_rules]
     E[Export<br/>export_gates<br/>export_skill_context]
     F[Hook telemetry<br/>collect_hook_event<br/>render_state_surface]
-    G[Refresh<br/>refresh_learning_state]
+    G[Refresh Run<br/>refresh_run<br/>refresh_learning_state]
 
     A --> B --> C --> D --> E
     F --> D
@@ -44,8 +44,8 @@ Layer responsibilities:
 | Ingestion | Turn ambient signals into bounded JSON. Raw transcripts never persist. | `reference-lib/source-adapters`, `reference-lib/distill-sessions` |
 | Distillation + scoring | Mine the corpus for proposals; score gates by effectiveness; dedupe near-duplicates; run causal A/B probes. | `reference-lib/gate-effectiveness`, `reference-lib/queue-dedup`, `reference-lib/domain-rules-learning` |
 | Export | Produce the two durable compact surfaces (`latest-approved-gates.md`, `latest-skill-context.md`). The only things future agents are supposed to load. | `reference-lib/output-schema`, `reference-lib/gate-registry` |
-| Hook telemetry | Bounded, allowlisted event collection. Two-phase runtime wiring (manifest-only by default; `--apply` required). | `reference-lib/hook-telemetry`, `reference-lib/event-schema-evolution` |
-| Refresh | Re-derive exports from the current corpus. Declarative only — never registers itself with cron/systemd. | `bin/refresh_learning_state` |
+| Hook telemetry | Bounded, allowlisted event collection. Two-phase runtime wiring (manifest-only by default; `--apply` required). Mode semantics for dev, release install, and drift audit now live in `bin/runtime_topology.py`. | `reference-lib/hook-telemetry`, `reference-lib/event-schema-evolution` |
+| Refresh Run | Own warm/full refresh profiles, hook-event replay into project `events.jsonl`, event indexing, refresh locking, stage ordering, and result reporting. Declarative only — never registers itself with cron/systemd. | `bin/refresh_run.py`, `bin/refresh_learning_state` |
 
 ## 2. Major modules and their seams
 
@@ -96,6 +96,14 @@ Backs the propose surface of the MCP catalog (M6–M9, see § 2.5):
 - `report_outcome` — records recommendation/gate outcome.
 - `report_agent_event` — records bounded agent-dispatch telemetry.
 - `mark_patch_status` — updates patch status (deferred/rejected).
+
+Project-state writers should prefer an explicit `StateHandle` when routing events
+rather than mutating `AGENT_LEARNING_STATE_DIR`. State target selection lives in
+`bin/state_handle.py` (State Scope); `event_writer` asks it for the event
+directory and `_write_scope` label, then keeps JSONL serialization, locking,
+rotation, and boundary checks local to the writer. Each row carries
+`_write_scope` so project writes (`project_state_handle`, `project_repo`) and
+background/legacy writes remain distinguishable.
 
 ### 2.3 The apply path: Hermes-DSL via `alc_apply`
 
@@ -196,13 +204,37 @@ skill executor itself.
 | **Project** | Per-repo events. That repo's baseline, improvement queue, hook telemetry, and dashboard view for "this codebase." Created by `init_learning_system` on bootstrap. | `<repo>/.agent-learning/` | `AGENT_LEARNING_STATE_DIR` |
 
 `auto_distill_session` (the Stop-hook distiller) writes user-scope —
-gates and insights belong to *you*, not to any one repo.
+gates and insights belong to *you*, not to any one repo. Runtime wiring,
+drift checks, and release installer pathing consume mode-aware behavior from
+`bin/runtime_topology.py`.
 `collect_hook_event` (the per-tool-use hook) writes project-scope —
-events belong to the repo where they happened.
+events belong to the repo where they happened. Runtime path resolution for
+repo-local setup is centralized in `bin/runtime_topology.py` so hook install and
+dev drift checks can compute the same expected command roots.
 
 Dashboards and `next_action` synthesise from **both** scopes so the
 operator sees "this project" and "across all your work" as two views of
 the same surface.
+
+`bin/state_handle.py` is the State Scope module. It owns project handle
+construction, user-root and user-report resolution, background write targets,
+read-scope validation (`user`, `project`, `both`), and event write-target
+classification. It must not absorb query parsing, event serialization, refresh
+orchestration, dashboard view-model construction, or proposal ranking.
+
+`bin/refresh_run.py` is the Refresh Run module. It owns the top-level refresh
+lock, warm vs full profile selection, incremental hook replay into project
+`events.jsonl`, indexing, stage ordering, and structured run results.
+`bin/refresh_learning_state` remains the public CLI adapter. Dashboard read
+models and proposal lifecycle ranking stay outside this seam.
+
+`bin/dashboard_read_model.py` is the Dashboard Read Model module. It builds
+the shared read payload for FastAPI `/api/data`, `bin/render_dashboard`, and
+the stdlib fallback dashboard. It may call `alc_query` and `StateHandle`, and
+it may shape archive metrics/history for compatibility, but it must not import
+dashboard actions, event writers, proposal writers, patch mutation, or distill
+job orchestration. Those mutable operations remain in the FastAPI action layer
+until Proposal Lifecycle is implemented.
 
 > **Naming history.** The env var was `AGENT_LEARNING_PERSONAL` before
 > `2026.05.27+review7-plus3`. The old name still works for one minor

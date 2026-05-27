@@ -138,6 +138,40 @@ class InstallRuntimeHooksTaxonomyTests(unittest.TestCase):
             for command in before_commands:
                 self.assertIn(command, after_commands)
 
+    def test_install_runtime_hooks_user_scope_stays_on_user_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo = _make_repo(tmp_path)
+            home = tmp_path / "user-home"
+
+            env = {
+                "HOME": str(home),
+            }
+            result = _run_install(
+                repo,
+                "--runtime",
+                "claude",
+                "--scope",
+                "user",
+                "--apply",
+                env=env,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((home / ".claude" / "settings.json").exists())
+            self.assertFalse((repo / ".claude" / "settings.local.json").exists())
+
+    def test_install_runtime_hooks_releases_config_paths_via_topology(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo = _make_repo(tmp_path)
+            result = _run_install(repo, "--runtime", "claude", "--runtime", "codex", "--apply")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads((repo / ".claude" / "settings.local.json").read_text(encoding="utf-8"))
+            codex_payload = json.loads((repo / ".codex" / "hooks.json").read_text(encoding="utf-8"))
+
+            self.assertIn("Stop", payload.get("hooks", {}))
+            self.assertIn("Stop", codex_payload.get("hooks", {}))
+
     def test_install_runtime_hooks_rejects_malformed_event_sources(self) -> None:
         malformed_rows = [
             [

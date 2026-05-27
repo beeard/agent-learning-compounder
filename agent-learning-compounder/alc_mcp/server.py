@@ -29,11 +29,11 @@ def _agent_kind(args: dict[str, Any]) -> str:
 
 
 def _state(args: dict[str, Any]) -> state_handle.StateHandle:
-    return state_handle.StateHandle.for_repo(Path(args["repo"]).resolve())
+    return state_handle.project_state(Path(args["repo"]).resolve())
 
 
 def _improvement_queue_path(repo: Path) -> Path:
-    return state_handle.StateHandle.for_repo(repo).repo_state_dir / "improvement-queue.jsonl"
+    return state_handle.project_state(repo).repo_state_dir / "improvement-queue.jsonl"
 
 
 def _schema(name: str, description: str, input_schema: dict[str, Any]) -> dict[str, Any]:

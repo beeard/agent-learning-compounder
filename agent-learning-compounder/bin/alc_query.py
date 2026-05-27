@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 try:
-    from state_handle import StateHandle
+    from state_handle import StateHandle, user_reports_dir, validate_read_scope
 except ImportError:  # pragma: no cover
-    from bin.state_handle import StateHandle
+    from bin.state_handle import StateHandle, user_reports_dir, validate_read_scope
 
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$", re.I)
@@ -24,9 +24,10 @@ _ALLOWED_KIND_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 _NOW = dt.datetime.now
 
 
-# Scope model — see ARCHITECTURE.md § 4.
+# Scope model — see ARCHITECTURE.md § 4. Validation and user report path
+# selection are owned by state_handle so read and write callers share one
+# vocabulary.
 Scope = Literal["user", "project", "both"]
-_VALID_SCOPES = frozenset({"user", "project", "both"})
 
 
 class QueryError(RuntimeError):
@@ -34,21 +35,10 @@ class QueryError(RuntimeError):
 
 
 def _validate_scope(scope: str) -> str:
-    if scope not in _VALID_SCOPES:
-        raise QueryError(f"scope must be one of {sorted(_VALID_SCOPES)}, got {scope!r}")
-    return scope
-
-
-def _user_reports_dir(user_root: Path | None) -> Path:
-    """Return user-scope reports directory.
-
-    Resolves to ``<user_root>/reports/agent-learning`` or, when ``user_root``
-    is ``None``, defers to :meth:`StateHandle.for_user` which honours
-    ``AGENT_LEARNING_USER`` (compat: ``AGENT_LEARNING_PERSONAL``) before
-    falling back to ``~/.agent-learning``.
-    """
-    base = Path(user_root) if user_root is not None else StateHandle.for_user()
-    return base / "reports" / "agent-learning"
+    try:
+        return validate_read_scope(scope)
+    except ValueError as exc:
+        raise QueryError(str(exc)) from exc
 
 
 def _read_json(path: Path) -> Any:
@@ -123,7 +113,7 @@ def get_gates(
             if path.is_file():
                 rows.extend(_parse_gates_markdown(path.read_text(encoding="utf-8"), source="project"))
     if scope in ("user", "both"):
-        path = _user_reports_dir(user_root) / "latest-approved-gates.md"
+        path = user_reports_dir(user_root) / "latest-approved-gates.md"
         if path.is_file():
             user_rows = _parse_gates_markdown(path.read_text(encoding="utf-8"), source="user")
             if scope == "both":
@@ -150,7 +140,7 @@ def get_skill_context(
     _validate_scope(scope)
     parts: list[str] = []
     if scope in ("user", "both"):
-        user_path = _user_reports_dir(user_root) / "latest-skill-context.md"
+        user_path = user_reports_dir(user_root) / "latest-skill-context.md"
         if user_path.is_file():
             text = user_path.read_text(encoding="utf-8")
             parts.append(f"<!-- scope: user -->\n{text}" if scope == "both" else text)
@@ -390,6 +380,48 @@ def get_pending_patches(
         payload["_path"] = str(path)
         out.append(payload)
     out.sort(key=lambda row: row.get("ts", ""))
+    return out
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    return str(value)
+
+
+def get_suggestions(
+    state: StateHandle,
+    *,
+    scope: Scope = "project",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Dashboard suggestions from project-scope recommender artifacts.
+
+    Suggestions are generated from project analysis. ``scope="user"`` returns
+    ``[]``. Missing, malformed, or non-list artifacts also return ``[]`` so
+    dashboard callers can render cold-state empty UI deterministically.
+    """
+    _validate_scope(scope)
+    if scope == "user":
+        return []
+
+    data = _read_json(state.repo_state_dir / "suggestions.json")
+    rows = data.get("suggestions") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        return []
+
+    bounded = rows[: max(0, int(limit))] if limit else rows
+    out: list[dict[str, Any]] = []
+    for row in bounded:
+        if isinstance(row, dict):
+            safe = _json_safe(row)
+            out.append(safe if isinstance(safe, dict) else {})
     return out
 
 

@@ -11,9 +11,8 @@
 #      supposed to merge automatically via the plugin loader — but plugin-
 #      level hooks aren't reliably merging into the active session config,
 #      so we copy them in by hand.
-#   3. Merges the understand-anything PostToolUse auto-update hook so
-#      committing in-session prompts the agent to refresh the knowledge
-#      graph (same bug class as #2).
+#   3. Wires auto_distill_session with repo-local dev output roots under
+#      .runtime/ so dogfood runs do not write to ~/.agent-learning.
 #   4. Refreshes events.sqlite from hook-events.jsonl via the warm-loop
 #      orchestrator so the read surfaces have current data on first session.
 #   5. Verifies the merged settings.local.json by counting hook entries
@@ -65,7 +64,7 @@ if [ "$mode" = "apply" ]; then
     --repo "$REPO_ROOT" --runtime claude --apply >/dev/null
 
   echo
-  echo "[2/4] merging plugin Stop hooks (refresh_dashboard, session-report) into $SETTINGS"
+  echo "[2/4] merging repo-local Stop hooks into $SETTINGS"
   "$PYTHON" scripts/merge_dev_hooks.py --repo "$REPO_ROOT"
 
   echo

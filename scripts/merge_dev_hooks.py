@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""Merge plugin + understand-anything hooks into .claude/settings.local.json.
+"""Merge repo-local ALC dev hooks into .claude/settings.local.json.
 
 Plugin-level hooks (those in ``agent-learning-compounder/hooks/hooks.json``
-and in ``~/.claude/plugins/cache/understand-anything*/hooks/hooks.json``)
 are supposed to merge into the active session's effective hook config
 automatically via the plugin loader. In practice they don't reliably do
 so — verified by running ``git commit`` in a session with the plugin
@@ -10,6 +9,7 @@ enabled and observing no auto-update prompt fired.
 
 This script copies those hooks into ``<repo>/.claude/settings.local.json``
 by hand. Idempotent — checks for command-string equality before adding.
+It deliberately does not copy hooks from user-scope plugin caches.
 
 Verify mode prints per-event hook counts and flags any expected hook
 that's missing, without changing the file.
@@ -23,87 +23,19 @@ import pathlib
 import sys
 from typing import Any
 
-
 REPO_DEFAULT = pathlib.Path(__file__).resolve().parents[1]
+BIN_DIR = REPO_DEFAULT / "agent-learning-compounder" / "bin"
+if str(BIN_DIR) not in sys.path:
+    sys.path.insert(0, str(BIN_DIR))
+
+from runtime_topology import dev_hook_specs
+
 SETTINGS_REL = ".claude/settings.local.json"
 
-# Hooks we expect to be present after setup. Each entry is:
-#   (event_name, command_substring_to_match, full_command_to_add, matcher)
-# command_substring keeps the idempotency check tolerant to absolute
-# paths varying across machines while still catching duplicates.
-
-
-def plugin_root(repo: pathlib.Path) -> pathlib.Path:
-    return repo / "agent-learning-compounder"
-
-
-def understand_anything_hook_command() -> str | None:
-    """Return the auto-update PostToolUse command if the plugin is installed.
-
-    Walks ``~/.claude/plugins/cache/understand-anything*/`` to find the
-    plugin's hooks.json and lifts the exact PostToolUse Bash command. We
-    can't blindly hardcode it because the plugin version changes the
-    install path.
-    """
-    cache = pathlib.Path.home() / ".claude" / "plugins" / "cache"
-    if not cache.is_dir():
-        return None
-    for candidate in cache.rglob("hooks.json"):
-        if "understand-anything" not in str(candidate):
-            continue
-        try:
-            data = json.loads(candidate.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        for entry in data.get("hooks", {}).get("PostToolUse", []):
-            for hook in entry.get("hooks", []):
-                cmd = hook.get("command")
-                if isinstance(cmd, str) and "understand-anything" in cmd:
-                    return cmd
-    return None
-
-
 def expected_hooks(repo: pathlib.Path) -> list[dict[str, Any]]:
-    plugin = plugin_root(repo)
-    entries: list[dict[str, Any]] = [
-        {
-            "event": "Stop",
-            "label": "warm-loop (events.sqlite refresh)",
-            "match": "alc_bootstrap_pipeline",
-            "matcher": "",
-            "command": (
-                f"{sys.executable} {plugin}/bin/alc_bootstrap_pipeline "
-                f"--repo {repo} --quiet"
-            ),
-        },
-        {
-            "event": "Stop",
-            "label": "refresh_dashboard (regenerate dashboard payload)",
-            "match": "refresh_dashboard.py",
-            "matcher": "",
-            "command": f"{plugin}/hooks/refresh_dashboard.py",
-        },
-        {
-            "event": "Stop",
-            "label": "render_state_surface session-report",
-            "match": "render_state_surface",
-            "matcher": "",
-            "command": (
-                f"{plugin}/bin/render_state_surface --repo {repo} "
-                "--format session-report"
-            ),
-        },
-    ]
-    ua_cmd = understand_anything_hook_command()
-    if ua_cmd is not None:
-        entries.append({
-            "event": "PostToolUse",
-            "label": "understand-anything auto-update (graph refresh on git commit)",
-            "match": "understand-anything",
-            "matcher": "Bash",
-            "command": ua_cmd,
-        })
-    return entries
+    # Centralized in runtime_topology so mode semantics are not duplicated
+    # across adapter scripts.
+    return dev_hook_specs(repo)
 
 
 def load_settings(path: pathlib.Path) -> dict[str, Any]:
@@ -143,6 +75,55 @@ def has_command_with_substring(
     return False
 
 
+def find_hook_with_substring(
+    rows: list[Any], needle: str
+) -> tuple[dict[str, Any], dict[str, Any]] | None:
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for hook in row.get("hooks", []):
+            if not isinstance(hook, dict):
+                continue
+            cmd = hook.get("command")
+            if isinstance(cmd, str) and needle in cmd:
+                return row, hook
+    return None
+
+
+def prune_user_scope_hooks(hooks_root: dict[str, Any]) -> int:
+    """Remove known user-scope plugin-cache hooks from repo-local settings."""
+    removed = 0
+    for event, rows in list(hooks_root.items()):
+        if not isinstance(rows, list):
+            continue
+        kept_rows = []
+        for row in rows:
+            if not isinstance(row, dict):
+                kept_rows.append(row)
+                continue
+            hooks = row.get("hooks", [])
+            if not isinstance(hooks, list):
+                kept_rows.append(row)
+                continue
+            kept_hooks = []
+            for hook in hooks:
+                cmd = hook.get("command") if isinstance(hook, dict) else None
+                if (
+                    isinstance(cmd, str)
+                    and "understand-anything" in cmd
+                    and "/.claude/plugins/cache/" in cmd
+                ):
+                    removed += 1
+                    continue
+                kept_hooks.append(hook)
+            if kept_hooks:
+                new_row = dict(row)
+                new_row["hooks"] = kept_hooks
+                kept_rows.append(new_row)
+        hooks_root[event] = kept_rows
+    return removed
+
+
 def add_hook(rows: list[Any], matcher: str, command: str) -> None:
     rows.append({
         "matcher": matcher,
@@ -155,21 +136,30 @@ def apply(repo: pathlib.Path) -> tuple[int, int]:
     data = load_settings(settings_path)
     hooks_root: dict[str, Any] = data.setdefault("hooks", {})
     added = 0
+    updated = 0
     skipped = 0
+    pruned = prune_user_scope_hooks(hooks_root)
     for entry in expected_hooks(repo):
         event = entry["event"]
         rows = hooks_root.setdefault(event, [])
         if not isinstance(rows, list):
             raise SystemExit(f"{settings_path} hooks.{event} must be a list")
-        if has_command_with_substring(rows, entry["match"]):
+        found = find_hook_with_substring(rows, entry["match"])
+        if found is not None:
+            _, hook = found
+            if hook.get("command") != entry["command"]:
+                hook["command"] = entry["command"]
+                updated += 1
+                print(f"  ~ {event:<12} {entry['label']}")
+                continue
             skipped += 1
             continue
         add_hook(rows, entry["matcher"], entry["command"])
         added += 1
         print(f"  + {event:<12} {entry['label']}")
-    if added:
+    if added or updated or pruned:
         write_settings(settings_path, data)
-    print(f"  added: {added}  already-present: {skipped}")
+    print(f"  added: {added}  updated: {updated}  pruned: {pruned}  already-present: {skipped}")
     return added, skipped
 
 

@@ -30,7 +30,6 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import os
 import pathlib
 import sys
 import time
@@ -41,7 +40,7 @@ PLUGIN_ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
 
 import alc_query  # noqa: E402
-from state_handle import StateHandle  # noqa: E402
+from state_handle import StateHandle, project_state  # noqa: E402
 
 _FORMATS = ("markdown", "html", "session-report", "json")
 _SESSION_REPORT_KEEP = 10
@@ -52,19 +51,8 @@ _SESSION_REPORT_KEEP = 10
 # ---------------------------------------------------------------------------
 
 def _setup_state(repo: pathlib.Path, state_dir: pathlib.Path | None) -> StateHandle:
-    """Build a StateHandle using env-variable injection to honour the
-    state_dir override without changing the public StateHandle API."""
-    if state_dir is not None:
-        prev = os.environ.get("AGENT_LEARNING_STATE_DIR")
-        os.environ["AGENT_LEARNING_STATE_DIR"] = str(state_dir)
-        try:
-            return StateHandle.for_repo(repo)
-        finally:
-            if prev is None:
-                os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-            else:
-                os.environ["AGENT_LEARNING_STATE_DIR"] = prev
-    return StateHandle.for_repo(repo)
+    """Build project-scope state through the State Scope module."""
+    return project_state(repo, state_dir=state_dir)
 
 
 def _read_text(path: pathlib.Path) -> str:

@@ -78,12 +78,49 @@ export interface ScopedGatesPayload {
   skill_context_md: string;
 }
 
+export interface ActorSummary {
+  since: string;
+  total: number;
+  by_actor_kind: { actor_kind: string; count: number; unique_actors: number }[];
+  last_activity_iso?: string | null;
+}
+
+export interface ReadSurfacePayload {
+  actor_summary: ActorSummary;
+  recommendations: Record<string, unknown>[];
+  pending_patches: Record<string, unknown>[];
+  apply_log: Record<string, unknown>[];
+  outcomes: Record<string, unknown>[];
+  skill_usage: { actor_name: string; count: number; last_used_ts?: string | null }[];
+  suggestions: Record<string, unknown>[];
+  diagnostics: {
+    repo_state: string;
+    events_sqlite: string;
+    events_sqlite_present: boolean;
+    events_sqlite_bytes: number;
+    events_jsonl_present: boolean;
+    events_jsonl_bytes: number;
+    hook_events_present: boolean;
+    hook_events_bytes: number;
+    cold_state_reasons?: string[];
+  };
+}
+
 export interface DashboardData {
   generated_at: string;
   personal_root: string;
   latest: ReportPayload | null;
   history: MetricsRow[];
+  archive_diagnostics?: {
+    reports_dir: string;
+    reports_dir_present: boolean;
+    metrics_jsonl_present: boolean;
+    metrics_jsonl_bytes: number;
+    latest_present: boolean;
+    history_rows: number;
+  };
   scoped_gates?: ScopedGatesPayload;
+  read_surface?: ReadSurfacePayload | null;
 }
 
 const placeholder: DashboardData = {

@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import json
 import os
@@ -53,19 +52,6 @@ ABSOLUTE_PATH_PREFIXES = ("/home/", "/Users/", "C:\\Users\\", "/etc/")
 _EVENT_WRITER_LOCK = threading.RLock()
 
 
-@contextlib.contextmanager
-def _event_writer_state(state: StateHandle):
-    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-        else:
-            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
-
-
 def _timestamp() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
@@ -93,8 +79,8 @@ def _emit(state: StateHandle, row: dict[str, Any], *, source: str, auto_id_fallb
     if "[REDACTED" in payload:
         raise ValueError("payload contained secret-like content")
 
-    with _EVENT_WRITER_LOCK, _event_writer_state(state):
-        return write_event(row, source=source, auto_id_fallback=auto_id_fallback)
+    with _EVENT_WRITER_LOCK:
+        return write_event(row, source=source, auto_id_fallback=auto_id_fallback, state=state)
 
 
 def _safe_telemetry(value: Any) -> Any:

@@ -115,9 +115,7 @@ def _run_id() -> str:
 
 
 def _stateful_handle(repo: pathlib.Path, state_dir: str | None = None) -> StateHandle:
-    if state_dir:
-        os.environ["AGENT_LEARNING_STATE_DIR"] = state_dir
-    return StateHandle.for_repo(repo)
+    return StateHandle.project_state(repo, state_dir=state_dir)
 
 
 def _resolve_timeout(scope: ExecScope, timeout_s: int | None) -> int:
@@ -436,7 +434,7 @@ def run(
             chain_payload["payload"]["timeout"] = True
         if parent_event_id is not None:
             chain_payload["parent_event_id"] = parent_event_id
-        event_id = write_event(chain_payload, source="eval", repo=handle.repo)
+        event_id = write_event(chain_payload, source="eval", state=handle)
 
         tracker.close()
 

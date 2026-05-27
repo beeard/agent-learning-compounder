@@ -4,10 +4,8 @@
 from __future__ import annotations
 
 import argparse
-import contextlib
 import datetime as dt
 import json
-import os
 import pathlib
 import sys
 from typing import Any
@@ -31,22 +29,6 @@ except Exception:  # pragma: no cover
 
 
 VERDICTS = {"approve", "reject", "modify"}
-
-
-@contextlib.contextmanager
-def _event_writer_state(state: StateHandle):
-    # event_writer resolves AGENT_LEARNING_STATE_DIR → events.jsonl at <state_dir>/events.jsonl;
-    # StateHandle.events_jsonl == repo_state_dir/events.jsonl, so we point at repo_state_dir
-    # (not state_root) to land in the indexed surface alc_query/index_events read.
-    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-        else:
-            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
 
 
 def _parse_window(value: str) -> dt.datetime:
@@ -169,8 +151,7 @@ def run(*, repo: pathlib.Path, window: str, limit: int, judge: str) -> tuple[int
                 "recommendation_kind": str(rec.get("kind") or rec.get("recommendation_kind") or "unknown"),
             },
         }
-        with _event_writer_state(state):
-            write_event(row, source="eval", auto_id_fallback=False)
+        write_event(row, source="eval", auto_id_fallback=False, state=state)
         existing.add(event_id)
         written += 1
     return 0, written

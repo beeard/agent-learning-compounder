@@ -8,7 +8,6 @@ and dispatch either to mock Claude/Codex adapters or a sandboxed fallback.
 from __future__ import annotations
 
 import argparse
-import contextlib
 import hashlib
 import json
 import os
@@ -20,8 +19,6 @@ import sys
 import time
 from dataclasses import dataclass
 from typing import Any
-
-import time
 
 try:
     from state_handle import StateHandle
@@ -54,22 +51,6 @@ class DispatchResult:
     tokens_out: int
     cost_usd: float | None
     backend: str
-
-
-@contextlib.contextmanager
-def _event_writer_state(state: StateHandle):
-    # event_writer resolves AGENT_LEARNING_STATE_DIR → events.jsonl at <state_dir>/events.jsonl;
-    # StateHandle.events_jsonl == repo_state_dir/events.jsonl, so we point at repo_state_dir
-    # (not state_root) to land in the indexed surface alc_query/index_events read.
-    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-        else:
-            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
 
 
 def _read_frontmatter(content: str) -> tuple[dict[str, Any], str]:
@@ -201,8 +182,7 @@ def _emit_start(
             "cost_usd": None,
         },
     }
-    with _event_writer_state(state):
-        return write_event(row, source="background", auto_id_fallback=True)
+    return write_event(row, source="background", auto_id_fallback=True, state=state)
 
 
 def _parse_age_days(value: str) -> int | None:
@@ -273,8 +253,7 @@ def _emit_end(
             "outcome": outcome,
         },
     }
-    with _event_writer_state(state):
-        return write_event(row, source="background", auto_id_fallback=True)
+    return write_event(row, source="background", auto_id_fallback=True, state=state)
 
 
 def _estimate_tokens(text: str) -> int:

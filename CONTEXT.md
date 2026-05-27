@@ -93,6 +93,7 @@ python3 scripts/run_pressure_tests.py            # durable-write gate
     domain-rules.active.json
     skill-map.json
     hook-events.jsonl                              # JSONL primary (append-only)
+    events.jsonl                                   # writer + replay JSONL primary
     improvement-queue.jsonl
     events.sqlite                                  # SQLite indexed cache over JSONL
     reports/latest-approved-gates.md               # ← durable surface 1
@@ -111,6 +112,32 @@ python3 scripts/run_pressure_tests.py            # durable-write gate
 4. `<repo>/.agent-learning` ← **production default**
 5. `$XDG_STATE_HOME/agent-learning`
 6. `~/.local/state/agent-learning`
+
+For project event writes, pass `state=<StateHandle>` or `repo=<path>` to the
+event writer. Avoid mutating `AGENT_LEARNING_STATE_DIR` inside project writers.
+`bin/state_handle.py` is the State Scope module: it owns project handles,
+user report paths, background write targets, read-scope validation, and
+`_write_scope` classification. Keep query parsing in `alc_query.py` and
+serialization/locking/boundary checks in `event_writer.py`.
+
+`bin/refresh_run.py` is the Refresh Run module: it owns warm/full refresh
+profiles, incremental hook replay into project `events.jsonl`, indexing, the
+repo refresh lock, stage ordering, and structured result payloads. The public
+`refresh_learning_state` command is a CLI adapter around this module.
+
+`bin/dashboard_read_model.py` is the Dashboard Read Model module: it owns
+read-only payload assembly for FastAPI/React, static dashboard rendering, and
+the stdlib fallback. Keep project reads behind `alc_query`/`StateHandle`, and
+keep promote/mute/distill/proposal writes in the FastAPI action or propose
+layers.
+
+`RuntimeTopology` (`bin/runtime_topology.py`) centralizes runtime mode selection
+for hook command rendering, config targets, and drift checks:
+
+- dev mode: repo-local dogfood paths and commands
+- release mode: explicit install into repo/user runtime config targets
+- drift mode: repo-only by default, with explicit `--include-user-runtimes` for
+  read-only user-runtime audit
 
 **Storage model: JSONL primary, SQLite indexed cache.** Reads go through
 `bin/alc_query.py`. Don't reach into SQLite or the JSONL files from a new

@@ -7,6 +7,14 @@
 
 ## Summary
 
+> 2026-05-27 status update: The original audit is retained as historical
+> evidence. Runtime Wiring and State Scope were completed first; Refresh Run
+> now closes the warm-loop orchestration gap by routing bootstrap/Stop-hook
+> warming through `bin/refresh_run.py`, appending hook replay rows behind a
+> cursor, indexing project `events.jsonl`, and keeping `refresh_learning_state`
+> as the full-refresh CLI adapter. Dashboard Read Model and Proposal Lifecycle
+> remain follow-up architecture work.
+
 | Severity | Count |
 |---|---|
 | Showstopper (loop is silently broken end-to-end) | 4 |

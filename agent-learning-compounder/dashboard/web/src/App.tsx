@@ -5,6 +5,7 @@ import { TrendChart } from "@/components/TrendChart";
 import { DomainHeat } from "@/components/DomainHeat";
 import { GateStabilityTable } from "@/components/GateStabilityTable";
 import { ScopedGatesPanel } from "@/components/ScopedGatesPanel";
+import { ReadSurfacePanel } from "@/components/ReadSurfacePanel";
 import { SkillPanel } from "@/components/SkillPanel";
 import { RunHistory } from "@/components/RunHistory";
 import { ActionBar } from "@/components/ActionBar";
@@ -100,6 +101,11 @@ export default function App() {
 
         {/* KPI strip */}
         <KpiCards data={data} />
+
+        <Separator className="my-8" />
+
+        {/* Canonical read API */}
+        <ReadSurfacePanel data={data} />
 
         <Separator className="my-8" />
 

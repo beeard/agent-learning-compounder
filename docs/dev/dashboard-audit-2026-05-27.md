@@ -10,15 +10,21 @@ Repos audited:
 - Live state — repo-local: `/home/tth/work/active/agent-learning-compounder/.agent-learning/repos/agent-learning-compounder-45819fdf8f74/`
 - Live state — personal: `/home/tth/.agent-learning/`
 
+2026-05-27 update: the dashboard read-model split identified here is now
+addressed by `bin/dashboard_read_model.py`. FastAPI `/api/data`,
+`bin/render_dashboard`, and `skills/alc-dashboard/server.py` consume the shared
+read model; project reads route through `alc_query`/`StateHandle`. Mutable
+dashboard actions remain in the FastAPI action layer.
+
 ---
 
 ## 1. Surface comparison table
 
 | # | Name | Tech | Entry point | Data source | Action surface | Status |
 |---|------|------|-------------|-------------|----------------|--------|
-| 1 | `dashboard/` (FastAPI shell + React injector) | FastAPI + Uvicorn; serves React bundle | `bin/serve_dashboard.py` → `dashboard.build_app()` | `bin/render_dashboard.py::build_dashboard_data()` — reads `<personal>/reports/agent-learning/metrics.jsonl` + embedded `report-payload` from `latest-report.html`; **does NOT use `alc_query`**. Action API reads `<personal>/actions/{promoted-gates,muted-domains}.json`. | 9 REST endpoints (see §4). Mutates `promoted-gates.json` and `muted-domains.json`; triggers `auto_distill_session`; serves latest report. | **Read-mostly works on personal archive only; misses everything keyed off `events.sqlite`.** Bundle path is the React SPA — same physical file as surface 2. |
+| 1 | `dashboard/` (FastAPI shell + React injector) | FastAPI + Uvicorn; serves React bundle | `bin/serve_dashboard.py` → `dashboard.build_app()` | `bin/dashboard_read_model.py` assembles archive data plus project read surface via `alc_query`/`StateHandle`. Action API reads `<personal>/actions/{promoted-gates,muted-domains}.json`. | 9 REST endpoints (see §4). Mutates `promoted-gates.json` and `muted-domains.json`; triggers `auto_distill_session`; serves latest report. | FastAPI/React is the canonical rich local UI. Bundle path is the React SPA — same physical file as surface 2. |
 | 2 | `dashboard/web/` (React SPA) | Vite + React 18 + TypeScript + Tailwind + Recharts + Radix UI + lucide-react. Bundled to single 626 KB `dist/index.html` (vite-plugin-singlefile). | Built file at `dashboard/web/dist/index.html`; injected by surface 1 OR opened standalone | `src/lib/data.ts::readDashboardData()` reads the inline `<script id="alc-payload">`. If FastAPI is up: `useConnection` pings `/api/health`, then `apiGet("/api/data")` refreshes every 25 s. **Same data structure as surface 1.** | Buttons that call surface 1's `/api/*` endpoints (Re-run distill, Latest report, Copy command, Payload, theme toggle, gate promotion). Falls back to "Offline · static" badge when API absent. | **The good one** per Tom. Genuinely polished UI; lives or dies with what `metrics.jsonl` + `report-payload` already contain. |
-| 3 | `skills/alc-dashboard/` (stdlib fallback) | Python `http.server` + `socketserver.ThreadingMixIn`; vanilla JS template + Alpine.js + handwritten `app.js` | `python3 skills/alc-dashboard/server.py` (loopback only; port-fallback aware) | `bin/alc_query.py` (KTD-21 canonical read API): `get_recommendations`, `get_pending_patches`, `get_apply_log`, `get_actor_summary` + raw markdown reads of `latest-approved-gates.md` and `latest-skill-context.md` from **repo-local** state. Plus local `suggestions.json` reader inline. | **None.** GET-only. `POST/PUT/DELETE/PATCH` all return 405. Per ADR R13, all writes stay on the CLI; the markdown bodies hand back ready-to-paste `bin/alc_apply` commands. | Working, on the agent-native model. Renders the right things from `events.sqlite` — but the file is empty on this repo, so most tabs say "No records yet." |
+| 3 | `skills/alc-dashboard/` (stdlib fallback) | Python `http.server` + `socketserver.ThreadingMixIn`; vanilla JS template + Alpine.js + handwritten `app.js` | `python3 skills/alc-dashboard/server.py` (loopback only; port-fallback aware) | `bin/dashboard_read_model.py::build_stdlib_payload()`, backed by `bin/alc_query.py` for recommendations, patches, apply log, actor summary, gates, skill context, and suggestions. | **None.** GET-only. `POST/PUT/DELETE/PATCH` all return 405. Per ADR R13, all writes stay on the CLI; the markdown bodies hand back ready-to-paste `bin/alc_apply` commands. | No-Node, read-only fallback. Renders the same read-model data without FastAPI actions. |
 
 > The two surfaces named `dashboard/` (1) and `dashboard/web/` (2) are
 > tightly coupled — (1) is mostly a *server wrapper around* (2)'s build
@@ -367,13 +373,11 @@ Proposed direction:
    (state-handle precedence: repo-local first). Today it defaults to
    `~/.agent-learning/`, which is why Tom is looking at the wrong corpus.
 
-4. **Widen the React payload schema** to include what the stdlib
+4. **Addressed: widen the React payload schema** to include what the stdlib
    dashboard already surfaces: recommendations, pending patches, anomalies/
    patterns/correlations, apply log, suggestions, next-action,
-   actor_summary. The simplest path: pipe everything through `alc_query`
-   (KTD-21) on the FastAPI side and add tabs/cards on the React side. The
-   eight tabs from the stdlib UI are obvious targets for new React
-   components.
+   actor_summary. `bin/dashboard_read_model.py` now pipes read payloads through
+   `alc_query`/`StateHandle`; React types include the canonical `read_surface`.
 
 5. **Keep the FastAPI shell.** It owns the write API (promote / mute /
    distill / job registry) which the stdlib surface cannot provide without
@@ -393,12 +397,10 @@ Proposed direction:
    `render_dashboard.render()` (which is a working bundle, not a stub
    directory). The current "static folder URI" fallback is misleading.
 
-8. **Update the ADR.** Replace `docs/decisions/dashboard-migration.md`
-   with: "the FastAPI + React surface is canonical; stdlib is the
-   no-Node fallback that consumes `alc_query` directly; muted-domains
-   stays on FastAPI." Bonus: capture the rule that any new artifact added
-   to the read seam (via `alc_query`) must also appear in the React
-   payload — that's the discipline that closes the 99% gap.
+8. **Addressed: update the ADR.** `docs/decisions/dashboard-migration.md`
+   now records FastAPI + React as canonical, stdlib as the no-Node fallback,
+   Dashboard Read Model as the shared read boundary, and mutable actions as
+   FastAPI-owned until Proposal Lifecycle.
 
 ---
 

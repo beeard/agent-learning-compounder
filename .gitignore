@@ -6,6 +6,7 @@ __pycache__/
 .venv/
 dist/
 node_modules/
+.runtime/
 
 # agent-learning-compounder: hook config contains absolute $HOME paths
 /.codex/hooks.json

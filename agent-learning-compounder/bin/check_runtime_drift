@@ -1,0 +1,205 @@
+#!/usr/bin/env python3
+"""Report drift between this source tree and repo-local runtime artifacts.
+
+Development rule: runtime trees are artifacts, not edit targets. This checker
+is read-only. It compares the source skill tree against repo-contained runtime
+copies and, only when explicitly requested, user-scope runtime installs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import pathlib
+import stat
+import sys
+from dataclasses import dataclass
+from typing import Iterable
+
+from runtime_topology import build_runtime_drift_plan
+
+
+INNER_ROOT = pathlib.Path(__file__).resolve().parents[1]
+REPO_ROOT = INNER_ROOT.parent
+SKILL_NAME = "agent-learning-compounder"
+
+EXCLUDED_DIRS = {
+    ".agent-learning",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    "__pycache__",
+    "coverage",
+    "dist",
+    "node_modules",
+}
+
+EXCLUDED_SUFFIXES = {
+    ".pyc",
+    ".pyo",
+    ".tsbuildinfo",
+}
+
+
+@dataclass(frozen=True)
+class SnapshotEntry:
+    kind: str
+    digest: str
+
+
+def _is_excluded(path: pathlib.Path) -> bool:
+    if any(part in EXCLUDED_DIRS for part in path.parts):
+        return True
+    if path.name.endswith(".agent-learning-bak"):
+        return True
+    return path.suffix in EXCLUDED_SUFFIXES
+
+
+def _digest_file(path: pathlib.Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _snapshot(root: pathlib.Path) -> dict[str, SnapshotEntry]:
+    entries: dict[str, SnapshotEntry] = {}
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirpath_obj = pathlib.Path(dirpath)
+        rel_dir = dirpath_obj.relative_to(root)
+        dirnames[:] = [
+            dirname for dirname in sorted(dirnames)
+            if not _is_excluded(rel_dir / dirname)
+        ]
+        for filename in sorted(filenames):
+            rel = rel_dir / filename
+            if _is_excluded(rel):
+                continue
+            path = dirpath_obj / filename
+            rel_key = rel.as_posix()
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                entries[rel_key] = SnapshotEntry("symlink", os.readlink(path))
+            elif stat.S_ISREG(mode):
+                entries[rel_key] = SnapshotEntry("file", _digest_file(path))
+            else:
+                entries[rel_key] = SnapshotEntry("other", stat.filemode(mode))
+    return entries
+
+
+
+
+def _diff(
+    source: dict[str, SnapshotEntry],
+    runtime: dict[str, SnapshotEntry],
+) -> tuple[list[str], list[str], list[str]]:
+    source_keys = set(source)
+    runtime_keys = set(runtime)
+    missing = sorted(source_keys - runtime_keys)
+    extra = sorted(runtime_keys - source_keys)
+    changed = sorted(
+        key for key in source_keys & runtime_keys
+        if source[key] != runtime[key]
+    )
+    return missing, extra, changed
+
+
+def _bounded(items: list[str], limit: int) -> list[str]:
+    if len(items) <= limit:
+        return items
+    return items[:limit] + [f"... {len(items) - limit} more"]
+
+
+def _existing_unique(paths: Iterable[pathlib.Path]) -> list[pathlib.Path]:
+    seen: set[pathlib.Path] = set()
+    out: list[pathlib.Path] = []
+    for path in paths:
+        resolved = path.expanduser()
+        if not resolved.exists():
+            continue
+        try:
+            key = resolved.resolve()
+        except OSError:
+            key = resolved.absolute()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(resolved)
+    return out
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=pathlib.Path, default=REPO_ROOT)
+    parser.add_argument("--source", type=pathlib.Path, default=INNER_ROOT)
+    parser.add_argument(
+        "--runtime",
+        action="append",
+        type=pathlib.Path,
+        default=[],
+        help="Runtime artifact tree to compare; may be repeated.",
+    )
+    parser.add_argument(
+        "--include-user-runtimes",
+        action="store_true",
+        help="Also inspect ~/.agents, ~/.claude, and ~/.codex installs read-only.",
+    )
+    parser.add_argument(
+        "--strict-missing",
+        action="store_true",
+        help="Fail if no runtime artifacts are found.",
+    )
+    parser.add_argument("--limit", type=int, default=20)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    repo = args.repo.expanduser().resolve()
+    source_root = args.source.expanduser().resolve()
+    if not source_root.is_dir():
+        print(f"source missing: {source_root}", file=sys.stderr)
+        return 2
+    topology = build_runtime_drift_plan(
+        repo,
+        explicit_runtimes=args.runtime,
+        include_user_runtimes=args.include_user_runtimes,
+    )
+    runtimes = _existing_unique(topology.read_targets)
+
+    print(f"source: {source_root}")
+    print("mode: read-only")
+    print(f"profile: {topology.mode}")
+    if not runtimes:
+        print("runtime artifacts: none found")
+        return 1 if args.strict_missing else 0
+
+    source_snapshot = _snapshot(source_root)
+    failures = 0
+    for runtime_root in runtimes:
+        runtime_snapshot = _snapshot(runtime_root)
+        missing, extra, changed = _diff(source_snapshot, runtime_snapshot)
+        status = "OK" if not (missing or extra or changed) else "DRIFT"
+        print(f"\n[{status}] {runtime_root}")
+        print(
+            f"  source_files={len(source_snapshot)} runtime_files={len(runtime_snapshot)} "
+            f"missing={len(missing)} extra={len(extra)} changed={len(changed)}"
+        )
+        for label, values in (
+            ("missing", missing),
+            ("extra", extra),
+            ("changed", changed),
+        ):
+            for value in _bounded(values, args.limit):
+                print(f"  {label}: {value}")
+        if status == "DRIFT":
+            failures += 1
+
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -9,7 +9,7 @@ import os
 import pathlib
 import sys
 
-from state_handle import resolve_state_dir
+from state_handle import project_state, resolve_state_dir
 import event_writer
 from transcript_parser import parse_claude_transcript, parse_codex_transcript
 
@@ -86,8 +86,8 @@ def ingest(
     state_dir: str | None,
     repo: pathlib.Path | None = None,
 ) -> tuple[int, dt.datetime | None]:
-    state = _state_root(state_dir)
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state)
+    project = project_state(repo, state_dir=state_dir) if repo is not None else None
+    state = project.state_root if project is not None else _state_root(state_dir)
     cursor = _read_cursor(_cursor_path(state))
 
     written = 0
@@ -97,7 +97,10 @@ def ingest(
             parsed = _extract_ts(row)
             if cursor is not None and parsed <= cursor:
                 continue
-            event_writer.write_event(row, source="transcript", repo=repo)
+            if project is not None:
+                event_writer.write_event(row, source="transcript", state=project)
+            else:
+                event_writer.write_event(row, source="transcript", state_root=state)
             written += 1
             if newest is None or parsed > newest:
                 newest = parsed
@@ -107,7 +110,10 @@ def ingest(
             parsed = _extract_ts(row)
             if cursor is not None and parsed <= cursor:
                 continue
-            event_writer.write_event(row, source="transcript", repo=repo)
+            if project is not None:
+                event_writer.write_event(row, source="transcript", state=project)
+            else:
+                event_writer.write_event(row, source="transcript", state_root=state)
             written += 1
             if newest is None or parsed > newest:
                 newest = parsed

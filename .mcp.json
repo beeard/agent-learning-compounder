@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "alc": {
+      "command": "python3",
+      "args": [
+        "-u",
+        "agent-learning-compounder/alc_mcp/server.py"
+      ]
+    }
+  }
+}

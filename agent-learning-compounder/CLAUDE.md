@@ -52,6 +52,27 @@ directory; see `.claude-plugin/plugin.json`, `.mcp.json`, and `hooks/hooks.json`
 
 - Use command entrypoints in the `scripts/` directory, not direct internal modules.
 - Keep repo mutation paths inside `agents/`, `skills/`, `commands/`, and configured state roots.
+- Event writers in repo context should pass explicit state intent (`state=...` or
+  `repo=...`) to `bin/event_writer.py`. Avoid mutating `AGENT_LEARNING_STATE_DIR`
+  in-process.
+- State Scope lives in `bin/state_handle.py`; use it for project handles, user
+  report paths, read-scope validation, and event write-target classification.
+  Do not reimplement those decisions in query, render, MCP, or writer callers.
+- Refresh Run lives in `bin/refresh_run.py`; use it for warm/full refresh,
+  event ingestion, indexing, stage ordering, locking, and result reporting.
+  Keep `bin/refresh_learning_state` as the CLI adapter and do not put dashboard
+  read models or proposal lifecycle ranking into refresh.
+- Dashboard Read Model lives in `bin/dashboard_read_model.py`; use it for
+  FastAPI/React, static-render, and stdlib dashboard payload assembly. Keep it
+  read-only: no action imports, event writers, proposal writers, patch mutation,
+  or distill job orchestration.
+- Dev hook commands are expected to come from `scripts/dev-session-setup.sh` and
+  `scripts/merge_dev_hooks.py`, which resolve their runtime surfaces from
+  `bin/runtime_topology.py`.
+- Runtime wiring in `bin/runtime_topology.py` now owns mode-specific command and
+  target selection for dev, release install, and drift audit. Dev hooks stay
+  repo-local; release install still requires `--apply`; drift checks are read-only
+  unless explicitly requested.
 
 ### Output policy
 

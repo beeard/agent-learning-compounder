@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -184,6 +185,37 @@ class AlcQueryTests(unittest.TestCase):
         rows = alc_query.get_pending_patches(self.state)
         self.assertEqual({r["patch_id"] for r in rows}, {"p1", "p3"})
 
+    def test_get_suggestions_reads_bounded_json_safe_rows(self) -> None:
+        payload = {
+            "suggestions": [
+                {"recommendation_id": "r1", "title": "One", "rank": 1},
+                "skip-me",
+                {"recommendation_id": "r2", "title": "Two", "nested": {"ok": True}},
+            ]
+        }
+        (self.state.repo_state_dir / "suggestions.json").write_text(json.dumps(payload), encoding="utf-8")
+
+        rows = alc_query.get_suggestions(self.state, limit=1)
+
+        self.assertEqual(rows, [{"recommendation_id": "r1", "title": "One", "rank": 1}])
+
+    def test_get_suggestions_missing_or_malformed_returns_empty(self) -> None:
+        self.assertEqual(alc_query.get_suggestions(self.state), [])
+
+        (self.state.repo_state_dir / "suggestions.json").write_text("{broken", encoding="utf-8")
+        self.assertEqual(alc_query.get_suggestions(self.state), [])
+
+        (self.state.repo_state_dir / "suggestions.json").write_text(json.dumps({"suggestions": {}}), encoding="utf-8")
+        self.assertEqual(alc_query.get_suggestions(self.state), [])
+
+    def test_get_suggestions_user_scope_returns_empty(self) -> None:
+        (self.state.repo_state_dir / "suggestions.json").write_text(
+            json.dumps({"suggestions": [{"recommendation_id": "r1"}]}),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(alc_query.get_suggestions(self.state, scope="user"), [])
+
     def test_get_event_dag_builds_hierarchy(self) -> None:
         now = dt.datetime.now(dt.timezone.utc).isoformat()
         self._insert_rows([
@@ -224,6 +256,67 @@ class AlcQueryTests(unittest.TestCase):
         ])
         rows = alc_query.get_skill_invocation_history(self.state, "alpha")
         self.assertEqual([row["event_id"] for row in rows], ["a", "c"])
+
+    def test_project_scope_requires_state_handle_for_project_only_reads(self) -> None:
+        with self.assertRaises(alc_query.QueryError):
+            alc_query.get_gates(scope="project")
+        with self.assertRaises(alc_query.QueryError):
+            alc_query.get_skill_context(scope="project")
+
+    def test_user_scope_reads_reports_from_state_scope_user_root(self) -> None:
+        user_root = Path(self.temp.name) / "user"
+        reports = user_root / "reports" / "agent-learning"
+        reports.mkdir(parents=True)
+        (reports / "latest-approved-gates.md").write_text(
+            "\n- domain: repo\n  gate_id: user-gate\n  gate_category: workflow\n  gate: prefer shared resolver\n",
+            encoding="utf-8",
+        )
+        (reports / "latest-skill-context.md").write_text("user context\n", encoding="utf-8")
+
+        gates = alc_query.get_gates(scope="user", user_root=user_root)
+        context = alc_query.get_skill_context(scope="user", user_root=user_root)
+
+        self.assertEqual([row["gate_id"] for row in gates], ["user-gate"])
+        self.assertEqual(context, "user context\n")
+
+    def test_both_scope_prefers_project_rows_on_gate_collision(self) -> None:
+        self.state.reports_dir.mkdir(parents=True, exist_ok=True)
+        self.state.reports_dir.joinpath("latest-approved-gates.md").write_text(
+            "\n- domain: repo\n  gate_id: shared\n  gate_category: project\n  gate: project wins\n",
+            encoding="utf-8",
+        )
+        user_root = Path(self.temp.name) / "user"
+        reports = user_root / "reports" / "agent-learning"
+        reports.mkdir(parents=True)
+        (reports / "latest-approved-gates.md").write_text(
+            "\n- domain: repo\n  gate_id: shared\n  gate_category: user\n  gate: user loses\n"
+            "\n- domain: repo\n  gate_id: user-only\n  gate_category: user\n  gate: user remains\n",
+            encoding="utf-8",
+        )
+
+        rows = alc_query.get_gates(self.state, scope="both", user_root=user_root)
+
+        self.assertEqual([row["gate_id"] for row in rows], ["shared", "user-only"])
+        self.assertEqual(rows[0]["_source_scope"], "project")
+
+    def test_env_user_scope_uses_shared_state_scope_resolver(self) -> None:
+        user_root = Path(self.temp.name) / "env-user"
+        reports = user_root / "reports" / "agent-learning"
+        reports.mkdir(parents=True)
+        (reports / "latest-skill-context.md").write_text("env context\n", encoding="utf-8")
+        old_user = os.environ.get("AGENT_LEARNING_USER")
+        try:
+            os.environ["AGENT_LEARNING_USER"] = str(user_root)
+            self.assertEqual(alc_query.get_skill_context(scope="user"), "env context\n")
+        finally:
+            if old_user is None:
+                os.environ.pop("AGENT_LEARNING_USER", None)
+            else:
+                os.environ["AGENT_LEARNING_USER"] = old_user
+
+    def test_invalid_scope_fails_through_shared_validation(self) -> None:
+        with self.assertRaisesRegex(alc_query.QueryError, "scope must be one of"):
+            alc_query.get_gates(self.state, scope="invalid")  # type: ignore[arg-type]
 
 
 if __name__ == "__main__":

@@ -107,19 +107,6 @@ def _apply_op_to_bytes(op: dict[str, Any], current: bytes) -> bytes:
 
 
 @contextlib.contextmanager
-def _event_state(state: StateHandle):
-    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.repo_state_dir)
-    try:
-        yield
-    finally:
-        if previous is None:
-            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-        else:
-            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
-
-
-@contextlib.contextmanager
 def _apply_lock(state: StateHandle):
     state.repo_state_dir.mkdir(parents=True, exist_ok=True)
     fd = os.open(str(state.repo_state_dir / ".apply.lock"), os.O_RDWR | os.O_CREAT, 0o600)
@@ -269,8 +256,7 @@ class HermesExecutor(Executor):
                 "ts": apply_ts,
                 "payload": payload,
             }
-            with _event_state(self.state):
-                write_event(event, source="apply", auto_id_fallback=False)
+            write_event(event, source="apply", auto_id_fallback=False, state=self.state)
             _index_state(self.state)
             _atomic_write(target, new)
         return ApplyResult(True, patch_id, str(target), sha256_bytes(current), sha256_bytes(new), event_id)
@@ -303,7 +289,6 @@ class HermesExecutor(Executor):
             "payload": {"patch_id": patch_id, "target": payload.get("target"), "reverted_event_id": applied.get("event_id")},
         }
         with _apply_lock(self.state):
-            with _event_state(self.state):
-                write_event(event, source="apply", auto_id_fallback=False)
+            write_event(event, source="apply", auto_id_fallback=False, state=self.state)
             _atomic_write(target, new)
         return RevertResult(True, patch_id, str(target), sha256_bytes(current), sha256_bytes(new), event_id)

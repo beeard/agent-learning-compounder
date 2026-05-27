@@ -17,6 +17,7 @@ if str(BIN_DIR) not in sys.path:
     sys.path.insert(0, str(BIN_DIR))
 
 import event_writer
+from state_handle import StateHandle
 
 
 class EventWriterTests(unittest.TestCase):
@@ -47,15 +48,83 @@ class EventWriterTests(unittest.TestCase):
         line = self._event_path().read_text(encoding="utf-8").strip()
         payload = json.loads(line)
         self.assertEqual(payload["event_id"], "evt-test-1")
+        self.assertEqual(payload["payload"]["_write_scope"], "legacy_state_dir_fallback")
 
     def test_write_event_auto_id_when_absent_and_fallback_true(self):
         row = self._row(event="apply")
         event_id = event_writer.write_event(row, source="hook")
         self.assertTrue(event_id.startswith("evt_"))
 
+    def test_write_event_with_explicit_state_handle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            repo.mkdir()
+            state = StateHandle.for_repo(repo, state_dir=pathlib.Path(tmp) / "state")
+            event_id = event_writer.write_event(
+                self._row(event_id="evt-explicit", event="hooked"),
+                source="hook",
+                state=state,
+            )
+            payload = json.loads(state.events_jsonl.read_text(encoding="utf-8").strip())
+            self.assertEqual(event_id, "evt-explicit")
+            self.assertEqual(payload["event_id"], "evt-explicit")
+            self.assertEqual(payload["payload"]["_write_scope"], "project_state_handle")
+            self.assertTrue(state.events_jsonl.exists())
+
     def test_write_event_rejects_missing_id_when_fallback_disabled(self):
         with self.assertRaises(ValueError):
             event_writer.write_event(self._row(), source="hook", auto_id_fallback=False)
+
+    def test_write_event_with_repo_param(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            repo.mkdir()
+            with mock.patch.dict(os.environ, {"AGENT_LEARNING_STATE_DIR": str(pathlib.Path(tmp) / "other-state")}):
+                expected = StateHandle.for_repo(repo)
+                event_writer.write_event(self._row(event_id="evt-repo", event="hooked"), source="hook", repo=repo)
+
+            payload = json.loads(expected.events_jsonl.read_text(encoding="utf-8").strip())
+            self.assertEqual(payload["event_id"], "evt-repo")
+            self.assertEqual(payload["payload"]["_write_scope"], "project_repo")
+
+    def test_write_event_with_explicit_state_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp) / "explicit-state-root"
+            root.mkdir(parents=True)
+            event_id = event_writer.write_event(
+                self._row(event_id="evt-root", event="hooked"),
+                source="hook",
+                state_root=root,
+            )
+            payload = json.loads((root / "events.jsonl").read_text(encoding="utf-8").strip())
+            self.assertEqual(event_id, "evt-root")
+            self.assertEqual(payload["event_id"], "evt-root")
+            self.assertEqual(payload["payload"]["_write_scope"], "legacy_state_root")
+
+    def test_write_event_rejects_ambiguous_target_inputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            repo.mkdir()
+            state = StateHandle.for_repo(repo, state_dir=pathlib.Path(tmp) / "state")
+
+            with self.assertRaisesRegex(ValueError, "ambiguous event write target"):
+                event_writer.write_event(self._row(event_id="evt-conflict"), source="hook", state=state, repo=repo)
+
+            with self.assertRaisesRegex(ValueError, "ambiguous event write target"):
+                event_writer.write_event(
+                    self._row(event_id="evt-conflict-2"),
+                    source="hook",
+                    repo=repo,
+                    state_root=pathlib.Path(tmp) / "root",
+                )
+
+    def test_write_event_rejects_symlink_event_path(self):
+        state_root = pathlib.Path(self.state.name) / "symlink-state"
+        events_path = state_root / "events.jsonl"
+        state_root.mkdir(parents=True, exist_ok=True)
+        events_path.symlink_to("/dev/null")
+        with self.assertRaises(ValueError):
+            event_writer.write_event(self._row(event_id="evt-symlink", event="hooked"), source="hook", state_root=state_root)
 
     def test_write_event_appends_to_jsonl(self):
         event_writer.write_event(self._row(event="one", event_id="evt-1"), source="hook")

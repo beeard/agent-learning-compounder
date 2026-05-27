@@ -15,6 +15,7 @@ import sys
 from export_gates import parse_gates, render_registry
 from export_skill_context import write_context
 from scrub_secrets import scrub
+from state_handle import user_reports_dir, user_scope
 from validate_outputs import validate
 
 
@@ -820,11 +821,8 @@ def resolve_user_arg(value: str | None) -> pathlib.Path | None:
     Reads ``AGENT_LEARNING_USER`` first, then ``AGENT_LEARNING_PERSONAL``
     for one-release backwards compatibility.
     """
-    if value:
-        return pathlib.Path(value).expanduser()
-    env_value = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
-    if env_value:
-        return pathlib.Path(env_value).expanduser()
+    if value or os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL"):
+        return user_scope(value).root
     return None
 
 
@@ -935,11 +933,11 @@ def main(argv: list[str] | None = None) -> int:
         today = dt.date.today().isoformat()
         touched = write_personal_updates(personal, report, today)
         gates_output = pathlib.Path(args.approved_gates_output) if args.approved_gates_output else (
-            personal / "reports" / "agent-learning" / "latest-approved-gates.md"
+            user_reports_dir(personal) / "latest-approved-gates.md"
         )
         touched.append(export_approved_gates(touched[0], report, gates_output, args.max_gate_domains))
         context_output = pathlib.Path(args.skill_context_output) if args.skill_context_output else (
-            personal / "reports" / "agent-learning" / "latest-skill-context.md"
+            user_reports_dir(personal) / "latest-skill-context.md"
         )
         touched.append(write_context(context_output, skill_map, skill_usage, skill_impact))
         if html_text is not None:

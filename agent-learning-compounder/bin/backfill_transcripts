@@ -9,7 +9,7 @@ import os
 import pathlib
 import sys
 
-from state_handle import resolve_state_dir
+from state_handle import project_state, resolve_state_dir
 import event_writer
 from transcript_parser import deterministic_event_id, parse_claude_transcript, parse_codex_transcript
 
@@ -97,7 +97,11 @@ def backfill(
 
     if not rows:
         return 0
-    event_writer.write_events_batch(rows, source="transcript", repo=repo)
+    if repo is not None:
+        state = project_state(repo, state_dir=state_dir)
+        event_writer.write_events_batch(rows, source="transcript", state=state)
+    else:
+        event_writer.write_events_batch(rows, source="transcript", state_root=_state_root(state_dir))
     return len(rows)
 
 
@@ -123,11 +127,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"invalid --since: {exc}", file=sys.stderr)
         return 2
 
-    # Validate state dir early and keep behavior aligned with event_writer writes.
+    # Validate state dir early; write routing is passed explicitly to event_writer.
     state = _state_root(args.state_dir)
     if not state:
         return 1
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state)
 
     repo = pathlib.Path(args.repo).expanduser().resolve() if args.repo else None
     try:

@@ -157,6 +157,49 @@ class IngestNewTranscriptsTests(unittest.TestCase):
                 self.assertEqual(len(rows), 4)
                 self.assertTrue(rows[-1].get("ts") >= rows[0].get("ts"))
 
+    def test_repo_state_dir_routes_events_and_cursor_to_same_state_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            repo = root / "repo"
+            state_root = root / "state"
+            claude_root = root / ".claude" / "projects"
+            codex_root = root / ".codex" / "sessions"
+            repo.mkdir()
+            claude_root.mkdir(parents=True)
+            codex_root.mkdir(parents=True)
+            _write_rows(
+                claude_root / "session.jsonl",
+                [
+                    {
+                        "type": "user",
+                        "sessionId": "s1",
+                        "uuid": "u-1",
+                        "timestamp": "2026-05-26T03:00:00+00:00",
+                        "message": {"role": "user"},
+                    },
+                ],
+            )
+
+            result = run_script(
+                "ingest_new_transcripts.py",
+                "--claude-dir",
+                str(claude_root),
+                "--codex-dir",
+                str(codex_root),
+                "--repo",
+                str(repo),
+                "--state-dir",
+                str(state_root),
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            sys.path.insert(0, str(BIN_DIR))
+            from state_handle import StateHandle
+
+            handle = StateHandle.project_state(repo, state_dir=state_root)
+            self.assertTrue(handle.events_jsonl.is_file())
+            self.assertTrue((state_root / ".transcript-cursor").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()

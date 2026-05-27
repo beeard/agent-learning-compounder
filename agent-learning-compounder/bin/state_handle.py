@@ -23,6 +23,28 @@ from typing import Literal
 logger = logging.getLogger(__name__)
 
 
+ReadScope = Literal["user", "project", "both"]
+_VALID_READ_SCOPES: frozenset[str] = frozenset({"user", "project", "both"})
+
+
+@dataclass(frozen=True)
+class UserScope:
+    """Resolved user-scope state root and derived report directory."""
+
+    root: pathlib.Path
+    reports_dir: pathlib.Path
+    tier: str
+
+
+@dataclass(frozen=True)
+class EventWriteTarget:
+    """Resolved event write target with the audit label persisted on rows."""
+
+    event_dir: pathlib.Path
+    events_jsonl: pathlib.Path
+    write_scope: str
+
+
 def _slugify(value: str, fallback: str = "repo") -> str:
     slug = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip()).strip("-").lower()
     return slug or fallback
@@ -88,6 +110,69 @@ def _resolve_state_root(
         return pathlib.Path(xdg).expanduser().resolve() / "agent-learning", "legacy_xdg"
 
     return pathlib.Path.home() / ".local" / "state" / "agent-learning", "legacy_home"
+
+
+def _resolve_user_scope(user_root: str | pathlib.Path | None = None) -> UserScope:
+    if user_root is not None:
+        root = pathlib.Path(user_root).expanduser().resolve()
+        tier = "explicit_user_root"
+    elif env_user := os.environ.get("AGENT_LEARNING_USER"):
+        root = pathlib.Path(env_user).expanduser().resolve()
+        tier = "env_user"
+    elif env_personal := os.environ.get("AGENT_LEARNING_PERSONAL"):
+        root = pathlib.Path(env_personal).expanduser().resolve()
+        tier = "legacy_env_personal"
+    else:
+        root = (pathlib.Path.home() / ".agent-learning").resolve()
+        tier = "default_user_home"
+    return UserScope(root=root, reports_dir=root / "reports" / "agent-learning", tier=tier)
+
+
+def _event_write_target(
+    *,
+    repo: str | pathlib.Path | None = None,
+    state: "StateHandle | None" = None,
+    state_root: str | pathlib.Path | None = None,
+    background_root: str | pathlib.Path | None = None,
+) -> EventWriteTarget:
+    intents = [
+        name
+        for name, value in (
+            ("state", state),
+            ("repo", repo),
+            ("state_root", state_root),
+            ("background_root", background_root),
+        )
+        if value is not None
+    ]
+    if len(intents) > 1:
+        raise ValueError(f"ambiguous event write target: pass only one of {', '.join(intents)}")
+
+    if state is not None:
+        event_dir = state.events_jsonl.parent
+        return EventWriteTarget(event_dir=event_dir, events_jsonl=state.events_jsonl, write_scope="project_state_handle")
+    if repo is not None:
+        handle = StateHandle.for_repo(pathlib.Path(repo))
+        return EventWriteTarget(event_dir=handle.repo_state_dir, events_jsonl=handle.events_jsonl, write_scope="project_repo")
+    if background_root is not None:
+        event_dir = pathlib.Path(background_root).expanduser().resolve()
+        return EventWriteTarget(
+            event_dir=event_dir,
+            events_jsonl=event_dir / "events.jsonl",
+            write_scope="background_explicit_root",
+        )
+    if state_root is not None:
+        event_dir = pathlib.Path(state_root).expanduser().resolve()
+        return EventWriteTarget(
+            event_dir=event_dir,
+            events_jsonl=event_dir / "events.jsonl",
+            write_scope="legacy_state_root",
+        )
+
+    state_dir, tier = _resolve_state_root()
+    event_dir = state_dir.expanduser().resolve()
+    label = "legacy_state_dir_fallback" if tier in {"legacy_env_state_dir", "legacy_home", "legacy_xdg"} else tier
+    return EventWriteTarget(event_dir=event_dir, events_jsonl=event_dir / "events.jsonl", write_scope=label)
 
 
 def _resolve_repo_state_dir(
@@ -158,12 +243,31 @@ class StateHandle:
         Returns a bare path (not a StateHandle dataclass) because user-scope
         is single-rooted by design — no per-repo subdirectory.
         """
-        if user_root is not None:
-            return pathlib.Path(user_root).expanduser().resolve()
-        env_user = os.environ.get("AGENT_LEARNING_USER") or os.environ.get("AGENT_LEARNING_PERSONAL")
-        if env_user:
-            return pathlib.Path(env_user).expanduser().resolve()
-        return (pathlib.Path.home() / ".agent-learning").resolve()
+        return _resolve_user_scope(user_root).root
+
+    @staticmethod
+    def user_scope(user_root: str | pathlib.Path | None = None) -> UserScope:
+        return _resolve_user_scope(user_root)
+
+    @staticmethod
+    def user_reports_dir(user_root: str | pathlib.Path | None = None) -> pathlib.Path:
+        return _resolve_user_scope(user_root).reports_dir
+
+    @staticmethod
+    def validate_read_scope(scope: str) -> ReadScope:
+        if scope not in _VALID_READ_SCOPES:
+            raise ValueError(f"scope must be one of {sorted(_VALID_READ_SCOPES)}, got {scope!r}")
+        return scope  # type: ignore[return-value]
+
+    @staticmethod
+    def event_write_target(
+        *,
+        repo: str | pathlib.Path | None = None,
+        state: "StateHandle | None" = None,
+        state_root: str | pathlib.Path | None = None,
+        background_root: str | pathlib.Path | None = None,
+    ) -> EventWriteTarget:
+        return _event_write_target(repo=repo, state=state, state_root=state_root, background_root=background_root)
 
     @classmethod
     def for_project(cls, repo_path: pathlib.Path) -> "StateHandle":
@@ -175,21 +279,40 @@ class StateHandle:
         return cls.for_repo(repo_path)
 
     @classmethod
-    def for_repo(cls, repo_path: pathlib.Path) -> "StateHandle":
+    def project_state(
+        cls,
+        repo_path: str | pathlib.Path,
+        *,
+        state_dir: str | pathlib.Path | None = None,
+    ) -> "StateHandle":
+        """Return the project-scope StateHandle for repo plus optional root."""
+        return cls.for_repo(pathlib.Path(repo_path), state_dir=state_dir)
+
+    @classmethod
+    def for_repo(
+        cls,
+        repo_path: pathlib.Path,
+        *,
+        state_dir: str | pathlib.Path | None = None,
+    ) -> "StateHandle":
         repo = pathlib.Path(repo_path).expanduser().resolve()
 
-        state_root = _load_state_root_from_repo_config(repo)
-        tier = "repo_config_state_dir" if state_root is not None else None
+        if state_dir is not None:
+            state_root = pathlib.Path(state_dir).expanduser().resolve()
+            tier = "explicit_state_dir"
+        else:
+            state_root = _load_state_root_from_repo_config(repo)
+            tier = "repo_config_state_dir" if state_root is not None else None
 
-        if state_root is None:
-            state_root, tier = _resolve_state_root(repo=repo)
-
-        logger.info("state_handle_state_root_resolved", extra={"repo": str(repo), "tier": tier})
+            if state_root is None:
+                state_root, tier = _resolve_state_root(repo=repo)
 
         repo_state = state_root / "repos" / cls.repo_id(repo)
         reports_dir = repo_state / "reports"
         dashboard_dir = repo_state / "dashboard"
         alc_agents_root = repo_state / "alc-agents"
+
+        logger.info("state_handle_state_root_resolved", extra={"repo": str(repo), "tier": tier})
 
         return cls(
             repo=repo,
@@ -258,6 +381,41 @@ def repo_state_dir(
 ) -> pathlib.Path:
     resolved, _ = _resolve_repo_state_dir(repo, state_dir, personal, user)
     return resolved
+
+
+def validate_read_scope(scope: str) -> ReadScope:
+    return StateHandle.validate_read_scope(scope)
+
+
+def user_scope(user_root: str | pathlib.Path | None = None) -> UserScope:
+    return StateHandle.user_scope(user_root)
+
+
+def user_reports_dir(user_root: str | pathlib.Path | None = None) -> pathlib.Path:
+    return StateHandle.user_reports_dir(user_root)
+
+
+def event_write_target(
+    *,
+    repo: str | pathlib.Path | None = None,
+    state: StateHandle | None = None,
+    state_root: str | pathlib.Path | None = None,
+    background_root: str | pathlib.Path | None = None,
+) -> EventWriteTarget:
+    return StateHandle.event_write_target(
+        repo=repo,
+        state=state,
+        state_root=state_root,
+        background_root=background_root,
+    )
+
+
+def project_state(
+    repo: str | pathlib.Path,
+    *,
+    state_dir: str | pathlib.Path | None = None,
+) -> StateHandle:
+    return StateHandle.project_state(repo, state_dir=state_dir)
 
 
 # --- durable-write primitives ------------------------------------------------

@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -35,19 +34,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def _state_handle(repo: Path | None, state: Path | None) -> StateHandle:
     if repo is None and state is None:
         raise ValueError("either --repo or --state must be supplied")
-
     if state is None:
         return StateHandle.for_repo(repo)
-
-    previous = os.environ.get("AGENT_LEARNING_STATE_DIR")
-    os.environ["AGENT_LEARNING_STATE_DIR"] = str(state.resolve())
-    try:
-        return StateHandle.for_repo(repo or Path.cwd())
-    finally:
-        if previous is None:
-            os.environ.pop("AGENT_LEARNING_STATE_DIR", None)
-        else:
-            os.environ["AGENT_LEARNING_STATE_DIR"] = previous
+    return StateHandle.for_repo(repo or Path.cwd(), state_dir=state)
 
 
 def _read_recommendations(state: StateHandle) -> list[dict[str, Any]]:

@@ -1,9 +1,11 @@
 # Dashboard Migration Decision
 
-Decision: keep the existing `dashboard/` FastAPI + React surface and the newer `skills/alc-dashboard/` stdlib `http.server` surface coexisting for MVP.
+Decision: keep the FastAPI + React dashboard as the canonical rich local UI, and keep `skills/alc-dashboard/` as the no-Node, read-only fallback.
 
-Why: `skills/alc-dashboard/` adopts the read-only model required by R13 and is suitable for agent-native browsing of ALC artifacts. The existing `dashboard/` still owns the `muted-domains.json` workflow from R5, so deleting it now would remove an operator capability that has not been ported.
+The shared read boundary is `bin/dashboard_read_model.py`. FastAPI `/api/data`, `bin/render_dashboard`, and the stdlib fallback consume that module; project-scoped reads route through `bin/alc_query.py` or `StateHandle`.
 
-Muted domains preservation plan: preserve `dashboard/actions.py` atomic-write semantics for `muted-domains.json`. The stdlib dashboard remains read-only and must not modify `muted-domains.json`.
+Mutable dashboard behavior stays outside the read model. Promote, unpromote, mute, unmute, distill jobs, job status, and latest-report serving remain in the FastAPI shell/action layer until Proposal Lifecycle is implemented.
 
-Migration timeline: after MVP, a follow-up unit will measure usage and, if the stdlib surface stabilizes, port the muted-domain behavior into `skills/alc-dashboard/` with equivalent atomic writes. After that port is verified, delete the legacy `dashboard/` surface.
+The stdlib dashboard remains GET-only. It may render recommendations, patches, apply logs, gates, insights, suggestions, and diagnostics from the shared read model, but it must not grow FastAPI action parity or write `muted-domains.json`.
+
+Migration direction: future dashboard work should widen the shared read model and React components, not delete the FastAPI/React surface. Proposal Lifecycle remains the next architecture item for write/propose consolidation.

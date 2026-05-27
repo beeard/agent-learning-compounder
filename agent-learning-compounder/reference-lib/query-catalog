@@ -13,3 +13,4 @@ Generated from Python registry:
 | UQ6 | read | Summarize actor-kind counts by time window | alc_query.get_actor_summary | 1 |
 | UQ7 | read | Read historical skill invocations by actor | alc_query.get_skill_invocation_history | 1 |
 | UQ8 | read | Aggregate actor_name counts in indexed events (skill usage) | alc_query.get_skill_usage_summary | 1 |
+| UQ9 | read | Read dashboard suggestions artifact rows | alc_query.get_suggestions | 1 |
