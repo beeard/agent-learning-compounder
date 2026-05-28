@@ -1,5 +1,8 @@
 # Bootstrap wiring audit — 2026-05-27
 
+> Historical status: superseded by current bootstrap/release controls and kept
+> as dated investigation evidence, not current product truth.
+
 > Trace what install / `alc_init` / `init_learning_system` / `refresh_learning_state`
 > actually run today vs what the learning loop needs to run on a fresh install,
 > driven by Tom's note that the "init refresh" used to backfill everything and

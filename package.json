@@ -36,6 +36,8 @@
     "scripts/sanitize_skill_tree.sh",
     "scripts/build_release.sh",
     "agent-learning-compounder/",
+    "!agent-learning-compounder/assets/_*.html",
+    "!agent-learning-compounder/assets/_*.png",
     ".claude-plugin/marketplace.json",
     "README.md",
     "CHANGES.md",

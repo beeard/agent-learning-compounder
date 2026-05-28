@@ -70,6 +70,12 @@ class ReleaseLayoutTests(unittest.TestCase):
             survivor_dir.mkdir(parents=True, exist_ok=True)
             survivor_file = survivor_dir / "keep.txt"
             survivor_file.write_text("keep", encoding="utf-8")
+            asset_source = root / "assets" / "_preview.html"
+            asset_source.parent.mkdir(parents=True, exist_ok=True)
+            asset_source.write_text("preview", encoding="utf-8")
+            template_partial = root / "dashboard" / "templates" / "_gates.html"
+            template_partial.parent.mkdir(parents=True, exist_ok=True)
+            template_partial.write_text("template", encoding="utf-8")
 
             command = (
                 f". {REPO_ROOT / 'scripts' / 'sanitize_skill_tree.sh'} && "
@@ -90,6 +96,8 @@ class ReleaseLayoutTests(unittest.TestCase):
             ]
             self.assertEqual(leaked, [])
             self.assertTrue(survivor_file.exists())
+            self.assertFalse(asset_source.exists())
+            self.assertTrue(template_partial.exists())
 
     def test_package_and_manifest_policy_match_layout_module(self) -> None:
         package = _json(REPO_ROOT / "package.json")
@@ -111,6 +119,9 @@ class ReleaseLayoutTests(unittest.TestCase):
         self.assertIn("install.sh", rendered)
         self.assertIn("agent-learning-compounder/AGENTS.md", rendered)
         self.assertNotIn("docs/dev/architecture-review-closeout-2026-05-27.md", rendered)
+        self.assertFalse(any(path.startswith("docs/plans/") for path in rendered))
+        self.assertFalse(any(path.startswith("docs/history/") for path in rendered))
+        self.assertFalse(any(path.startswith("docs/decisions/") for path in rendered))
         self.assertFalse(any("__pycache__" in path for path in rendered))
         self.assertFalse(any(path.endswith(".pyc") for path in rendered))
         self.assertFalse(any("/.pytest_cache/" in path for path in rendered))

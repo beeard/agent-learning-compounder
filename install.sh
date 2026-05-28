@@ -6,19 +6,20 @@ usage() {
 Install agent-learning-compounder.
 
 Usage:
-  ./install.sh                                            (zero-config: detect runtime, verify)
+  ./install.sh                                            (global install: detect runtime, verify)
   ./install.sh [--codex|--codex-home|--claude|--plugin|--target DIR] [--runtime codex|claude|all|auto] [--verify]
   ./install.sh --bootstrap-repo DIR [--runtime codex|claude|all|auto] [--verify] [--apply-runtime-hooks]
 
-Zero-config behavior (when no runtime/target flag is passed and
+Zero-argument global install behavior (when no runtime/target flag is passed and
 AGENT_LEARNING_RUNTIME is unset):
   - Detect runtime from filesystem (~/.claude/ vs ~/.agents/);
     prompt once if both are present, default to codex if neither.
   - Run --verify automatically.
+  - Does not run --bootstrap-repo, initialize the current repo, or apply hooks.
 
 Defaults:
   --codex         Install to ${AGENTS_HOME:-$HOME/.agents}/skills
-  --runtime       auto (from AGENT_LEARNING_RUNTIME or repo instruction, then codex)
+  --runtime       auto (env/repo hints for bootstrap, then codex)
 
 Options:
   --codex                Install for Codex-compatible ~/.agents skills

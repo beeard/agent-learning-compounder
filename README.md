@@ -10,9 +10,9 @@
 
 [![Release](https://img.shields.io/badge/release-2026.05.27%2Breview7--plus2.3-2563eb?style=flat-square)](CHANGES.md)
 [![npm](https://img.shields.io/npm/v/agent-learning-compounder?label=npm&color=cb3837&style=flat-square)](https://www.npmjs.com/package/agent-learning-compounder)
-[![MCP](https://img.shields.io/badge/MCP-12_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
+[![MCP](https://img.shields.io/badge/MCP-20_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
 [![License](https://img.shields.io/badge/license-MIT-15803d?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-363_smoke_%2B_251_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
+[![Tests](https://img.shields.io/badge/tests-529_smoke_%2B_289_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
 
 <br/>
 
@@ -62,7 +62,8 @@ npx agent-learning-compounder \
   --bootstrap-repo "$PWD" --verify
 ```
 
-Anyone with Node 18+. Zero-config, auto-detects Codex vs Claude Code.
+Anyone with Node 18+. Repo bootstrap uses env/repo runtime hints and defaults
+to Codex; pass `--runtime claude` or `--runtime all` when you need that target.
 
 </td>
 <td width="33%" valign="top">
@@ -99,6 +100,21 @@ Hooks + MCP + slash commands wired automatically.
 </table>
 
 All three pass the same end-to-end validation suite. See [`docs/QUICKSTART.md`](docs/QUICKSTART.md) for the walk-through.
+
+Install modes are deliberately separate:
+
+```bash
+./install.sh
+# zero-argument global runtime install; detects ~/.claude/ vs ~/.agents/,
+# verifies, and prints repo-init commands. It does not bootstrap the current repo
+# or apply repo runtime hooks.
+
+./install.sh --bootstrap-repo "$PWD" --runtime codex --verify
+./install.sh --bootstrap-repo "$PWD" --runtime claude --verify
+./install.sh --bootstrap-repo "$PWD" --runtime all --verify
+# repo bootstrap; `--runtime auto` uses env/repo hints, not filesystem detection.
+# Add --apply-runtime-hooks only after reviewing the dry-run hook plan.
+```
 
 <br/>
 
@@ -146,7 +162,7 @@ Agent:  → mcp__alc__next_action(repo)
             suggest /ce-doc-review docs/plans/refactor-api.md"
 ```
 
-12 MCP tools total — read surface (`get_gates`, `get_recommendations`,
+20 MCP tools total — read surface (`get_gates`, `get_recommendations`,
 `get_skill_context`, …), propose surface (`propose_gate`, `report_outcome`),
 sandbox (`exec_sandbox`), and the new synthesiser. All auto-registered
 from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
@@ -180,8 +196,8 @@ from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 
 ```bash
 cd agent-learning-compounder
-python3 -m unittest discover -s fixtures/tests   # 251 unit + integration
-python3 -m unittest discover -s tests            # 363 post-install smoke
+python3 -m unittest discover -s fixtures/tests   # 289 unit + integration
+python3 -m unittest discover -s tests            # 529 post-install smoke
 python3 scripts/run_pressure_tests.py            # 4 durable-write gates
 ```
 

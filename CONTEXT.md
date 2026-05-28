@@ -16,14 +16,14 @@ When you change behavior, the consumer is a fresh repo that just installed
 the package. Paths, imports, and entrypoints must work from the **installed
 location**, not just from this working tree.
 
-Production version string: `2026.05.27+review7-plus2.1` (single source of
+Production version string: `2026.05.27+review7-plus2.3` (single source of
 truth in `MANIFEST.json`, mirrored to README, plugin.json, marketplace.json).
 
 ## 2. Three install paths (when each is preferred)
 
 | Path | Command | When |
 |---|---|---|
-| **npm / npx** | `npx agent-learning-compounder` | Anyone with Node 18+. Zero-config. **Symlink caveat:** npm strips symlinks on pack, so `scripts/alc-install.mjs` materializes the `.py` aliases as file copies at install. Other paths preserve symlinks. |
+| **npm / npx** | `npx agent-learning-compounder` | Anyone with Node 18+. Repo bootstrap uses env/repo runtime hints and defaults to Codex. **Symlink caveat:** npm strips symlinks on pack, so `scripts/alc-install.mjs` materializes the `.py` aliases as file copies at install. Other paths preserve symlinks. |
 | **curl one-liner** | `curl -fsSL https://raw.githubusercontent.com/beeard/agent-learning-compounder/master/bootstrap.sh \| sh` | No Node. Just `curl` + `tar`. Fetches master tarball, exec's `install.sh`. |
 | **Claude Code marketplace** | `/plugin marketplace add beeard/agent-learning-compounder` then `/plugin install agent-learning-compounder@agent-learning-compounder` | Claude Code users who want hooks + MCP + slash commands wired automatically. |
 | Git clone (legacy) | `git clone … && ./agent-learning-compounder/install.sh` | Full source for inspection / contribution. |
@@ -34,6 +34,20 @@ suite. Forward any `install.sh` flag through `npx` / curl pipe:
 ```bash
 npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
 ```
+
+Keep install modes distinct:
+
+- zero-argument `./install.sh` is a global runtime install. It detects
+  `${CLAUDE_HOME:-~/.claude}` and `${AGENTS_HOME:-~/.agents}`, runs verify, and
+  prints repo-init commands. It does not run `--bootstrap-repo`, initialize the
+  current repo, or apply repo runtime hooks.
+- repo bootstrap uses `--bootstrap-repo "$PWD"` and `--runtime codex|claude|all`.
+  `--runtime auto` uses env/repo hints before defaulting to Codex; it is not
+  filesystem detection.
+- runtime hook writes need `--apply-runtime-hooks`; the default bootstrap hook
+  path is dry-run.
+- `alc_init` can smoke `alc_mcp`, but optional MCP dependencies require
+  `--install-deps` or a separate install. Bootstrap does not register Codex MCP.
 
 Runtime target selection for these paths is owned by
 `agent-learning-compounder/bin/runtime_topology.py`: user-global Codex/Claude
@@ -67,8 +81,8 @@ symlinks.
 ## 4. Two test directories (different purposes)
 
 ```
-agent-learning-compounder/tests/              ← post-install smoke (small, ~219 tests)
-agent-learning-compounder/fixtures/tests/     ← unit + integration (29 files, ~251 tests)
+agent-learning-compounder/tests/              ← post-install smoke (small, ~529 tests)
+agent-learning-compounder/fixtures/tests/     ← unit + integration (29 files, ~289 tests)
 ```
 
 The `fixtures/` prefix on the second one reflects co-location with
@@ -176,7 +190,7 @@ implement against the ID.
 |---|---|---|
 | Analyst queries | Q1–Qn | `bin/analyst_queries.py::QUERY_SPECS`; mirror: `reference-lib/analyst-queries-catalog` |
 | Generators (patch and suggestion emitters) | G1–Gn | `bin/recommender_generators.py::GENERATORS`; mirrors: `reference-lib/generator-catalog`, `skills/alc-core/references/generator-catalog.md` |
-| MCP tools | M1–M20 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
+| MCP tools | M1-M20 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | `reference-lib/propose-catalog` |
 | Hermes-DSL targets | `skill` / `agent` / `command` / `hook` | `reference-lib/hermes-dsl-spec` |
 

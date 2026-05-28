@@ -1,5 +1,8 @@
 # Dashboard surface audit — 2026-05-27
 
+> Historical status: superseded by the current dashboard read-model work and
+> kept as dated investigation evidence, not current product truth.
+
 ALC ships **three dashboard surfaces** that look superficially similar but
 have radically different shapes, data flows, and lifecycles. This audit
 covers what each actually does, where its data comes from, what overlaps,

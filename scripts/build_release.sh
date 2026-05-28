@@ -11,7 +11,7 @@
 # numeric ownership, and a gzip header with no embedded timestamp.
 #
 # Usage:
-#   ./scripts/build_release.sh [--version X]
+#   ./scripts/build_release.sh [--version X] [--source-ref REF]
 #
 # Version defaults to MANIFEST.json["version"].
 # Requires: GNU tar, zip, gzip, python3.
@@ -26,12 +26,22 @@ cd "$repo_root"
 . "$script_dir/sanitize_skill_tree.sh"
 
 version=""
+source_ref="HEAD"
+local_experiment="${ALC_ALLOW_DIRTY_RELEASE:-0}"
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --version)
       shift
       [ "$#" -gt 0 ] || { echo "--version requires a value" >&2; exit 2; }
       version="$1"
+      ;;
+    --source-ref)
+      shift
+      [ "$#" -gt 0 ] || { echo "--source-ref requires a value" >&2; exit 2; }
+      source_ref="$1"
+      ;;
+    --local-experiment)
+      local_experiment=1
       ;;
     -h|--help)
       sed -n 's/^# \{0,1\}//;3,18p' "$0"
@@ -60,16 +70,15 @@ command -v zip >/dev/null 2>&1 || { echo "zip required" >&2; exit 1; }
 command -v sha256sum >/dev/null 2>&1 || { echo "sha256sum required" >&2; exit 1; }
 
 release_layout_py="$repo_root/agent-learning-compounder/bin/release_layout.py"
+release_manifest_py="$repo_root/agent-learning-compounder/bin/release_manifest.py"
 top_files=$(python3 "$release_layout_py" --shell top-files)
 top_dirs=$(python3 "$release_layout_py" --shell top-dirs)
 build_pruned_paths=$(python3 "$release_layout_py" --shell build-pruned-paths)
 
-for f in $top_files; do
-  [ -e "$repo_root/$f" ] || { echo "missing $f at repo root" >&2; exit 1; }
-done
-for d in $top_dirs; do
-  [ -d "$repo_root/$d" ] || { echo "missing $d/ at repo root" >&2; exit 1; }
-done
+if [ "$local_experiment" != 1 ]; then
+  command -v git >/dev/null 2>&1 || { echo "git required for publishable release source materialization" >&2; exit 1; }
+  python3 "$release_manifest_py" check-source-clean --repo-root "$repo_root"
+fi
 
 name="agent-learning-compounder-$version"
 dist_dir="$repo_root/dist"
@@ -81,16 +90,32 @@ trap 'rm -rf "$stage"' EXIT
 stage_root="$stage/$name"
 mkdir -p "$stage_root"
 
+if [ "$local_experiment" = 1 ]; then
+  source_root="$repo_root"
+else
+  source_root="$stage/source"
+  mkdir -p "$source_root"
+  git archive --format=tar "$source_ref" | tar -xf - -C "$source_root"
+fi
+
 for f in $top_files; do
-  cp -a "$repo_root/$f" "$stage_root/$f"
+  [ -e "$source_root/$f" ] || { echo "missing $f at source root" >&2; exit 1; }
 done
 for d in $top_dirs; do
-  cp -a "$repo_root/$d" "$stage_root/$d"
+  [ -d "$source_root/$d" ] || { echo "missing $d/ at source root" >&2; exit 1; }
 done
 
-# Strip __pycache__, .pytest_cache, .agent-learning, *.pyc, *.pyo,
-# .agent-learning.json. Same exclusion set install.sh enforces at install time.
-sanitize_skill_tree "$stage_root/agent-learning-compounder"
+for f in $top_files; do
+  cp -a "$source_root/$f" "$stage_root/$f"
+done
+for d in $top_dirs; do
+  cp -a "$source_root/$d" "$stage_root/$d"
+done
+
+# Strip generated/cache files from every shipped top-level path. Same exclusion
+# set install.sh enforces at install time, widened beyond the inner skill tree
+# because top-level scripts/docs are shipped too.
+sanitize_skill_tree "$stage_root"
 
 for path in $build_pruned_paths; do
   rm -rf "$stage_root/$path"
@@ -126,18 +151,26 @@ rm -f "$out_zip_tmp"
 )
 mv "$out_zip_tmp" "$out_zip"
 
-# Regenerate SHA256SUMS over every archive currently in dist/.
-# Sorted by filename so re-runs produce identical sums files.
+# Regenerate SHA256SUMS over the current release set only. Stale entries in
+# this file make release readiness ambiguous.
 sums="$dist_dir/SHA256SUMS"
 sums_tmp="$sums.tmp"
 (
   cd "$dist_dir" && \
-  ls -1 *.tar.gz *.zip 2>/dev/null | LC_ALL=C sort | \
+  printf '%s\n' "$name.tar.gz" "$name.zip" | LC_ALL=C sort | \
   while IFS= read -r entry; do
     sha256sum "$entry"
   done
 ) > "$sums_tmp"
 mv "$sums_tmp" "$sums"
+
+if [ "$local_experiment" = 1 ]; then
+  echo "local experiment build: skipped publishable release-manifest source commit inventory" >&2
+elif command -v npm >/dev/null 2>&1; then
+  python3 "$release_manifest_py" write --dist "$dist_dir" --version "$version" --source-ref "$source_ref" >/dev/null
+else
+  echo "npm not found; skipped release-manifest npm inventory" >&2
+fi
 
 echo "built:"
 echo "  $out_tar"

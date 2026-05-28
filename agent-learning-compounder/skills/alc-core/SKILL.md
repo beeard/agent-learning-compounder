@@ -1,6 +1,6 @@
 ---
 name: alc-core
-description: This skill should be used when the user asks to "initialize agent learning", "set up alc", "run the learning report", "distill sessions", "build a baseline", "extract gates", "compile durable memory", "evaluate skill impact", "review approved gates", "propose a gate", "report an outcome", or any variant referencing the agent-learning-compounder pipeline. Use it whenever work touches `.agent-learning.json`, `latest-approved-gates.md`, `latest-skill-context.md`, the MCP tools M1–M18, hook telemetry, or the durable-write pressure tests. Also use whenever a fresh session enters an ALC-initialized repo, before forming opinions about the repo's state — the skill defines the read-only operating contract (KTD-21 read/write seams, synthesis discipline, three-tier progressive disclosure) every agent must follow before invoking the read or propose surfaces.
+description: This skill should be used when the user asks to "initialize agent learning", "set up alc", "run the learning report", "distill sessions", "build a baseline", "extract gates", "compile durable memory", "evaluate skill impact", "review approved gates", "propose a gate", "report an outcome", or any variant referencing the agent-learning-compounder pipeline. Use it whenever work touches `.agent-learning.json`, `latest-approved-gates.md`, `latest-skill-context.md`, the MCP tools M1-M20, hook telemetry, or the durable-write pressure tests. Also use whenever a fresh session enters an ALC-initialized repo, before forming opinions about the repo's state — the skill defines the read-only operating contract (KTD-21 read/write seams, synthesis discipline, three-tier progressive disclosure) every agent must follow before invoking the read or propose surfaces.
 ---
 
 # Agent Learning Compounder
@@ -58,6 +58,22 @@ python3 ../../bin/init_learning_system.py \
 Use a matching `install.sh` target first if this repo does not already have the
 skill installed in the active runtime root.
 
+Install boundary notes:
+
+- zero-argument `./install.sh` is a global runtime install. It uses filesystem
+  detection for `${CLAUDE_HOME:-~/.claude}` and `${AGENTS_HOME:-~/.agents}`,
+  verifies, and prints repo-init commands; it does not bootstrap the current
+  repo or apply runtime hooks.
+- `./install.sh --bootstrap-repo "$PWD" --runtime codex|claude|all --verify`
+  is the repo bootstrap path. `--runtime auto` uses env/repo hints before
+  defaulting to Codex; it is not filesystem detection.
+- Runtime hook writes require `--apply-runtime-hooks`; bootstrap otherwise
+  leaves a dry-run hook plan.
+- `bin/alc_init` can smoke `alc_mcp`, but optional MCP dependencies require
+  `--install-deps` or a separate dependency install. Bootstrap does not register Codex MCP.
+  Dashboard React bundling is best-effort and falls back to static HTML if
+  `pnpm` is missing or the build fails.
+
 ## Lifecycle
 
 - **Uninstall**: remove the installed skill package directory and delete
@@ -112,7 +128,7 @@ JSONL reads/writes inline.
 
 ### MCP tools
 
-The `alc` MCP server exposes 18 stdio tools (M1–M18) plus a `list_capabilities`
+The `alc` MCP server exposes 20 stdio tools (M1-M20) plus a `list_capabilities`
 meta tool. The authoritative catalog lives at `alc_mcp/catalog.py::MCP_TOOLS`
 and is mirrored for humans at `references/mcp-catalog.md`. Call
 `list_capabilities(repo)` first and compare `version` / `min_compatible_version`
@@ -140,9 +156,9 @@ For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
 ### First-run profiler
 
 - `bin/alc_init` — per-repo bootstrap profiler. Detects the host repo's
-  language/framework profile, ensures MCP dependencies are installed, smokes
-  the MCP server, and renders the per-session `latest-session-context.md`
-  surface future agents load on entry.
+  language/framework profile, can install optional MCP dependencies with
+  `--install-deps`, smokes the MCP server when available, and renders the
+  per-session `latest-session-context.md` surface future agents load on entry.
 
 ### Pipeline stages (manual invocation)
 
@@ -193,7 +209,7 @@ individual subsystems — load these when working inside that subsystem.
 ### Contract indexes (load to verify a seam)
 
 - `references/mcp-catalog.md` — mirror of `alc_mcp/catalog.py::MCP_TOOLS`. The
-  18 MCP tools (M1–M18) and their backings.
+  20 MCP tools (M1-M20) and their backings.
 - `references/capability-map.md` — every user action mapped to dashboard
   section, slash command, MCP tool, and CLI invocation.
 - `references/capability-parity.md` — every M-ID mapped to its query / propose

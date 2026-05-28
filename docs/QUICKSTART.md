@@ -1,9 +1,11 @@
 # Quickstart
 
 Get `agent-learning-compounder` installed and wired into a project in
-**one command**. The installer auto-detects your runtime (Codex / Claude
-Code) and runs `alc init` to profile your repo, smoke-test MCP, and write
-the first session-context.
+**one command**. Repo bootstrap uses deterministic runtime resolution:
+`AGENT_LEARNING_RUNTIME`, repo hints in `AGENTS.md` / `CLAUDE.md` /
+`GEMINI.md`, then Codex by default. It runs `alc_init` to profile your repo,
+smoke-test MCP when optional deps are available, and write the first
+session-context.
 
 ## What you need (one-time check)
 
@@ -14,6 +16,22 @@ the first session-context.
 ## Install — pick the path that fits
 
 Run from inside the project you want to wire up.
+
+Command matrix:
+
+```bash
+./install.sh
+# zero-argument `./install.sh`: global runtime install only. It detects
+# ${CLAUDE_HOME:-~/.claude} and ${AGENTS_HOME:-~/.agents}, verifies, and prints
+# repo-init commands. It does not run --bootstrap-repo, initialize the current
+# repo, or apply repo runtime hooks.
+
+./install.sh --bootstrap-repo "$PWD" --runtime codex --verify
+./install.sh --bootstrap-repo "$PWD" --runtime claude --verify
+./install.sh --bootstrap-repo "$PWD" --runtime all --verify
+# `--runtime auto` uses env/repo hints, not filesystem detection.
+# Add --apply-runtime-hooks to write hooks after reviewing the dry-run plan.
+```
 
 ### npm / npx (recommended)
 
@@ -50,14 +68,18 @@ git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
 
 Any of the four paths above will:
 
-- Install the skill into the right runtime root (auto-detects `~/.agents/` vs
-  `~/.claude/`; pick explicitly with `--runtime codex|claude`).
+- Install the skill into the selected repo-local runtime root. Pick explicitly
+  with `--runtime codex|claude|all`; `--runtime auto` uses env/repo hints.
 - Run the packaged test suite (`--verify`) — about a minute.
 - Create `.agent-learning.json` at your project root and `.agent-learning/`
   for local state.
 - Run `alc_init` to profile the host repo (frameworks, languages, tests),
-  smoke the MCP server, check the doc contract, and write
-  `latest-session-context.md`.
+  smoke the MCP server when optional MCP dependencies are installed, check the
+  doc contract, and write `latest-session-context.md`.
+- Build dashboard React assets best-effort when `pnpm` is available; fallback
+  HTML remains usable when the build is skipped or fails.
+- It does not register Codex MCP. Register the MCP server separately in Codex
+  when you want that host to load it.
 
 ## Did it work?
 
@@ -67,8 +89,8 @@ If both files exist in your project, you're done:
 ls -la .agent-learning.json .agent-learning/
 ```
 
-You should also see a final line in the installer output that says
-`self-test passed` (or similar).
+You should also see successful bootstrap output from `init_learning_system.py`
+and a final `bootstrapped agent-learning-compounder into: ...` line.
 
 ## What now?
 

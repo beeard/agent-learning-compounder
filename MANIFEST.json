@@ -56,7 +56,12 @@
     "*.pyc",
     "*.pyo",
     ".agent-learning.json",
+    "agent-learning-compounder/assets/_*.html",
+    "agent-learning-compounder/assets/_*.png",
     "docs/dev",
+    "docs/plans",
+    "docs/history",
+    "docs/decisions",
     "review-patches.diff",
     "runtime state"
   ]

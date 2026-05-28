@@ -1,5 +1,8 @@
 # ALC data-pipeline audit — 2026-05-27
 
+> Historical status: superseded by the current runtime/state/refresh refactor
+> sequence and kept as dated investigation evidence, not current product truth.
+
 > Trace every link from hook firing through analyst surfaces, against the real
 > 1.2 MB / 4309-row corpus at
 > `/home/tth/work/active/agent-learning-compounder/.agent-learning/repos/agent-learning-compounder-45819fdf8f74/`.

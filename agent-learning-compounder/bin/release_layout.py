@@ -26,6 +26,9 @@ SHIPPED_TOP_LEVEL_DIRS = (
 
 BUILD_PRUNED_PATHS = (
     "docs/dev",
+    "docs/plans",
+    "docs/history",
+    "docs/decisions",
 )
 
 SANITIZER_DIR_EXCLUSIONS = (
@@ -42,6 +45,13 @@ SANITIZER_FILE_EXCLUSIONS = (
     ".agent-learning.json",
 )
 
+SANITIZER_PATH_EXCLUSIONS = (
+    "agent-learning-compounder/assets/_*.html",
+    "agent-learning-compounder/assets/_*.png",
+    "assets/_*.html",
+    "assets/_*.png",
+)
+
 MANIFEST_EXCLUDED_FROM_PACKAGE = (
     "__pycache__",
     ".pytest_cache",
@@ -51,7 +61,12 @@ MANIFEST_EXCLUDED_FROM_PACKAGE = (
     "*.pyc",
     "*.pyo",
     ".agent-learning.json",
+    "agent-learning-compounder/assets/_*.html",
+    "agent-learning-compounder/assets/_*.png",
     "docs/dev",
+    "docs/plans",
+    "docs/history",
+    "docs/decisions",
     "review-patches.diff",
     "runtime state",
 )
@@ -76,6 +91,8 @@ NPM_FILES = (
     "scripts/sanitize_skill_tree.sh",
     "scripts/build_release.sh",
     "agent-learning-compounder/",
+    "!agent-learning-compounder/assets/_*.html",
+    "!agent-learning-compounder/assets/_*.png",
     ".claude-plugin/marketplace.json",
     "README.md",
     "CHANGES.md",
@@ -101,8 +118,11 @@ def is_sanitizer_excluded(relative_path: pathlib.Path | str) -> bool:
     parts = _normalized_parts(relative_path)
     if any(part in SANITIZER_DIR_EXCLUSIONS for part in parts):
         return True
-    name = pathlib.PurePosixPath(str(relative_path)).name
-    return any(fnmatch.fnmatch(name, pattern) for pattern in SANITIZER_FILE_EXCLUSIONS)
+    path = pathlib.PurePosixPath(str(relative_path)).as_posix()
+    name = pathlib.PurePosixPath(path).name
+    return any(fnmatch.fnmatch(name, pattern) for pattern in SANITIZER_FILE_EXCLUSIONS) or any(
+        fnmatch.fnmatch(path, pattern) for pattern in SANITIZER_PATH_EXCLUSIONS
+    )
 
 
 def is_release_excluded(relative_path: pathlib.Path | str) -> bool:

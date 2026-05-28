@@ -6,6 +6,18 @@ Close the warm-loop seam — `replay_hook_events` → `index_events` — into
 the install bootstrap and the Stop hook. A fresh install lands with a
 populated `events.sqlite` and stays populated without operator action.
 
+Release-control follow-up in this source line:
+
+- `scripts/build_release.sh` now sanitizes the whole staged release tree,
+  not just the inner skill directory, and writes `SHA256SUMS` for the current
+  release set only.
+- Release readiness now has explicit helpers for extracted tar/zip checks,
+  npm pack inspection, per-file release manifests, source-clean gating, and
+  docs freshness.
+- Install docs now distinguish zero-argument global install filesystem
+  detection from `--bootstrap-repo --runtime auto` env/repo resolution, with
+  hook writes kept behind `--apply-runtime-hooks`.
+
 - New `bin/alc_bootstrap_pipeline` — single orchestrator for the chain.
   Called from `install.sh --bootstrap-repo` (after `alc_init`) and from
   the runtime Stop hook. Idempotent: replay is full each run, the

@@ -19,4 +19,5 @@ sanitize_skill_tree() {
   fi
   find "$root" \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.agent-learning' -o -name 'node_modules' -o -name 'dist' \) -type d -prune -exec rm -rf {} +
   find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
+  find "$root" \( -path '*/assets/_*.html' -o -path '*/assets/_*.png' \) -type f -exec rm -f {} +
 }

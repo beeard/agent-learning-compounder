@@ -278,6 +278,27 @@ class InstallTargetTests(unittest.TestCase):
         self.assertIn("spawnSync(installSh, process.argv.slice(2)", npm_wrapper)
         self.assertIn('exec "$tmp/install.sh" "$@"', bootstrap)
 
+    def test_install_docs_distinguish_zero_arg_and_bootstrap_auto(self) -> None:
+        docs = "\n".join(
+            [
+                (ROOT / "README.md").read_text(encoding="utf-8"),
+                (ROOT / "docs" / "QUICKSTART.md").read_text(encoding="utf-8"),
+                (ROOT / "docs" / "llm-install-prompt.md").read_text(encoding="utf-8"),
+            ]
+        )
+
+        self.assertIn("zero-argument `./install.sh`", docs)
+        self.assertIn("global runtime install", docs)
+        self.assertIn("`--runtime auto` uses env/repo hints", docs)
+        self.assertIn("--apply-runtime-hooks", docs)
+        self.assertNotRegex(docs, r"--bootstrap-repo[\s\S]{0,180}auto-detects `?~/.agents")
+
+    def test_skill_docs_call_out_optional_dependency_boundaries(self) -> None:
+        skill = (ROOT / "agent-learning-compounder" / "skills" / "alc-core" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("--install-deps", skill)
+        self.assertIn("best-effort", skill)
+        self.assertIn("does not register Codex MCP", skill)
+
 
 if __name__ == "__main__":
     unittest.main()

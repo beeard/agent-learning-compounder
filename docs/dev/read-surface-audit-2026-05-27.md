@@ -1,5 +1,8 @@
 # Read-surface audit — 2026-05-27
 
+> Historical status: superseded by the current read-model/refactor sequence and
+> kept as dated investigation evidence, not current product truth.
+
 Scope: every MCP read tool, every `alc_query.py` function, the propose seam,
 the `next_action` synthesizer, `render_state_surface`, `alc_init`'s runtime
 synthesis, and the two dashboards. Exercised against the populated state at
