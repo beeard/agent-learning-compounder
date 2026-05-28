@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 import datetime as dt
+from collections import Counter
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 BIN_DIR = REPO_ROOT / "bin"
@@ -496,7 +497,8 @@ class AnalystQueriesTests(unittest.TestCase):
             analyst_queries.open_events_db(mismatch_state)
 
     def test_q_shapes_match_catalog(self) -> None:
-        with sqlite3.connect(self.state.events_sqlite) as conn:
+        conn = sqlite3.connect(self.state.events_sqlite)
+        try:
             conn.row_factory = sqlite3.Row
             for query in analyst_queries.QUERIES:
                 query_id = str(query["id"])
@@ -505,6 +507,99 @@ class AnalystQueriesTests(unittest.TestCase):
                 self.assertTrue(rows, f"query {query_id} should return at least one row")
                 shape = set(query["shape"])
                 self.assertTrue(shape.issubset(set(rows[0].keys())), f"query {query_id} shape mismatch")
+        finally:
+            conn.close()
+
+    def test_catalog_ids_are_unique_and_sequential(self) -> None:
+        ids = [str(query["id"]) for query in analyst_queries.QUERIES]
+        counts = Counter(ids)
+        duplicates = sorted(query_id for query_id, count in counts.items() if count > 1)
+        self.assertEqual(duplicates, [])
+
+        numbers = sorted(int(query_id[1:]) for query_id in ids)
+        self.assertEqual(numbers, list(range(1, max(numbers) + 1)))
+
+    def test_catalog_entries_have_required_contract(self) -> None:
+        required = {"id", "name", "question", "sql", "shape", "consumers", "backing"}
+        for query in analyst_queries.QUERIES:
+            missing = required - set(query)
+            self.assertEqual(missing, set(), f"{query.get('id')} missing {missing}")
+            self.assertTrue(query["shape"], f"{query['id']} needs output shape")
+            self.assertTrue(query["consumers"], f"{query['id']} needs consumers")
+            self.assertTrue(callable(query["backing"]), f"{query['id']} needs callable backing")
+
+    def test_legacy_q_constants_are_public_catalog_entries(self) -> None:
+        self.assertIs(analyst_queries.Q1, analyst_queries.QUERIES[0])
+        self.assertIs(analyst_queries.Q12, analyst_queries.QUERIES[-1])
+        self.assertIsInstance(analyst_queries.Q1, dict)
+
+    def test_dispatch_registry_matches_public_catalog(self) -> None:
+        catalog_ids = {str(query["id"]) for query in analyst_queries.QUERIES}
+        dispatch_ids = set(analyst_queries.QUERY_FUNCS)
+        self.assertEqual(dispatch_ids, catalog_ids)
+
+    def test_query_by_id_resolves_catalog_backing(self) -> None:
+        conn = sqlite3.connect(self.state.events_sqlite)
+        try:
+            conn.row_factory = sqlite3.Row
+            for query in analyst_queries.QUERIES:
+                query_id = str(query["id"])
+                kwargs = {"now": "2026-05-26T12:00:00+00:00"} if query_id == "Q9" else {}
+                self.assertEqual(
+                    analyst_queries.query_by_id(conn, query_id.lower(), **kwargs),
+                    query["backing"](conn, **kwargs),
+                )
+        finally:
+            conn.close()
+
+    def test_q11_and_q12_are_public_with_expected_shapes(self) -> None:
+        queries = {str(query["id"]): query for query in analyst_queries.QUERIES}
+        self.assertIn("Q11", queries)
+        self.assertIn("Q12", queries)
+        self.assertEqual(
+            queries["Q11"]["shape"],
+            [
+                "parent_actor",
+                "child_actor",
+                "child_model",
+                "event_count",
+                "avg_child_duration_ms",
+                "total_child_cost_usd",
+                "event_ids",
+            ],
+        )
+        self.assertEqual(
+            queries["Q12"]["shape"],
+            ["session_id", "actor_model", "sample_count", "cache_hit_ratio", "total_duration_ms"],
+        )
+        self.assertEqual(queries["Q11"]["consumers"], ["analyst_correlations", "analyst_score"])
+        self.assertEqual(queries["Q12"]["consumers"], ["analyst_correlations", "analyst_score"])
+
+    def test_q11_and_q12_dispatch_match_direct_helpers(self) -> None:
+        conn = sqlite3.connect(self.state.events_sqlite)
+        try:
+            conn.row_factory = sqlite3.Row
+            self.assertEqual(
+                analyst_queries.query_by_id(conn, "q11"),
+                analyst_queries.query_dag_parent_child_cost(conn),
+            )
+            self.assertEqual(
+                analyst_queries.query_by_id(conn, "q12"),
+                analyst_queries.query_cache_hit_ratio(conn),
+            )
+        finally:
+            conn.close()
+
+    def test_declared_consumers_are_known_analyst_scripts(self) -> None:
+        known_consumers = {
+            "analyst_anomalies",
+            "analyst_correlations",
+            "analyst_patterns",
+            "analyst_score",
+        }
+        for query in analyst_queries.QUERIES:
+            unknown = set(query["consumers"]) - known_consumers
+            self.assertEqual(unknown, set(), f"{query['id']} unknown consumers")
 
 
 if __name__ == "__main__":

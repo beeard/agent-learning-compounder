@@ -24,7 +24,12 @@ def _to_entries(obj: Any) -> list[dict[str, Any]]:
 
 
 def _safe_get(entry: dict[str, Any], name: str, default: str = "") -> Any:
-    return entry.get(name, default)
+    value = entry.get(name, default)
+    if callable(value):
+        module = getattr(value, "__module__", "")
+        name = getattr(value, "__name__", repr(value))
+        return f"{module}.{name}" if module else name
+    return value
 
 
 def _readme_header(name: str, source: str) -> str:
@@ -54,24 +59,65 @@ def _render_table(entries: list[dict[str, Any]], headers: list[str]) -> str:
     return header + sep + "\n".join(rows) + "\n"
 
 
-def _render_catalog(name: str, module_path: str, attr: str, output_path: pathlib.Path) -> tuple[str, int]:
+def _inline_code_list(values: Any) -> str:
+    if not isinstance(values, list):
+        values = list(values) if isinstance(values, tuple) else [values]
+    return ", ".join(f"`{str(value)}`" for value in values)
+
+
+def _render_analyst_queries_catalog(entries: list[dict[str, Any]]) -> str:
+    headers = ["Catalog ID", "Question", "Consumer", "SQL skeleton", "Output shape"]
+    rows: list[str] = []
+    for entry in entries:
+        sql = str(entry["sql"]).replace("|", "\\|")
+        rows.append(
+            "| "
+            + " | ".join(
+                [
+                    str(entry["id"]),
+                    str(entry["question"]),
+                    _inline_code_list(entry["consumers"]),
+                    f"`{sql}`",
+                    _inline_code_list(entry["shape"]),
+                ]
+            )
+            + " |"
+        )
+    return (
+        "# Analyst queries catalog\n"
+        "\n"
+        "| " + " | ".join(headers) + " |\n"
+        + "| " + " | ".join("---" for _ in headers) + " |\n"
+        + "\n".join(rows)
+        + "\n"
+    )
+
+
+def _render_catalog_payload(name: str, module_path: str, attr: str) -> tuple[str, int]:
     module = importlib.import_module(module_path)
     entries = _to_entries(getattr(module, attr))
     if not entries:
         raise RuntimeError(f"{module_path}.{attr} was empty or unsupported")
 
+    if module_path == "bin.analyst_queries" and attr == "QUERIES":
+        return _render_analyst_queries_catalog(entries), len(entries)
+
     headers = ["id", "kind", "summary", "backing", "version"]
     body = _render_table(entries, headers)
-    payload = _readme_header(name, f"{module_path}.{attr}") + body
+    return _readme_header(name, f"{module_path}.{attr}") + body, len(entries)
+
+
+def _render_catalog(name: str, module_path: str, attr: str, output_path: pathlib.Path) -> tuple[str, int]:
+    payload, count = _render_catalog_payload(name, module_path, attr)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(payload, encoding="utf-8")
-    return (str(output_path), len(entries))
+    return (str(output_path), count)
 
 
 def _default_specs() -> list[tuple[str, str, str, pathlib.Path]]:
     return [
         ("mcp-catalog", "alc_mcp.catalog", "MCP_TOOLS", ROOT / "skills" / "alc-core" / "references" / "mcp-catalog.md"),
-        ("query-catalog", "bin.analyst_queries", "QUERIES", ROOT / "skills" / "alc-core" / "references" / "analyst-queries-catalog.md"),
+        ("query-catalog", "bin.analyst_queries", "QUERIES", ROOT / "reference-lib" / "analyst-queries-catalog"),
         ("generator-catalog", "bin.recommender_generators", "GENERATORS", ROOT / "skills" / "alc-core" / "references" / "generator-catalog.md"),
         ("propose-catalog", "bin.analyst_queries", "PROPOSALS", ROOT / "skills" / "alc-core" / "references" / "propose-catalog.md"),
     ]

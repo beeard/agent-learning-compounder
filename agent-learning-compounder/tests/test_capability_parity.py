@@ -34,7 +34,7 @@ PARITY_PARTNERS = {
     "M7": ["alc_propose.propose_gate"],
     "M8": ["alc_propose.report_outcome"],
     "M9": ["alc_propose.report_agent_event"],
-    "M10": ["analyst_queries.QUERIES"],
+    "M10": ["analyst_queries.QUERIES", "analyst_queries.QUERY_FUNCS"],
     "M11": ["alc_next_action.next_action"],
     "M12": ["alc_query.get_apply_log"],
     "M13": ["alc_query.get_outcomes"],
@@ -73,6 +73,7 @@ class CapabilityParityTests(unittest.TestCase):
                 available[f"alc_propose.{name}"] = func
         available["recommender_generators.GENERATORS"] = recommender_generators.GENERATORS
         available["analyst_queries.QUERIES"] = analyst_queries.QUERIES
+        available["analyst_queries.QUERY_FUNCS"] = analyst_queries.QUERY_FUNCS
         available["alc_next_action"] = alc_next_action
         available["alc_next_action.next_action"] = alc_next_action.next_action
 
@@ -80,6 +81,11 @@ class CapabilityParityTests(unittest.TestCase):
             partners = PARITY_PARTNERS.get(spec.id, [])
             self.assertTrue(partners, f"missing parity partners for {spec.id}")
             self.assertTrue(any(partner in available and available[partner] for partner in partners), spec)
+
+    def test_m10_analyst_partner_covers_dispatchable_catalog(self) -> None:
+        query_ids = {str(query["id"]) for query in analyst_queries.QUERIES}
+        self.assertTrue(query_ids)
+        self.assertEqual(set(analyst_queries.QUERY_FUNCS), query_ids)
 
     def test_capability_parity_document_covers_every_mid(self) -> None:
         text = PARITY.read_text(encoding="utf-8")

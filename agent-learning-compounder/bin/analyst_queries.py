@@ -12,7 +12,10 @@ import json
 import pathlib
 import sqlite3
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
+
+QueryFunc = Callable[..., list[dict[str, Any]]]
 
 EXPECTED_SCHEMA_VERSION = 4
 EVENT_SCHEMA_COLUMNS = [
@@ -505,138 +508,172 @@ def load_samples_rows(state_handle: Any) -> list[dict[str, Any]]:
     return [row for row in rows if isinstance(row, dict)]
 
 
-Q1 = {
-    "id": "Q1",
-    "name": "Which slash-command takes longest relative to its value?",
-    "question": "Which slash-command takes longest relative to its value?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["skill", "event_name", "sample_count", "avg_duration_ms", "min_duration_ms", "max_duration_ms"],
-    "consumers": ["analyst_anomalies", "analyst_correlations"],
-}
+@dataclass(frozen=True)
+class QuerySpec:
+    id: str
+    name: str
+    question: str
+    sql: str
+    shape: tuple[str, ...]
+    consumers: tuple[str, ...]
+    backing: QueryFunc
+    kind: str = "analyst_query"
+    version: int = 1
+
+    @property
+    def backing_name(self) -> str:
+        return self.backing.__name__
+
+    def to_public(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "name": self.name,
+            "question": self.question,
+            "summary": self.question,
+            "sql": self.sql,
+            "shape": list(self.shape),
+            "consumers": list(self.consumers),
+            "backing": self.backing,
+            "backing_name": self.backing_name,
+            "version": self.version,
+        }
 
 
-Q2 = {
-    "id": "Q2",
-    "name": "Which model is overkill for which skill (high cost, high pass-rate)?",
-    "question": "Which model is overkill for which skill (high cost, high pass-rate)?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["model", "skill", "sample_count", "total_cost_usd", "avg_cost_usd", "pass_rate"],
-    "consumers": ["analyst_correlations"],
-}
+Q1 = QuerySpec(
+    id="Q1",
+    name="Which slash-command takes longest relative to its value?",
+    question="Which slash-command takes longest relative to its value?",
+    sql="SELECT actor_name AS skill, ... FROM events GROUP BY actor_name, event",
+    shape=("skill", "event_name", "sample_count", "avg_duration_ms", "min_duration_ms", "max_duration_ms"),
+    consumers=("analyst_anomalies", "analyst_correlations"),
+    backing=query_q1_longest_by_skill,
+)
 
 
-Q3 = {
-    "id": "Q3",
-    "name": "Which subagent dispatch patterns spawn most expensive subagents?",
-    "question": "Which subagent dispatch patterns spawn most expensive subagents?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["parent_actor", "child_actor", "child_model", "event_count", "avg_child_duration_ms", "total_child_cost_usd"],
-    "consumers": ["analyst_correlations"],
-}
+Q2 = QuerySpec(
+    id="Q2",
+    name="Which model is overkill for which skill (high cost, high pass-rate)?",
+    question="Which model is overkill for which skill (high cost, high pass-rate)?",
+    sql="SELECT actor_model, actor_name, ... FROM events",
+    shape=("model", "skill", "sample_count", "total_cost_usd", "avg_cost_usd", "pass_rate"),
+    consumers=("analyst_correlations",),
+    backing=query_q2_model_overkill,
+)
 
 
-Q4 = {
-    "id": "Q4",
-    "name": "Which background agents fail silently?",
-    "question": "Which background agents fail silently?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["actor", "sample_count", "error_count", "avg_duration_ms", "total_cost_usd"],
-    "consumers": ["analyst_anomalies"],
-}
+Q3 = QuerySpec(
+    id="Q3",
+    name="Which subagent dispatch patterns spawn most expensive subagents?",
+    question="Which subagent dispatch patterns spawn most expensive subagents?",
+    sql="JOIN events AS c ON c.parent_event_id = p.event_id",
+    shape=("parent_actor", "child_actor", "child_model", "event_count", "avg_child_duration_ms", "total_child_cost_usd"),
+    consumers=("analyst_correlations",),
+    backing=query_q3_dag_subagent_cost,
+)
 
 
-Q5 = {
-    "id": "Q5",
-    "name": "Which gates load at SessionStart but never get used in same session?",
-    "question": "Which gates load at SessionStart but never get used in same session?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["gate_id", "n_loaded_tools", "n_error", "pass_rate"],
-    "consumers": ["analyst_correlations"],
-}
+Q4 = QuerySpec(
+    id="Q4",
+    name="Which background agents fail silently?",
+    question="Which background agents fail silently?",
+    sql="SELECT actor_name ... WHERE actor_kind='background_agent'",
+    shape=("actor", "sample_count", "error_count", "avg_duration_ms", "total_cost_usd"),
+    consumers=("analyst_anomalies",),
+    backing=query_q4_background_failure,
+)
 
 
-Q6 = {
-    "id": "Q6",
-    "name": "What time-of-day buckets have shortest/longest sessions?",
-    "question": "What time-of-day buckets have shortest/longest sessions?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["actor_name", "hour_of_day", "session_count", "avg_session_seconds", "min_session_seconds", "max_session_seconds"],
-    "consumers": ["analyst_patterns"],
-}
+Q5 = QuerySpec(
+    id="Q5",
+    name="Which gates load at SessionStart but never get used in same session?",
+    question="Which gates load at SessionStart but never get used in same session?",
+    sql="session_start joined to same-session post_tool_use",
+    shape=("gate_id", "n_loaded_tools", "n_error", "pass_rate"),
+    consumers=("analyst_correlations",),
+    backing=query_q5_gate_effectiveness,
+)
 
 
-Q7 = {
-    "id": "Q7",
-    "name": "Which MCP servers are bottlenecks (avg duration_ms)?",
-    "question": "Which MCP servers are bottlenecks (avg duration_ms)?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["tool_server", "sample_count", "avg_duration_ms", "min_duration_ms", "max_duration_ms"],
-    "consumers": ["analyst_anomalies"],
-}
+Q6 = QuerySpec(
+    id="Q6",
+    name="What time-of-day buckets have shortest/longest sessions?",
+    question="What time-of-day buckets have shortest/longest sessions?",
+    sql="session_start/end aggregated by STRFTIME('%H', ts)",
+    shape=("actor_name", "hour_of_day", "session_count", "avg_session_seconds", "min_session_seconds", "max_session_seconds"),
+    consumers=("analyst_patterns",),
+    backing=query_q6_time_of_day_sessions,
+)
 
 
-Q8 = {
-    "id": "Q8",
-    "name": "Frustration patterns: Stop within 30s after PostToolUse(error)?",
-    "question": "Frustration patterns: Stop within 30s after PostToolUse(error)?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["stop_event_id", "session_id", "failed_tool_events_earlier_30s"],
-    "consumers": ["analyst_correlations"],
-}
+Q7 = QuerySpec(
+    id="Q7",
+    name="Which MCP servers are bottlenecks (avg duration_ms)?",
+    question="Which MCP servers are bottlenecks (avg duration_ms)?",
+    sql="GROUP BY tool_server",
+    shape=("tool_server", "sample_count", "avg_duration_ms", "min_duration_ms", "max_duration_ms"),
+    consumers=("analyst_anomalies",),
+    backing=query_q7_tool_server_bottlenecks,
+)
 
 
-Q9 = {
-    "id": "Q9",
-    "name": "Which skills have drifted (loaded freq dropped >50% over 30d)?",
-    "question": "Which skills have drifted (loaded freq dropped >50% over 30d)?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["skill", "recent_count", "prior_count", "ratio", "is_drifted"],
-    "consumers": ["analyst_patterns"],
-}
+Q8 = QuerySpec(
+    id="Q8",
+    name="Frustration patterns: Stop within 30s after PostToolUse(error)?",
+    question="Frustration patterns: Stop within 30s after PostToolUse(error)?",
+    sql="windowed post_tool_use/stop join",
+    shape=("stop_event_id", "session_id", "failed_tool_events_earlier_30s"),
+    consumers=("analyst_correlations",),
+    backing=query_q8_frustration_pairs,
+)
 
 
-Q10 = {
-    "id": "Q10",
-    "name": "Eval-loop ROI: cost of eval vs. quality of resulting recommendations?",
-    "question": "Eval-loop ROI: cost of eval vs. quality of resulting recommendations?",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["kind", "sample_count", "total_cost_usd", "avg_tokens", "failed_count"],
-    "consumers": ["analyst_correlations"],
-}
+Q9 = QuerySpec(
+    id="Q9",
+    name="Which skills have drifted (loaded freq dropped >50% over 30d)?",
+    question="Which skills have drifted (loaded freq dropped >50% over 30d)?",
+    sql="30-day / 60-day actor_name windowed counts",
+    shape=("skill", "recent_count", "prior_count", "ratio", "is_drifted"),
+    consumers=("analyst_patterns",),
+    backing=query_q9_drift,
+)
 
 
-Q11 = {
-    "id": "Q11",
-    "name": "Tool-use DAG parent-child support",
-    "question": "DAG parent-child cost attribution",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["parent_actor", "child_actor", "child_model", "event_count", "avg_child_duration_ms", "total_child_cost_usd", "event_ids"],
-    "consumers": ["analyst_correlations"],
-}
+Q10 = QuerySpec(
+    id="Q10",
+    name="Eval-loop ROI: cost of eval vs. quality of resulting recommendations?",
+    question="Eval-loop ROI: cost of eval vs. quality of resulting recommendations?",
+    sql="aggregate on event='eval_verdict'",
+    shape=("kind", "sample_count", "total_cost_usd", "avg_tokens", "failed_count"),
+    consumers=("analyst_correlations",),
+    backing=query_q10_eval_verdict_roi,
+)
 
-Q12 = {
-    "id": "Q12",
-    "name": "Cache-hit ratio by session and model",
-    "question": "Cache-hit ratio by session × model",
-    "sql": "SELECT ... FROM events ...",
-    "shape": ["session_id", "actor_model", "sample_count", "cache_hit_ratio", "total_duration_ms"],
-    "consumers": ["analyst_correlations"],
-}
 
-QUERY_FUNCS: dict[str, Callable[..., list[dict[str, Any]]]] = {
-    "Q1": query_q1_longest_by_skill,
-    "Q2": query_q2_model_overkill,
-    "Q3": query_q3_dag_subagent_cost,
-    "Q4": query_q4_background_failure,
-    "Q5": query_q5_gate_effectiveness,
-    "Q6": query_q6_time_of_day_sessions,
-    "Q7": query_q7_tool_server_bottlenecks,
-    "Q8": query_q8_frustration_pairs,
-    "Q9": query_q9_drift,
-    "Q10": query_q10_eval_verdict_roi,
-    "Q11": query_dag_parent_child_cost,
-    "Q12": query_cache_hit_ratio,
-}
+Q11 = QuerySpec(
+    id="Q11",
+    name="Tool-use DAG parent-child support",
+    question="DAG parent-child cost attribution",
+    sql="JOIN parent_map ON child.parent_event_id = parent.parent_event_id",
+    shape=("parent_actor", "child_actor", "child_model", "event_count", "avg_child_duration_ms", "total_child_cost_usd", "event_ids"),
+    consumers=("analyst_correlations", "analyst_score"),
+    backing=query_dag_parent_child_cost,
+)
+
+Q12 = QuerySpec(
+    id="Q12",
+    name="Cache-hit ratio by session and model",
+    question="Cache-hit ratio by session x model",
+    sql="GROUP BY session_id, actor_model",
+    shape=("session_id", "actor_model", "sample_count", "cache_hit_ratio", "total_duration_ms"),
+    consumers=("analyst_correlations", "analyst_score"),
+    backing=query_cache_hit_ratio,
+)
+
+QUERY_SPECS = (Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12)
+QUERY_FUNCS: dict[str, QueryFunc] = {spec.id: spec.backing for spec in QUERY_SPECS}
+QUERIES = [spec.to_public() for spec in QUERY_SPECS]
+Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10, Q11, Q12 = QUERIES
 
 def query_by_id(conn: sqlite3.Connection, query_id: str, **kwargs: Any) -> list[dict[str, Any]]:
     if not isinstance(query_id, str):
@@ -647,5 +684,4 @@ def query_by_id(conn: sqlite3.Connection, query_id: str, **kwargs: Any) -> list[
     return fn(conn, **kwargs)
 
 
-QUERIES = [Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q9, Q10]
 PROPOSALS: list[dict[str, Any]] = []

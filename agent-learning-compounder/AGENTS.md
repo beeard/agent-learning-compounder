@@ -61,6 +61,10 @@ meta tool.
   loopback validation, owner-token cleanup, and static fallback order. FastAPI,
   stdlib serving, static rendering, `state_handle.dashboard_url`, and MCP
   `get_dashboard_url` are adapters around that policy.
+- `bin/analyst_queries.py::QUERY_SPECS` owns analyst query identity, output
+  shape, consumer metadata, SQL skeleton summaries, and callable dispatch.
+  `QUERIES`, `QUERY_FUNCS`, `query_by_id()`, and
+  `reference-lib/analyst-queries-catalog` are derived or guarded mirrors.
 
 ## Operating rules
 

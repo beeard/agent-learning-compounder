@@ -11,6 +11,7 @@ if str(BIN) not in sys.path:
     sys.path.insert(0, str(BIN))
 
 import render_catalogs
+import analyst_queries
 
 
 def write_module(path: Path, body: str) -> None:
@@ -61,3 +62,17 @@ CATALOG = [
                 self.assertEqual(rendered_text, rendered_text2)
             finally:
                 del sys.path[0]
+
+    def test_analyst_catalog_render_matches_checked_in_reference(self) -> None:
+        rendered, count = render_catalogs._render_catalog_payload(
+            "query-catalog",
+            "bin.analyst_queries",
+            "QUERIES",
+        )
+        self.assertEqual(count, len(analyst_queries.QUERIES))
+        self.assertIn("| Q11 |", rendered)
+        self.assertIn("| Q12 |", rendered)
+        self.assertIn("query_dag_parent_child_cost", repr(analyst_queries.QUERY_FUNCS["Q11"]))
+
+        reference = Path(__file__).resolve().parents[1] / "reference-lib" / "analyst-queries-catalog"
+        self.assertEqual(reference.read_text(encoding="utf-8"), rendered)

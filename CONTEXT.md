@@ -162,7 +162,7 @@ implement against the ID.
 
 | Catalog | IDs | Source of truth |
 |---|---|---|
-| Analyst queries | Q1–Q10 | `reference-lib/analyst-queries-catalog` |
+| Analyst queries | Q1–Qn | `bin/analyst_queries.py::QUERY_SPECS`; mirror: `reference-lib/analyst-queries-catalog` |
 | Generators (patch emitters) | G1–G5 | `reference-lib/generator-catalog` (`bin.recommender_generators.GENERATORS`) |
 | MCP tools | M1–M20 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | `reference-lib/propose-catalog` |

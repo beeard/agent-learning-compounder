@@ -11,7 +11,7 @@
 | M7 | propose_gate | alc_propose.propose_gate | alc_propose.propose_gate |
 | M8 | report_outcome | alc_propose.report_outcome | alc_propose.report_outcome |
 | M9 | report_agent_event | alc_propose.report_agent_event | alc_propose.report_agent_event |
-| M10 | exec_sandbox | exec_sandbox.run | analyst_queries.QUERIES |
+| M10 | exec_sandbox | exec_sandbox.run | analyst_queries.QUERIES / analyst_queries.QUERY_FUNCS |
 | M11 | next_action | alc_next_action.next_action | alc_query (multi-surface synthesiser) |
 | M12 | get_apply_log | alc_query.get_apply_log | alc_query.get_apply_log (UQ1) |
 | M13 | get_outcomes | alc_query.get_outcomes | alc_query.get_outcomes (UQ2) |
