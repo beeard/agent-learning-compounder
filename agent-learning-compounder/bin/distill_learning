@@ -494,94 +494,83 @@ def render_report(
     domain_rules: list[dict] | None = None,
     domain_rules_source: pathlib.Path | None = None,
 ) -> str:
-    domain_rules = domain_rules or load_domain_rules(packaged_domain_rules_path(DEFAULT_DOMAIN_PRESET))
-    today = dt.date.today().isoformat()
-    user_messages = clean_user_messages(corpus)
-    u_lines = [message.text for message in user_messages]
-    a_lines = assistant_lines(corpus)
-    corpus_meta = meta_lines(corpus)
-    evidence = find_preference_evidence(u_lines, domain_rules)
-    checked_sources = baseline.get("source_files", []) + baseline.get("skills", [])
-    source_evidence = baseline.get("source_evidence") or [
-        {"fact": f"`{path}` exists as a repo source-of-truth file.", "source": f"{path}:1"}
-        for path in baseline.get("source_files", [])
-    ]
-    instruction_evidence = baseline.get("instruction_evidence", [])
-    skill_evidence = baseline.get("skill_evidence") or [
-        {"path": path, "source": f"{path}:1"} for path in baseline.get("skills", [])
-    ]
-    validation_evidence = baseline.get("validation_evidence") or [
-        {"command": command, "source": "package.json:1"} for command in baseline.get("validation_commands", [])
-    ]
-    map_rows = classify_events(baseline, user_messages, domain_rules)
-    if personal:
-        # Drop rows for domains the operator has muted via the dashboard.
-        muted = _load_muted_domains(personal)
-        if muted:
-            map_rows = [row for row in map_rows if row.get("domain") not in muted]
-        prior_report, level_changes = prior_report_context(personal, map_rows)
-        proposed_evergreen = evergreen_proposals(personal, baseline, u_lines)
-    else:
-        prior_report = None
-        level_changes = []
-        proposed_evergreen = []
+    from learning_report_payload import build_report_payload
 
+    payload = build_report_payload(
+        corpus,
+        baseline,
+        mode,
+        personal,
+        skill_map,
+        skill_usage,
+        skill_impact,
+        domain_rules,
+        domain_rules_source,
+    )
+    return render_markdown_report(payload)
+
+
+def render_markdown_report(payload: dict) -> str:
+    baseline_evidence = payload["baseline_evidence"]
+    memory = payload["memory_derived"]
+    rows = memory["rows"]
     lines = [
         "# Agent Learning Report",
         "",
-        f"date: {today}",
-        f"mode: {mode}",
-        f"repo: {baseline.get('repo', 'unknown')}",
+        f"date: {payload['date']}",
+        f"mode: {payload['mode']}",
+        f"repo: {payload.get('repo', 'unknown')}",
         "",
         "## confirmed_current",
     ]
-    if domain_rules_source:
+    domain_rules = payload.get("domain_rules", {})
+    if domain_rules.get("source"):
         lines.append(
-            f"- [confirmed_current] Domain rules loaded: {len(domain_rules)} rules. source: {domain_rules_source}"
+            f"- [confirmed_current] Domain rules loaded: {domain_rules.get('count', 0)} rules. source: {domain_rules['source']}"
         )
-    for item in source_evidence:
+    for item in baseline_evidence["source"]:
         lines.append(f"- [confirmed_current] {item['fact']} source: {item['source']}")
-    for bucket in ("purpose_evidence", "entrypoint_evidence", "planning_evidence", "stack_evidence", "gotcha_evidence"):
-        for item in baseline.get(bucket, []):
+    for bucket in ("purpose", "entrypoint", "planning", "stack", "gotcha"):
+        for item in baseline_evidence[bucket]:
             lines.append(f"- [confirmed_current] {item['fact']} source: {item['source']}")
-    for item in instruction_evidence[:30]:
+    for item in baseline_evidence["instruction"]:
         lines.append(f"- [confirmed_current] {item['fact']} source: {item['source']}")
-    if len(instruction_evidence) > 30:
+    if baseline_evidence["instruction_omitted"]:
         lines.append(
-            f"- [confirmed_current] {len(instruction_evidence) - 30} additional instruction rules were omitted from this compact section. "
+            f"- [confirmed_current] {baseline_evidence['instruction_omitted']} additional instruction rules were omitted from this compact section. "
             "source: build_repo_baseline.py output"
         )
-    for item in skill_evidence:
+    for item in baseline_evidence["skills"]:
         lines.append(f"- [confirmed_current] Repo-local skill `{item['path']}` is available. source: {item['source']}")
-    for item in validation_evidence:
+    for item in baseline_evidence["validation"]:
         script = f" from `{item['script']}`" if item.get("script") else ""
         lines.append(f"- [confirmed_current] Validation command `{item['command']}` discovered{script}. source: {item['source']}")
-    if prior_report:
-        lines.append(f"- [confirmed_current] Prior agent-learning report found for continuity. source: {prior_report}")
-    for item in corpus_meta:
+    if payload.get("prior_report_path"):
+        lines.append(f"- [confirmed_current] Prior agent-learning report found for continuity. source: {payload['prior_report_path']}")
+    for item in payload["corpus_meta"]:
         lines.append(f"- [confirmed_current] Session extraction metadata: {item}. source: corpus metadata")
-    if not checked_sources and not baseline.get("validation_commands"):
+    if not baseline_evidence["has_checked_sources"]:
         lines.append("- [confirmed_current] No repo baseline sources were discovered. source: build_repo_baseline.py output")
 
     lines.extend(["", "## memory_derived"])
-    if map_rows:
-        for row in map_rows:
-            quote_part = f' quote: "{row["quotes"][0]}"' if row["quotes"] else ""
+    if rows:
+        for row in rows:
+            quote_part = f' quote: "{row["quote"]}"' if row.get("quote") else ""
             refs_part = f"; session_refs: {', '.join(row['session_refs'])}" if row.get("session_refs") else ""
             lines.append(
-                f"- [memory_derived] domain: {row['domain']}; evidence: {evidence_label(row)}; "
-                f"failure_signal: {row['failure_signal']}.{quote_part}{refs_part} source: {event_source(row)}"
+                f"- [memory_derived] domain: {row['domain']}; evidence: {row['evidence_label']}; "
+                f"failure_signal: {row['failure_signal']}.{quote_part}{refs_part} source: {row['evidence_source']}"
             )
-        for change in level_changes:
-            lines.append(f"- [memory_derived] level_change: {change}. source: {prior_report}")
-    elif evidence:
-        for item in evidence:
-            lines.append(f'- [memory_derived] Session steering evidence. quote: "{quote(item)}" source: corpus')
+        for change in memory["level_changes"]:
+            lines.append(f"- [memory_derived] level_change: {change}. source: {payload['prior_report_path']}")
+    elif memory["evidence_fallback"]:
+        for item in memory["evidence_fallback"]:
+            lines.append(f'- [memory_derived] Session steering evidence. quote: "{item}" source: corpus')
     else:
         lines.append("- [memory_derived] No reusable user-steering evidence found in this corpus. source: corpus")
 
     lines.extend(["", "## needs_verification"])
-    if a_lines:
+    if payload["totals"]["assistant_lines"]:
         lines.append(
             "- [needs_verification] Assistant claims in transcripts are not treated as current repo truth without live checks. "
             "verify: rerun current repo or runtime checks before reuse."
@@ -590,54 +579,96 @@ def render_report(
         lines.append("- [needs_verification] No assistant claims found. verify: rerun extraction if this is unexpected.")
 
     lines.extend(["", "## agent_compensation"])
-    for row in map_rows:
+    for row in rows:
         lines.append(f"### domain: {row['domain']}")
         lines.append(f"- marker: agent_compensation")
-        lines.append(f"- level: {event_level(row)}")
+        lines.append(f"- level: {row['level']}")
         lines.append(f"- matching_lines: {row['count']}")
         if row["source_count"]:
             lines.append(f"- baseline_sources: {row['source_count']}")
         if row.get("session_refs"):
             lines.append(f"- session_refs: {', '.join(row['session_refs'])}")
-        lines.append(f"- failure_signal: {row['failure_signal']} source: {event_source(row)}")
-        lines.append(f"- gate_category: {row['category']}")
+        lines.append(f"- failure_signal: {row['failure_signal']} source: {row['evidence_source']}")
+        lines.append(f"- gate_category: {row['gate_category']}")
         lines.append(f"- gate: {row['gate']}")
-        if row["quotes"]:
-            lines.append(f'- quote: "{row["quotes"][0]}"')
-    if not map_rows:
-        lines.append("- Use read-only exploration before recommendations. source: empty baseline")
+        if row["quote"]:
+            lines.append(f'- quote: "{row["quote"]}"')
+    if payload["agent_compensation"]["default"]:
+        lines.append(f"- {payload['agent_compensation']['default']} source: empty baseline")
 
     lines.extend(["", "## self_healing_loop"])
-    if map_rows:
-        top = map_rows[0]
+    if rows:
+        top = rows[0]
         lines.append(
             "- failure_signal -> candidate_gate -> validation_status -> next_session_load. "
-            f"source: {event_source(top)}"
+            f"source: {top['evidence_source']}"
         )
         lines.append(
-            f"- strongest_current_gate: {top['domain']} requires `{top['category']}` before action. "
-            f"source: {event_source(top)}"
+            f"- strongest_current_gate: {top['domain']} requires `{top['gate_category']}` before action. "
+            f"source: {top['evidence_source']}"
         )
     else:
-        lines.append("- No repeated failure signal found; keep dry-run report advisory. source: corpus")
+        lines.append(f"- {payload['self_healing_loop']['fallback']} source: corpus")
 
-    skill_map = skill_map or skill_map_from_baseline(baseline)
-    skill_usage = skill_usage or {}
-    skill_impact = skill_impact or {}
-    lines.extend(render_skill_sections(skill_map, skill_usage, skill_impact))
+    lines.extend(render_payload_skill_sections(payload))
 
     lines.extend(["", "## next_agent_brief"])
-    lines.append("- Start by reading repo-local instruction files and skill inventory.")
-    lines.append("- Treat transcript-derived memories as advisory until verified in the current checkout.")
-    if map_rows:
-        for row in map_rows[:5]:
-            lines.append(f"- {row['domain']}: {row['gate']}")
-    else:
-        lines.append("- Convert repeated corrections into gates, not personality claims.")
-    lines.append("- Do not append durable personalization unless validation passes and --write was requested.")
-    if proposed_evergreen:
-        lines.extend(["", "## proposed_evergreen_diffs", *proposed_evergreen])
+    lines.extend(f"- {item}" for item in payload["next_agent_brief"])
+    if payload["proposed_evergreen"]:
+        lines.extend(["", "## proposed_evergreen_diffs", *payload["proposed_evergreen"]])
     return "\n".join(lines) + "\n"
+
+
+def render_payload_skill_sections(payload: dict) -> list[str]:
+    lines: list[str] = []
+    inventory = payload["skill_inventory"]
+    usage = payload["skill_usage"]
+    health = payload["skill_health"]
+    compensation = payload["skill_compensation"]
+
+    lines.extend(["", "## skill_inventory"])
+    lines.append(f"- [skill_inventory] available_skills: {inventory['available_count']} source: skill-map input")
+    if inventory["invalid_count"]:
+        lines.append(f"- [skill_inventory] invalid_skills: {inventory['invalid_count']} source: skill-map input")
+    for item in inventory["rows"]:
+        lines.append(f"- [skill_inventory] skill: {item.get('name', 'unknown')} source: {item.get('path') or 'skill-map input'}")
+    if inventory["omitted"]:
+        lines.append(f"- [skill_inventory] omitted_skills: {inventory['omitted']} source: skill-map input")
+
+    lines.extend(["", "## skill_usage"])
+    lines.append(f"- [skill_usage] expected: {', '.join(usage['expected']) or 'none'} count: {len(usage['expected'])} source: skill-usage input")
+    lines.append(f"- [skill_usage] loaded: {', '.join(usage['loaded']) or 'none'} count: {len(usage['loaded'])} source: skill-usage input")
+    lines.append(f"- [skill_usage] applied: {', '.join(usage['applied']) or 'none'} count: {len(usage['applied'])} source: skill-usage input")
+
+    lines.extend(["", "## skill_health"])
+    if not health["invalid"] and not health["missed"] and not health["failed_to_apply"]:
+        lines.append("- [skill_health] no skill-health alerts found. source: skill inputs; count: 0; verify: rerun map_active_skills.py and extract_skill_usage.py.")
+    for item in health["invalid"]:
+        lines.append(
+            f"- [skill_health] invalid: {item} "
+            "source: skill-map input; count: 1; verify: inspect SKILL.md frontmatter and resources."
+        )
+    for skill in health["missed"]:
+        lines.append(
+            f"- [skill_health] missed_expected_skill: {skill} "
+            "source: skill-usage input; count: 1; verify: rerun evaluate_skill_routing.py for the matching scope."
+        )
+    for skill in health["failed_to_apply"]:
+        lines.append(
+            f"- [skill_health] loaded_but_not_applied: {skill} "
+            "source: skill-usage input; count: 1; verify: inspect session closeout evidence before changing the skill."
+        )
+
+    lines.extend(["", "## skill_compensation"])
+    if not compensation["rows"]:
+        lines.append("- [skill_compensation] no candidate skill adjustments. source: skill-impact input; count: 0; verify: rerun evaluate_skill_impact.py.")
+    for row in compensation["rows"]:
+        lines.append(
+            f"- [skill_compensation] category: candidate_skill_adjustment; skill: {row.get('skill', 'unknown')}; "
+            f"signal: {row.get('signal', 'needs_review')}; gate: {row.get('gate', '')} "
+            f"source: skill-impact input; count: {row.get('count', 1)}; verify: rerun evaluate_skill_impact.py after the next session batch."
+        )
+    return lines
 
 
 def first_report_quote(report: str) -> str:
@@ -682,24 +713,6 @@ def archive_html_report(personal: pathlib.Path, html_text: str, today: str) -> p
     latest = target_dir / "latest-report.html"
     latest.write_text(html_text, encoding="utf-8")
     return target
-
-
-def _load_muted_domains(personal: pathlib.Path) -> set[str]:
-    """Read the dashboard's muted-domains.json. Safe on missing/invalid file."""
-    path = personal / "actions" / "muted-domains.json"
-    if not path.is_file():
-        return set()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return set()
-    if not isinstance(data, list):
-        return set()
-    return {
-        (item.get("domain") or "").strip()
-        for item in data
-        if isinstance(item, dict) and (item.get("domain") or "").strip()
-    }
 
 
 def derive_html_output(markdown_output: pathlib.Path, override: str | None) -> pathlib.Path:
@@ -910,7 +923,8 @@ def main(argv: list[str] | None = None) -> int:
     html_text: str | None = None
     html_path: pathlib.Path | None = None
     if not args.no_html or args.write:
-        from render_html_report import build_report_payload, render_html_report
+        from learning_report_payload import build_report_payload
+        from render_html_report import render_html_report
 
         payload = build_report_payload(
             corpus,
