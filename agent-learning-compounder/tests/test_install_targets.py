@@ -30,6 +30,7 @@ def _run_install(
     *,
     base: pathlib.Path,
     env: dict[str, str] | None = None,
+    cwd: pathlib.Path | None = None,
 ) -> subprocess.CompletedProcess[str]:
     home = base / "home"
     home.mkdir(exist_ok=True)
@@ -45,7 +46,7 @@ def _run_install(
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=False,
-        cwd=str(ROOT),
+        cwd=str(cwd or ROOT),
         env=run_env,
     )
 
@@ -55,7 +56,59 @@ def _assert_skill_installed(test: unittest.TestCase, dest: pathlib.Path) -> None
     test.assertTrue((dest / "bin").is_dir(), f"{dest} has no bin directory")
 
 
+@unittest.skipUnless(INSTALL.is_file(), "source checkout installer tests require top-level install.sh")
 class InstallTargetTests(unittest.TestCase):
+    def test_zero_arg_installs_current_repo_project_local_codex_by_default(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            repo = base / "repo"
+            repo.mkdir()
+
+            result = _run_install(
+                ["--no-verify", "--no-first-run-index"],
+                base=base,
+                cwd=repo,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            _assert_skill_installed(self, repo / ".agents" / "skills" / SKILL_NAME)
+            self.assertTrue((repo / ".agent-learning.json").exists())
+            self.assertTrue((repo / ".agent-learning").is_dir())
+            self.assertTrue((repo / ".codex" / "hooks.json").exists())
+            self.assertFalse((base / "home" / ".agents" / "skills" / SKILL_NAME).exists())
+            self.assertFalse((base / "home" / ".agent-learning").exists())
+
+    def test_project_bootstrap_verify_uses_repo_local_personal_scope(self) -> None:
+        installer = INSTALL.read_text(encoding="utf-8")
+
+        self.assertIn('project_verify_env "$repo_root" python3 -m unittest discover -s tests', installer)
+        self.assertIn('verify_home="$repo_root/.agent-learning/verify-home"', installer)
+        self.assertIn('HOME="$verify_home" "$@"', installer)
+
+    def test_installer_optional_deps_flag_passes_project_local_alc_init_mode(self) -> None:
+        installer = INSTALL.read_text(encoding="utf-8")
+
+        self.assertIn("--install-deps|--install-optional-deps)", installer)
+        self.assertIn('alc_init_extra="--install-deps"', installer)
+        self.assertIn(".agent-learning/venv", installer)
+
+    def test_runtime_flag_without_bootstrap_still_installs_current_repo_project_local(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            repo = base / "repo"
+            repo.mkdir()
+
+            result = _run_install(
+                ["--runtime", "all", "--no-verify", "--no-first-run-index"],
+                base=base,
+                cwd=repo,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            _assert_skill_installed(self, repo / ".agents" / "skills" / SKILL_NAME)
+            _assert_skill_installed(self, repo / ".claude" / "skills" / SKILL_NAME)
+            self.assertFalse((base / "home" / ".agents" / "skills" / SKILL_NAME).exists())
+
     def test_codex_flag_installs_under_agents_home_skills(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
@@ -149,11 +202,11 @@ class InstallTargetTests(unittest.TestCase):
             self.assertIn(str(dest), result.stdout)
             self.assertFalse((agents_home / "skills" / SKILL_NAME).exists())
 
-    def test_runtime_all_requires_bootstrap_or_explicit_target(self) -> None:
+    def test_runtime_all_requires_explicit_project_or_target_for_user_global_installs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)
 
-            result = _run_install(["--runtime", "all"], base=base)
+            result = _run_install(["--codex", "--runtime", "all"], base=base)
 
             self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
             self.assertIn("--runtime all requires --bootstrap-repo", result.stderr)
@@ -211,20 +264,23 @@ class InstallTargetTests(unittest.TestCase):
             claude_home = base / "claude-home"
             agents_home = base / "agents-home"
 
+            repo = base / "repo"
+            repo.mkdir()
+
             result = _run_install(
-                [],
+                ["--no-verify", "--no-first-run-index"],
                 base=base,
                 env={
                     "AGENT_LEARNING_RUNTIME": "claude",
                     "CLAUDE_HOME": str(claude_home),
                     "AGENTS_HOME": str(agents_home),
                 },
+                cwd=repo,
             )
 
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            dest = claude_home / "skills" / SKILL_NAME
+            dest = repo / ".claude" / "skills" / SKILL_NAME
             _assert_skill_installed(self, dest)
-            self.assertIn(str(dest), result.stdout)
             self.assertNotIn("auto-detected runtime", result.stderr)
             self.assertFalse((agents_home / "skills" / SKILL_NAME).exists())
 
@@ -235,7 +291,7 @@ class InstallTargetTests(unittest.TestCase):
             agents_home = base / "agents-home"
 
             result = _run_install(
-                ["--runtime", "codex"],
+                ["--codex", "--runtime", "codex"],
                 base=base,
                 env={
                     "AGENT_LEARNING_RUNTIME": "claude",
@@ -278,7 +334,7 @@ class InstallTargetTests(unittest.TestCase):
         self.assertIn("spawnSync(installSh, process.argv.slice(2)", npm_wrapper)
         self.assertIn('exec "$tmp/install.sh" "$@"', bootstrap)
 
-    def test_install_docs_distinguish_zero_arg_and_bootstrap_auto(self) -> None:
+    def test_install_docs_describe_project_default_and_user_scope_boundaries(self) -> None:
         docs = "\n".join(
             [
                 (ROOT / "README.md").read_text(encoding="utf-8"),
@@ -287,11 +343,12 @@ class InstallTargetTests(unittest.TestCase):
             ]
         )
 
-        self.assertIn("zero-argument `./install.sh`", docs)
-        self.assertIn("global runtime install", docs)
-        self.assertIn("`--runtime auto` uses env/repo hints", docs)
+        self.assertIn("zero-argument `./install.sh`: project-local install", docs)
+        self.assertIn("npx agent-learning-compounder", docs)
+        self.assertIn("user/global flags", docs)
+        self.assertIn("--no-apply-runtime-hooks", docs)
         self.assertIn("--apply-runtime-hooks", docs)
-        self.assertNotRegex(docs, r"--bootstrap-repo[\s\S]{0,180}auto-detects `?~/.agents")
+        self.assertNotIn("global runtime install only", docs)
 
     def test_skill_docs_call_out_optional_dependency_boundaries(self) -> None:
         skill = (ROOT / "agent-learning-compounder" / "skills" / "alc-core" / "SKILL.md").read_text(encoding="utf-8")

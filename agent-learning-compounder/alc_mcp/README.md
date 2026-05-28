@@ -8,9 +8,15 @@ Stdio MCP server exposing the durable state as queryable tools.
 pip install mcp
 ```
 
-(Or `pip install -r requirements-optional.txt` from the installed skill root.
-From the archive root, use
-`pip install -r agent-learning-compounder/requirements-optional.txt`.)
+For a repo-local install, prefer:
+
+```bash
+python3 .agents/skills/agent-learning-compounder/bin/alc_init --repo "$PWD" --install-deps
+```
+
+That installs `requirements-optional.txt` into `.agent-learning/venv` by
+default. User-site installs require explicit `--deps-scope user` or
+`--user-deps`.
 
 ## Run
 

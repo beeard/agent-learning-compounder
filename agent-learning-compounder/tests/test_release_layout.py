@@ -22,6 +22,10 @@ def _json(path: pathlib.Path) -> dict:
 
 
 class ReleaseLayoutTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not (REPO_ROOT / "install.sh").is_file():
+            raise unittest.SkipTest("release layout tests require a source checkout")
+
     def test_build_release_adapter_reads_top_level_layout_from_module(self) -> None:
         script = (REPO_ROOT / "scripts" / "build_release.sh").read_text(encoding="utf-8")
         self.assertIn("release_layout.py", script)

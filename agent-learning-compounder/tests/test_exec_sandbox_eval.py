@@ -32,6 +32,8 @@ class ExecSandboxEvalTests(unittest.TestCase):
         self.env["PYTHONPATH"] = str(BIN_DIR) + os.pathsep + self.env.get("PYTHONPATH", "")
 
         subprocess.run(["git", "-C", str(self.repo), "init"], check=True, text=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "alc-test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "ALC Test"], check=True)
         _write_file(self.repo / "seed.txt", "seed\n")
         subprocess.run(["git", "-C", str(self.repo), "add", "seed.txt"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-m", "seed", "--no-gpg-sign"],

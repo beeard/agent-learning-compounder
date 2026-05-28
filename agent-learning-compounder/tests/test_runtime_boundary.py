@@ -34,6 +34,10 @@ def _function_from(path: pathlib.Path, name: str) -> ast.FunctionDef:
 
 
 class RuntimeBoundaryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not MERGE_DEV_HOOKS.is_file():
+            raise unittest.SkipTest("runtime boundary tests require a source checkout")
+
     def test_drift_checker_reports_repo_local_runtime_drift(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = pathlib.Path(tmp)

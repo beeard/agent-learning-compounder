@@ -23,6 +23,10 @@ def _json(path: pathlib.Path) -> dict:
 
 
 class ReleaseMetadataTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not (REPO_ROOT / "package.json").is_file():
+            raise unittest.SkipTest("release metadata tests require a source checkout")
+
     def test_release_versions_match_canonical_surface_mappings(self) -> None:
         manifest = _json(REPO_ROOT / "MANIFEST.json")
         package = _json(REPO_ROOT / "package.json")

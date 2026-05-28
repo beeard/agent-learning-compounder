@@ -17,6 +17,10 @@ import release_manifest
 
 
 class ReleaseArchiveContentsTests(unittest.TestCase):
+    def setUp(self) -> None:
+        if not (REPO_ROOT / "install.sh").is_file():
+            raise unittest.SkipTest("release archive tests require a source checkout")
+
     def test_excluded_paths_are_detected_after_normalizing_archive_root(self) -> None:
         leaks = release_manifest.find_excluded_paths(
             [

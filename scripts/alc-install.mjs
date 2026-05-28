@@ -2,9 +2,10 @@
 // alc-install — npm/npx entry point for installing agent-learning-compounder.
 //
 // Usage:
-//   npx agent-learning-compounder                     # zero-config (auto-detect runtime, verify)
+//   npx agent-learning-compounder                     # project install (auto-detect runtime, verify)
 //   npx agent-learning-compounder --plugin            # install as Claude Code plugin
-//   npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
+//   npx agent-learning-compounder --runtime all        # project install for Codex + Claude
+//   npx agent-learning-compounder --install-deps       # optional Python deps in .agent-learning/venv
 //
 // This is a thin Node wrapper around install.sh — it forwards all arguments
 // unchanged. The package ships install.sh and the inner skill tree, so the

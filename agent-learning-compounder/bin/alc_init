@@ -43,21 +43,70 @@ detect_repo = repo_profile.detect
 check_doc_contract = repo_profile.doc_contract_rows
 
 
-def ensure_mcp(install: bool, quiet: bool) -> dict:
-    """Check for `mcp`. If missing and install=True, pip install --user."""
-    status = {"available": False, "installed_now": False, "error": None}
+def _venv_python(state_root: pathlib.Path) -> pathlib.Path:
+    bin_dir = "Scripts" if sys.platform == "win32" else "bin"
+    exe = "python.exe" if sys.platform == "win32" else "python"
+    return state_root / "venv" / bin_dir / exe
+
+
+def _site_packages(python: pathlib.Path) -> pathlib.Path | None:
+    proc = subprocess.run(
+        [
+            str(python),
+            "-c",
+            "import sysconfig; print(sysconfig.get_paths()['purelib'])",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        return None
+    path = pathlib.Path(proc.stdout.strip())
+    return path if path.exists() else None
+
+
+def _add_project_venv_to_path(python: pathlib.Path) -> None:
+    site = _site_packages(python)
+    if site and str(site) not in sys.path:
+        sys.path.insert(0, str(site))
+
+
+def _python_can_import(python: pathlib.Path, module: str) -> bool:
+    if not python.exists():
+        return False
+    proc = subprocess.run(
+        [str(python), "-c", f"import {module}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return proc.returncode == 0
+
+
+def ensure_mcp(install: bool, quiet: bool, state_root: pathlib.Path, deps_scope: str) -> dict:
+    """Check for `mcp`. If requested, install extras into project venv by default."""
+    status = {"available": False, "installed_now": False, "error": None, "python": sys.executable}
     try:
         __import__("mcp")
-        status["available"] = True
-        return status
+        if not install:
+            status["available"] = True
+            return status
     except ImportError:
         pass
+
+    project_python = _venv_python(state_root)
+    if not install and deps_scope == "project" and _python_can_import(project_python, "mcp"):
+        _add_project_venv_to_path(project_python)
+        status["python"] = str(project_python)
+        status["available"] = True
+        return status
 
     req = PLUGIN_ROOT / "requirements-optional.txt"
     if not install:
         status["error"] = (
-            "mcp not installed; pass --install-deps to pip-install optional extras "
-            f"from {req}"
+            "mcp not installed; pass --install-deps to install optional extras "
+            f"from {req} into the project-local .agent-learning/venv"
         )
         return status
 
@@ -65,15 +114,35 @@ def ensure_mcp(install: bool, quiet: bool) -> dict:
         status["error"] = f"requirements-optional.txt missing at {req}"
         return status
 
-    cmd = [sys.executable, "-m", "pip", "install", "--user", "-r", str(req)]
+    if deps_scope == "user":
+        cmd = [sys.executable, "-m", "pip", "install", "--user", "-r", str(req)]
+        install_python = pathlib.Path(sys.executable)
+        target = "user site"
+    else:
+        venv_dir = state_root / "venv"
+        create = subprocess.run(
+            [sys.executable, "-m", "venv", str(venv_dir)],
+            capture_output=True,
+            text=True,
+        )
+        if create.returncode != 0:
+            status["error"] = (create.stderr or create.stdout).strip()[:500]
+            return status
+        install_python = project_python
+        cmd = [str(install_python), "-m", "pip", "install", "-r", str(req)]
+        target = str(venv_dir)
+
     if not quiet:
-        print(f"alc_init: pip-installing optional deps from {req}", file=sys.stderr)
+        print(f"alc_init: pip-installing optional deps from {req} into {target}", file=sys.stderr)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         status["error"] = (proc.stderr or proc.stdout).strip()[:500]
         return status
 
     status["installed_now"] = True
+    status["python"] = str(install_python)
+    if deps_scope == "project":
+        _add_project_venv_to_path(install_python)
     try:
         __import__("mcp")
         status["available"] = True
@@ -82,7 +151,7 @@ def ensure_mcp(install: bool, quiet: bool) -> dict:
     return status
 
 
-def smoke_mcp(timeout_s: int = 10) -> dict:
+def smoke_mcp(timeout_s: int = 10, python: str | pathlib.Path = sys.executable) -> dict:
     """Run alc_mcp/server.py with initialize + tools/list; return status + tool names."""
     server = PLUGIN_ROOT / "alc_mcp" / "server.py"
     if not server.is_file():
@@ -98,7 +167,7 @@ def smoke_mcp(timeout_s: int = 10) -> dict:
 
     try:
         proc = subprocess.run(
-            [sys.executable, str(server)],
+            [str(python), str(server)],
             input=payload, text=True, capture_output=True, timeout=timeout_s,
         )
     except subprocess.TimeoutExpired:
@@ -157,7 +226,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--state-dir", type=pathlib.Path,
                         help="state root (default: <repo>/.agent-learning)")
     parser.add_argument("--install-deps", action="store_true",
-                        help="pip-install requirements-optional.txt if mcp missing")
+                        help="pip-install requirements-optional.txt into .agent-learning/venv")
+    parser.add_argument("--deps-scope", choices=["project", "user"], default="project",
+                        help="where --install-deps writes optional Python deps (default: project)")
+    parser.add_argument("--user-deps", action="store_const", const="user", dest="deps_scope",
+                        help="explicitly allow --install-deps to use pip --user")
     parser.add_argument("--skip-mcp-smoke", action="store_true",
                         help="don't actually launch the MCP server")
     parser.add_argument("--quiet", action="store_true",
@@ -182,7 +255,12 @@ def main(argv: list[str] | None = None) -> int:
               f"frameworks={profile['frameworks']} "
               f"tests={profile['has_tests']}", file=sys.stderr)
 
-    deps_status = ensure_mcp(install=args.install_deps, quiet=args.quiet)
+    deps_status = ensure_mcp(
+        install=args.install_deps,
+        quiet=args.quiet,
+        state_root=state_root,
+        deps_scope=args.deps_scope,
+    )
     if not args.quiet:
         print(f"alc_init: mcp available={deps_status['available']} "
               f"installed_now={deps_status['installed_now']}", file=sys.stderr)
@@ -192,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
     elif not deps_status["available"]:
         mcp_status = {"status": "unavailable", "tools": [], "error": deps_status.get("error")}
     else:
-        mcp_status = smoke_mcp()
+        mcp_status = smoke_mcp(python=deps_status.get("python") or sys.executable)
     if not args.quiet:
         print(f"alc_init: mcp_status={mcp_status['status']} "
               f"tools={len(mcp_status['tools'])}", file=sys.stderr)

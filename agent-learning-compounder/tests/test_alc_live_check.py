@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import subprocess
+import sys
 import tempfile
 import unittest
 from importlib.machinery import SourceFileLoader
@@ -43,17 +44,36 @@ class AlcLiveCheckTests(unittest.TestCase):
             repo = pathlib.Path(tmp) / "repo"
             repo.mkdir()
             (repo / "README.md").write_text("# smoke\n", encoding="utf-8")
+            init = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "bin" / "init_learning_system"),
+                    "--repo",
+                    str(repo),
+                    "--runtime",
+                    "codex",
+                    "--install-repo-integration",
+                    "--install-hooks",
+                    "--self-test",
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
 
             result = subprocess.run(
                 [
-                    "python3",
+                    sys.executable,
                     str(LIVE_CHECK),
                     "--repo",
                     str(repo),
                     "--runtime",
                     "codex",
+                    "--skip-install",
                     "--no-verify",
-                    "--apply-hooks",
+                    "--no-apply-hooks",
                     "--no-install-deps",
                     "--no-serve-dashboard",
                     "--yes",

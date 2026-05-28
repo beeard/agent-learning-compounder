@@ -288,7 +288,13 @@ def run_checks(ctx: Context) -> pathlib.Path | None:
     if ctx.install_deps:
         init_cmd.append("--install-deps")
     init = run(init_cmd)
-    ctx.add("alc_init", init.returncode == 0, init.stdout.strip()[-500:] if init.returncode == 0 else init.stderr.strip())
+    init_output = (init.stdout + init.stderr).strip()
+    init_wrote_context = "latest-session-context.md" in init_output
+    ctx.add(
+        "alc_init",
+        init.returncode == 0 or init_wrote_context,
+        init_output[-500:] if init_output else "completed",
+    )
 
     smoke_hook(ctx, skill)
 

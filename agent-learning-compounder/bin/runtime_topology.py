@@ -466,6 +466,7 @@ def _shell(argv: list[str]) -> int:
         "--shell",
         choices=[
             "resolve-install-runtime",
+            "runtime-hint",
             "install-target-root",
             "install-targets",
             "install-runtimes",
@@ -482,6 +483,13 @@ def _shell(argv: list[str]) -> int:
         if args.shell == "resolve-install-runtime":
             repo = pathlib.Path(args.repo) if args.repo else None
             print(resolve_install_runtime(args.request, repo=repo))
+            return 0
+        if args.shell == "runtime-hint":
+            if not args.repo:
+                return 0
+            hint = runtime_hint_from_repo(pathlib.Path(args.repo))
+            if hint:
+                print(hint)
             return 0
         if args.shell == "install-runtimes":
             for runtime_name in runtime_install_modes(args.runtime):

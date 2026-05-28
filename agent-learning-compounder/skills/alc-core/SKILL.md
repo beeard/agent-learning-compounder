@@ -60,17 +60,19 @@ skill installed in the active runtime root.
 
 Install boundary notes:
 
-- zero-argument `./install.sh` is a global runtime install. It uses filesystem
-  detection for `${CLAUDE_HOME:-~/.claude}` and `${AGENTS_HOME:-~/.agents}`,
-  verifies, and prints repo-init commands; it does not bootstrap the current
-  repo or apply runtime hooks.
-- `./install.sh --bootstrap-repo "$PWD" --runtime codex|claude|all --verify`
-  is the repo bootstrap path. `--runtime auto` uses env/repo hints before
-  defaulting to Codex; it is not filesystem detection.
-- Runtime hook writes require `--apply-runtime-hooks`; bootstrap otherwise
-  leaves a dry-run hook plan.
+- zero-argument `./install.sh` is a project-local install. It uses the current
+  repo, resolves runtime from env/repo hints and local runtime evidence, runs
+  verify, initializes `.agent-learning`, and applies repo-local hooks.
+- `./install.sh --runtime codex|claude|all` overrides the project-local runtime
+  target. User/global installs require explicit flags such as `--codex`,
+  `--claude`, `--codex-home`, `--plugin`, or `--target`.
+- `--no-apply-runtime-hooks` keeps the zero-argument project install from
+  writing repo-local hooks. Explicit `--bootstrap-repo <dir>` remains dry-run
+  unless `--apply-runtime-hooks` is passed.
 - `bin/alc_init` can smoke `alc_mcp`, but optional MCP dependencies require
-  `--install-deps` or a separate dependency install. Bootstrap does not register Codex MCP.
+  `--install-deps` or a separate dependency install. `--install-deps` writes to
+  the project-local `.agent-learning/venv` by default; user-site installs require
+  explicit `--deps-scope user` or `--user-deps`. Bootstrap does not register Codex MCP.
   Dashboard React bundling is best-effort and falls back to static HTML if
   `pnpm` is missing or the build fails.
 
@@ -157,8 +159,9 @@ For scratch outputs, create a run directory first: `RUN_DIR="$(mktemp -d)"`.
 
 - `bin/alc_init` — per-repo bootstrap profiler. Detects the host repo's
   language/framework profile, can install optional MCP dependencies with
-  `--install-deps`, smokes the MCP server when available, and renders the
-  per-session `latest-session-context.md` surface future agents load on entry.
+  `--install-deps` into `.agent-learning/venv`, smokes the MCP server when
+  available, and renders the per-session `latest-session-context.md` surface
+  future agents load on entry.
 
 ### Pipeline stages (manual invocation)
 

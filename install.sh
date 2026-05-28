@@ -6,20 +6,22 @@ usage() {
 Install agent-learning-compounder.
 
 Usage:
-  ./install.sh                                            (global install: detect runtime, verify)
+  ./install.sh                                            (project install: detect runtime, verify, apply repo hooks)
+  ./install.sh [--runtime codex|claude|all|auto] [--verify|--no-verify] [--install-deps] [--no-apply-runtime-hooks]
   ./install.sh [--codex|--codex-home|--claude|--plugin|--target DIR] [--runtime codex|claude|all|auto] [--verify]
   ./install.sh --bootstrap-repo DIR [--runtime codex|claude|all|auto] [--verify] [--apply-runtime-hooks]
 
-Zero-argument global install behavior (when no runtime/target flag is passed and
-AGENT_LEARNING_RUNTIME is unset):
-  - Detect runtime from filesystem (~/.claude/ vs ~/.agents/);
-    prompt once if both are present, default to codex if neither.
-  - Run --verify automatically.
-  - Does not run --bootstrap-repo, initialize the current repo, or apply hooks.
+Zero-argument project install behavior:
+  - Uses the current directory as --bootstrap-repo.
+  - Resolves runtime from AGENT_LEARNING_RUNTIME, repo hints, filesystem
+    evidence (~/.claude/ vs ~/.agents/), then Codex by default.
+  - Runs --verify and applies repo-local runtime hooks automatically.
+  - Never writes user-scope runtime config unless you pass an explicit
+    user/global install flag such as --codex, --claude, --codex-home, or --plugin.
 
 Defaults:
-  --codex         Install to ${AGENTS_HOME:-$HOME/.agents}/skills
-  --runtime       auto (env/repo hints for bootstrap, then codex)
+  project scope   Install to <repo>/.agents/skills and/or <repo>/.claude/skills
+  --runtime       auto (env/repo hints, filesystem runtime evidence, then codex)
 
 Options:
   --codex                Install for Codex-compatible ~/.agents skills
@@ -30,10 +32,14 @@ Options:
   --target DIR           Install into an explicit skills root directory
   --runtime MODE         Codex/Claude runtime filter: codex|claude|all|auto
   --bootstrap-repo DIR    Install in project-local runtime roots and initialize the repo
-  --apply-runtime-hooks  Apply runtime hooks during bootstrap (default is dry-run)
+  --apply-runtime-hooks  Apply runtime hooks during explicit bootstrap (default is dry-run)
+  --no-apply-runtime-hooks
+                         Do not apply hooks in zero-argument project install
   --no-first-run-index   Skip the post-bootstrap warm-loop (replay → index_events).
                          Default-on; also disabled by ALC_FIRST_RUN_INDEX=0.
+  --install-deps         Install optional Python deps into <repo>/.agent-learning/venv
   --verify               Run the packaged unittest suite after install
+  --no-verify            Skip the packaged unittest suite
   -h, --help             Show this help
 
 The installer preserves an existing install by moving it to a timestamped backup.
@@ -57,6 +63,9 @@ runtime="auto"
 bootstrap_repo=""
 apply_runtime_hooks=0
 verify=0
+verify_explicit=0
+install_mode_explicit=0
+apply_runtime_hooks_explicit=0
 target_root_explicit=0
 plugin_mode=0
 # Default-on warm-loop seam at end of --bootstrap-repo: replay hook events
@@ -64,10 +73,18 @@ plugin_mode=0
 # with a populated sqlite for alc_query/dashboard/MCP. Opt out via the
 # --no-first-run-index flag or ALC_FIRST_RUN_INDEX=0 env var.
 first_run_index="${ALC_FIRST_RUN_INDEX:-1}"
-# Stays 1 while no runtime/target/bootstrap flag has been passed; the
-# zero-arg install path picks the runtime by filesystem detection and
-# turns on --verify only when this is still 1 after arg parsing.
-auto_detect=1
+install_optional_deps=0
+# Stays 0 until the caller selects a user/global install target or an explicit
+# bootstrap repo. Runtime/verify/hook flags alone still use the default
+# project-local install mode.
+
+project_verify_env() {
+  repo_root="$1"
+  shift
+  verify_home="$repo_root/.agent-learning/verify-home"
+  mkdir -p "$verify_home"
+  HOME="$verify_home" "$@"
+}
 
 resolve_runtime() {
   request="$1"
@@ -183,24 +200,24 @@ while [ "$#" -gt 0 ]; do
     --codex)
       target_mode="user"
       runtime="codex"
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --codex-home)
       target_mode="codex-home"
       runtime="codex"
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --claude)
       target_mode="user"
       runtime="claude"
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --plugin)
       plugin_mode=1
       runtime="claude"
       target_mode="plugin"
       target_root_explicit=1
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --target)
       shift
@@ -211,7 +228,7 @@ while [ "$#" -gt 0 ]; do
       target_root="$1"
       target_mode="explicit"
       target_root_explicit=1
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --runtime)
       shift
@@ -228,7 +245,6 @@ while [ "$#" -gt 0 ]; do
           exit 2
           ;;
       esac
-      auto_detect=0
       ;;
     --bootstrap-repo)
       shift
@@ -237,16 +253,29 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       bootstrap_repo="$1"
-      auto_detect=0
+      install_mode_explicit=1
       ;;
     --apply-runtime-hooks)
       apply_runtime_hooks=1
+      apply_runtime_hooks_explicit=1
+      ;;
+    --no-apply-runtime-hooks)
+      apply_runtime_hooks=0
+      apply_runtime_hooks_explicit=1
       ;;
     --no-first-run-index)
       first_run_index=0
       ;;
+    --install-deps|--install-optional-deps)
+      install_optional_deps=1
+      ;;
     --verify)
       verify=1
+      verify_explicit=1
+      ;;
+    --no-verify)
+      verify=0
+      verify_explicit=1
       ;;
     -h|--help)
       usage
@@ -285,39 +314,43 @@ topology_shell() {
   python3 "$skill_src/bin/runtime_topology.py" --shell "$@"
 }
 
-# Zero-arg path: detect the runtime from filesystem state and turn on
-# --verify by default. Skipped when any explicit flag set auto_detect=0,
-# and skipped when AGENT_LEARNING_RUNTIME is set so env-var configuration
-# still wins (consistent with resolve_runtime's precedence).
-if [ "$auto_detect" = 1 ] && [ -z "${AGENT_LEARNING_RUNTIME:-}" ]; then
-  detected=$(detect_runtime)
-  case "$detected" in
-    claude)
-      echo "auto-detected runtime: claude (~/.claude/ present)" >&2
-      runtime="claude"
-      ;;
-    codex)
-      echo "auto-detected runtime: codex (~/.agents/ present)" >&2
-      runtime="codex"
-      ;;
-    both)
-      printf 'both ~/.claude/ and ~/.agents/ present. Install runtime? [codex/claude] (default codex): ' >&2
-      choice=""
-      if [ -r /dev/tty ]; then
-        read -r choice < /dev/tty || choice=""
-      fi
-      case "$choice" in
-        c|C|claude|Claude|CLAUDE) runtime="claude" ;;
-        *) runtime="codex" ;;
+# Default path: install into the current repo, not user scope. Explicit
+# user/global install flags keep the old user-scope behavior.
+if [ "$install_mode_explicit" = 0 ]; then
+  bootstrap_repo="."
+  if [ "$verify_explicit" = 0 ]; then
+    verify=1
+  fi
+  if [ "$apply_runtime_hooks_explicit" = 0 ]; then
+    apply_runtime_hooks=1
+  fi
+  if [ "$runtime" = "auto" ] && [ -z "${AGENT_LEARNING_RUNTIME:-}" ]; then
+    repo_root=$(CDPATH= cd -- "$bootstrap_repo" && pwd)
+    repo_hint=$(topology_shell runtime-hint --repo "$repo_root" 2>/dev/null || :)
+    if [ -n "$repo_hint" ]; then
+      runtime="$repo_hint"
+    else
+      detected=$(detect_runtime)
+      case "$detected" in
+        claude)
+          echo "auto-detected runtime: claude (~/.claude/ present)" >&2
+          runtime="claude"
+          ;;
+        codex)
+          echo "auto-detected runtime: codex (~/.agents/ present)" >&2
+          runtime="codex"
+          ;;
+        both)
+          echo "auto-detected runtimes: codex and claude (~/.agents/ and ~/.claude present)" >&2
+          runtime="all"
+          ;;
+        neither|*)
+          echo "no runtime directory found; defaulting to codex project install" >&2
+          runtime="codex"
+          ;;
       esac
-      echo "selected runtime: $runtime" >&2
-      ;;
-    neither|*)
-      echo "no runtime directory found; defaulting to codex (~/.agents/skills)" >&2
-      runtime="codex"
-      ;;
-  esac
-  verify=1
+    fi
+  fi
 fi
 
 if [ -n "$bootstrap_repo" ]; then
@@ -341,9 +374,9 @@ if [ -n "$bootstrap_repo" ]; then
   fi
 
   if [ "$verify" -eq 1 ]; then
-    (cd "$bootstrap_dest" && python3 -m unittest discover -s fixtures/tests)
-    (cd "$bootstrap_dest" && python3 -m unittest discover -s tests)
-    (cd "$bootstrap_dest" && python3 scripts/run_pressure_tests.py)
+    (cd "$bootstrap_dest" && project_verify_env "$repo_root" python3 -m unittest discover -s fixtures/tests)
+    (cd "$bootstrap_dest" && project_verify_env "$repo_root" python3 -m unittest discover -s tests)
+    (cd "$bootstrap_dest" && project_verify_env "$repo_root" python3 scripts/run_pressure_tests.py)
     sanitize_skill_tree "$bootstrap_dest"
   fi
 
@@ -375,8 +408,12 @@ if [ -n "$bootstrap_repo" ]; then
 
   # First-run: profile host repo, smoke alc_mcp, write session context.
   # Best-effort — failures here don't unwind the bootstrap.
-  if ! python3 "$bootstrap_dest/bin/alc_init" --repo "$repo_root" >/dev/null; then
-    echo "note: alc_init reported an issue (often just \"mcp not installed\"); install agent-learning-compounder/requirements-optional.txt to get the full first-run flow." >&2
+  alc_init_extra=""
+  if [ "$install_optional_deps" -eq 1 ]; then
+    alc_init_extra="--install-deps"
+  fi
+  if ! python3 "$bootstrap_dest/bin/alc_init" --repo "$repo_root" $alc_init_extra >/dev/null; then
+    echo "note: alc_init reported an issue (often just \"mcp not installed\"); run python3 $bootstrap_dest/bin/alc_init --repo $repo_root --install-deps to install optional deps into $repo_root/.agent-learning/venv." >&2
   fi
 
   # Warm-loop seam (PR 5): replay any accumulated hook events into

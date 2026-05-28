@@ -25,6 +25,8 @@ class ExecSandboxWorktreeTests(unittest.TestCase):
         self.repo = pathlib.Path(self.tmp.name) / "repo"
         self.repo.mkdir()
         subprocess.run(["git", "-C", str(self.repo), "init"], check=True, text=True, stdout=subprocess.DEVNULL)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.email", "alc-test@example.invalid"], check=True)
+        subprocess.run(["git", "-C", str(self.repo), "config", "user.name", "ALC Test"], check=True)
         (self.repo / "seed.txt").write_text("seed\n", encoding="utf-8")
         subprocess.run(["git", "-C", str(self.repo), "add", "seed.txt"], check=True)
         subprocess.run(["git", "-C", str(self.repo), "commit", "-m", "seed", "--no-gpg-sign"],

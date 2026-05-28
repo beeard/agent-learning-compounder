@@ -22,7 +22,7 @@ This plan fixes the control system, not just today's visible strings. It adds pa
 
 ### Install and Runtime Truth
 
-- **R1:** Document the one-command install paths precisely: `./install.sh` with no args performs global runtime install with filesystem detection under `${CLAUDE_HOME:-~/.claude}` and `${AGENTS_HOME:-~/.agents}`, while repo bootstrap runtime auto-resolution uses env and repo hints before defaulting to Codex.
+- **R1:** Document the one-command install paths precisely. Superseded by the later install flip: `./install.sh` with no args now performs a project-local install in the current repo, while user/global installs require explicit target flags.
 - **R2:** Preserve explicit runtime install commands for Codex, Claude, and both runtimes; do not imply a single mode gives every runtime 100% live behavior without flags and prerequisites.
 - **R3:** Document the dry-run/apply boundary for runtime hooks: bootstrap plans hooks by default and writes hooks only with `--apply-runtime-hooks`.
 - **R4:** Document optional dependency and host-load boundaries: `alc_init` can smoke `alc_mcp` but optional MCP deps need `--install-deps`; dashboard React bundling is best-effort and continues with fallback HTML when `pnpm` is missing or build fails; `--plugin` Claude discovery happens on the next Claude Code launch; Codex MCP registration is not performed by bootstrap and must not be implied.
@@ -156,7 +156,7 @@ flowchart TD
   - Claude repo bootstrap: `./install.sh --bootstrap-repo "$PWD" --runtime claude --verify`
   - both runtimes: `./install.sh --bootstrap-repo "$PWD" --runtime all --verify`
   - hook writes: add `--apply-runtime-hooks`
-- State explicitly that the no-arg `./install.sh` path is a global runtime install only. It does not run `--bootstrap-repo`, initialize the current repo, or apply repo runtime hooks.
+- State explicitly that the no-arg `./install.sh` path is project-local by default. It initializes the current repo and applies repo-local hooks; user/global runtime installs require explicit flags.
 - Clarify that `--runtime auto` is deterministic repo/env resolution, not filesystem detection.
 - Update prompt/docs that mention exact final stdout lines or "self-test passed" text to assertions that tests can verify without depending on stale phrasing.
 - Clarify optional dependency and host reload boundaries: `alc_init` optional deps, Claude plugin next-launch discovery, no automatic Codex MCP registration, and best-effort dashboard bundling with fallback HTML.

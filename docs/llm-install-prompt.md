@@ -22,31 +22,30 @@ You are installing the agent-learning-compounder skill into THIS repo
 Steps:
 1. Pick a clean work dir: WORK=$(mktemp -d)
 2. Extract: tar -xzf PATH/TO/TARBALL.tar.gz -C "$WORK"
-3. cd into the extracted dir (it is named agent-learning-compounder-<version>).
-4. Run the zero-argument `./install.sh` installer: ./install.sh
-   - It auto-detects Codex (~/.agents/) vs Claude (~/.claude/), prompts once
-     if both are present, defaults to Codex if neither.
+3. Find the extracted dir (it is named agent-learning-compounder-<version>):
+   EXTRACTED=$(find "$WORK" -maxdepth 1 -type d -name 'agent-learning-compounder-*' | head -n 1)
+4. From THIS repo's root, run the extracted zero-argument installer:
+   "$EXTRACTED/install.sh"
+   - It installs project-locally into THIS repo.
+   - It resolves runtime from env/repo hints, local Codex/Claude runtime
+     evidence, then Codex by default.
    - It runs the packaged test suite (~1 minute) automatically.
-   - The final line of stdout is the exact init_learning_system.py command
-     you need next, with the target runtime pre-filled.
-   - This is a global runtime install only. It does not run --bootstrap-repo,
-     initialize THIS repo, or apply repo runtime hooks.
-5. Return to THIS repo's root and run the printed init command, substituting
-   "$PWD" with the absolute path of this repo.
-6. Print the final state: ls -la .agent-learning.json .agent-learning/ in
+   - It initializes .agent-learning and applies repo-local runtime hooks.
+5. Print the final state: ls -la .agent-learning.json .agent-learning/ in
    this repo.
 
 Do NOT:
-- Pass --apply-runtime-hooks. The default dry-run is intentional; the user
-  reviews the printed hook manifest before applying.
+- Pass user/global flags such as --codex, --claude, --codex-home, or --plugin
+  unless the user explicitly asks for a user-scope install.
 - Install optional extras (mcp, fastapi, sentence-transformers) unless the
-  user explicitly asks. The base install works without them.
+  user explicitly asks. If asked during install, pass `--install-deps` to the
+  installer; it installs into this repo's `.agent-learning/venv` by default. Do not use
+  `--deps-scope user` or `--user-deps` unless explicitly requested.
 - Retry destructively on failure. Stop and surface the stderr.
 - Touch any files outside $WORK and this repo.
 
 Success criteria (all must hold):
 - install.sh exits 0 (test suite passed).
-- init_learning_system.py exits 0 and creates the expected state files.
 - .agent-learning.json exists at this repo's root and is in .gitignore.
 - .agent-learning/repos/<repo-id>/baseline.json exists.
 
@@ -67,30 +66,32 @@ You are installing the agent-learning-compounder skill into THIS repo
 
 Steps:
 1. Resolve the absolute path of this repo first: TARGET="$PWD"
-2. cd PATH/TO/SOURCE
-3. Run the one-step bootstrap installer:
-     ./install.sh --bootstrap-repo "$TARGET" --runtime codex --verify
+2. Resolve the source checkout path: SOURCE="PATH/TO/SOURCE"
+3. From THIS repo's root, run the one-step installer:
+     "$SOURCE/install.sh"
    - Use --runtime claude for Claude repo-local install or --runtime all for
      both runtimes.
-   - `--runtime auto` uses env/repo hints before defaulting to Codex; it is not
-     filesystem detection.
+   - Default auto mode uses env/repo hints, local runtime evidence, then Codex.
    - This installs into the repo's runtime root (.agents/skills or
      .claude/skills under $TARGET), runs init_learning_system.py, executes
-     the self-test, and writes a runtime-hook manifest in dry-run mode.
+     the self-test, and applies repo-local hooks.
    - Bootstrap does not register Codex MCP. Register that host-side MCP server
      separately if the user asks.
    - alc_init can smoke alc_mcp, but optional MCP dependencies require
-     --install-deps or a separate dependency install.
-4. Return to THIS repo and print: ls -la .agent-learning.json .agent-learning/
+     --install-deps or a separate dependency install. `--install-deps` writes
+     to this repo's `.agent-learning/venv` by default, not user site.
+4. Print: ls -la .agent-learning.json .agent-learning/
 
 Do NOT:
-- Pass --apply-runtime-hooks unless the user explicitly asks. Dry-run is the
-  intentional default; the user reviews the manifest before applying.
-- Install optional extras unless asked.
+- Pass user/global flags such as --codex, --claude, --codex-home, or --plugin
+  unless the user explicitly asks for a user-scope install.
+- Install optional extras unless asked. If asked, keep them project-local; do
+  this by passing installer `--install-deps`. Do not use `--deps-scope user`
+  or `--user-deps` unless explicitly requested.
 - Retry destructively on failure.
 
 Success criteria:
-- install.sh --bootstrap-repo exits 0.
+- install.sh exits 0.
 - install.sh reports successful bootstrap and creates the expected state files.
 - .agent-learning.json exists in this repo's root.
 - .agent-learning/repos/<repo-id>/baseline.json exists.
@@ -102,13 +103,12 @@ On failure: stop, print the stderr verbatim, ask the user before continuing.
 
 ## Notes for the human dispatching one of these prompts
 
-- The agent does not need to know the runtime ahead of time for global install.
-  The zero-arg installer detects it from filesystem state. Repo bootstrap
-  should choose `--runtime codex`, `--runtime claude`, `--runtime all`, or
-  rely on `--runtime auto` uses env/repo hints. If you want to override, set
-  `AGENT_LEARNING_RUNTIME=claude` (or `codex`) before pasting the prompt.
-- Both prompts stop short of applying runtime hooks. To wire hooks, run
-  `install_runtime_hooks.py --apply` after reviewing the dry-run output.
+- The agent does not need to know the runtime ahead of time. The zero-arg
+  installer resolves it from env/repo hints, local runtime evidence, then Codex.
+  If you want to override, set `AGENT_LEARNING_RUNTIME=claude` (or `codex`) or
+  pass `--runtime claude|codex|all`.
+- The zero-arg path applies repo-local hooks. Use `--no-apply-runtime-hooks`
+  when you want a dry-run first.
 - If your repo already has an installed copy of `agent-learning-compounder`,
   the installer will move it to a timestamped `.bak-<ts>` directory before
   copying the new one.

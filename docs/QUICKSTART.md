@@ -1,11 +1,11 @@
 # Quickstart
 
 Get `agent-learning-compounder` installed and wired into a project in
-**one command**. Repo bootstrap uses deterministic runtime resolution:
+**one command**. The default install is project-local and uses runtime resolution:
 `AGENT_LEARNING_RUNTIME`, repo hints in `AGENTS.md` / `CLAUDE.md` /
-`GEMINI.md`, then Codex by default. It runs `alc_init` to profile your repo,
-smoke-test MCP when optional deps are available, and write the first
-session-context.
+`GEMINI.md`, local Codex/Claude runtime evidence, then Codex by default. It
+runs `alc_init` to profile your repo, smoke-test MCP when optional deps are
+available, and write the first session-context.
 
 ## What you need (one-time check)
 
@@ -21,29 +21,29 @@ Command matrix:
 
 ```bash
 ./install.sh
-# zero-argument `./install.sh`: global runtime install only. It detects
-# ${CLAUDE_HOME:-~/.claude} and ${AGENTS_HOME:-~/.agents}, verifies, and prints
-# repo-init commands. It does not run --bootstrap-repo, initialize the current
-# repo, or apply repo runtime hooks.
+# zero-argument `./install.sh`: project-local install in the current repo.
+# It detects runtime, verifies, initializes .agent-learning, and applies
+# repo-local hooks.
 
-./install.sh --bootstrap-repo "$PWD" --runtime codex --verify
-./install.sh --bootstrap-repo "$PWD" --runtime claude --verify
-./install.sh --bootstrap-repo "$PWD" --runtime all --verify
-# `--runtime auto` uses env/repo hints, not filesystem detection.
-# Add --apply-runtime-hooks to write hooks after reviewing the dry-run plan.
+./install.sh --runtime codex
+./install.sh --runtime claude
+./install.sh --runtime all
+# Runtime flags are overrides. They still install project-locally.
+# Use --install-deps for optional Python extras in .agent-learning/venv.
+# Use --no-verify or --no-apply-runtime-hooks for custom unattended setups.
 ```
 
 ### npm / npx (recommended)
 
 ```bash
-npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
+npx agent-learning-compounder
 ```
 
 ### curl one-liner (no Node required)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/beeard/agent-learning-compounder/master/bootstrap.sh \
-  | sh -s -- --bootstrap-repo "$PWD" --verify
+  | sh
 ```
 
 ### Claude Code marketplace (in-app)
@@ -63,19 +63,23 @@ server auto-discover. Per-repo init still needs the npm/curl path or
 
 ```bash
 git clone https://github.com/beeard/agent-learning-compounder.git /tmp/alc
-/tmp/alc/install.sh --bootstrap-repo "$PWD" --verify
+/tmp/alc/install.sh
 ```
 
 Any of the four paths above will:
 
 - Install the skill into the selected repo-local runtime root. Pick explicitly
-  with `--runtime codex|claude|all`; `--runtime auto` uses env/repo hints.
+  with `--runtime codex|claude|all`; the default auto mode uses env/repo hints,
+  then local runtime evidence, then Codex.
 - Run the packaged test suite (`--verify`) — about a minute.
 - Create `.agent-learning.json` at your project root and `.agent-learning/`
   for local state.
 - Run `alc_init` to profile the host repo (frameworks, languages, tests),
   smoke the MCP server when optional MCP dependencies are installed, check the
   doc contract, and write `latest-session-context.md`.
+- Optional Python extras are not installed by default. Pass `--install-deps`
+  to install `requirements-optional.txt` into `.agent-learning/venv`; user-site
+  installs require explicit `alc_init --deps-scope user` or `--user-deps`.
 - Build dashboard React assets best-effort when `pnpm` is available; fallback
   HTML remains usable when the build is skipped or fails.
 - It does not register Codex MCP. Register the MCP server separately in Codex
@@ -99,28 +103,27 @@ would. The skill builds up learning context in the background and surfaces
 it to future sessions automatically. The longer it runs, the smarter it gets
 about your specific repo.
 
-## Optional: wire runtime hooks
+## Runtime hooks
 
-By default the installer prepares hook configs but does **not** apply them —
-it leaves a dry-run manifest you can review. To actually wire the hooks (so
-the skill captures session telemetry automatically), pass
-`--apply-runtime-hooks` to the install command:
+The zero-argument installer applies repo-local hooks by default so the skill
+captures session telemetry automatically. To review without writing hooks:
 
 ```bash
-/tmp/alc/install.sh --bootstrap-repo "$PWD" --verify --apply-runtime-hooks
+/tmp/alc/install.sh --no-apply-runtime-hooks
 ```
 
-Or apply them later by running `install_runtime_hooks.py --apply` against
-the installed location (the installer prints the exact command).
+Explicit `--bootstrap-repo <dir>` remains dry-run by default for scripted
+operators; pass `--apply-runtime-hooks` when you want that path to write hooks.
 
 ## Uninstall
 
 If you change your mind:
 
 ```bash
-# 1. Remove the installed skill (path depends on your runtime).
-rm -rf "$HOME/.agents/skills/agent-learning-compounder"   # Codex
-# or:  rm -rf "$HOME/.claude/skills/agent-learning-compounder"  # Claude
+# 1. Remove the repo-local installed skill (path depends on your runtime).
+rm -rf .agents/skills/agent-learning-compounder   # Codex
+rm -rf .claude/skills/agent-learning-compounder   # Claude
+rm -f .codex/hooks.json .claude/settings.local.json
 
 # 2. Remove the per-project state.
 rm -rf .agent-learning .agent-learning.json

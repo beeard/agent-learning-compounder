@@ -54,6 +54,16 @@ class AlcInitTests(unittest.TestCase):
         self.assertIs(module.detect_repo, module.repo_profile.detect)
         self.assertIs(module.check_doc_contract, module.repo_profile.doc_contract_rows)
 
+    def test_install_deps_is_project_local_unless_user_scope_is_explicit(self) -> None:
+        source = ALC_INIT.read_text(encoding="utf-8")
+
+        self.assertIn('choices=["project", "user"]', source)
+        self.assertIn('default="project"', source)
+        self.assertIn("--user-deps", source)
+        self.assertIn(".agent-learning/venv", source)
+        self.assertIn('[str(install_python), "-m", "pip", "install", "-r", str(req)]', source)
+        self.assertIn('[sys.executable, "-m", "pip", "install", "--user", "-r", str(req)]', source)
+
     def test_writes_session_context_with_expected_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
