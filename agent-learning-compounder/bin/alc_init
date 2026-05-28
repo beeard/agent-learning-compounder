@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import pathlib
 import subprocess
 import sys
@@ -29,6 +28,7 @@ sys.path.insert(0, str(PLUGIN_ROOT / "bin"))
 
 import alc_query  # noqa: E402
 import ce_playbook  # noqa: E402
+import repo_profile  # noqa: E402
 from state_handle import StateHandle  # noqa: E402
 from session_context_render import (  # noqa: E402
     render_runtime_summary_md,
@@ -37,151 +37,10 @@ from session_context_render import (  # noqa: E402
     render_session_context,
 )
 
-# Prefixes that mark a skill as part of the compound-engineering family or
-# adjacent workflow tooling worth tracking. Match against `actor_name` in
-# events. We bias toward over-inclusion — the section can always filter
-# down at render time, but missing data can't be reconstructed.
-CE_SKILL_PREFIXES = (
-    "ce-",
-    "compound-engineering:",
-    "improve-codebase-architecture",
-    "to-prd",
-    "to-issues",
-)
-
-# Documentation contract: files/dirs ALC expects in a healthy repo, paired
-# with the CE skill that produces them. Missing entries surface as hints in
-# session-context (with manual fallback when CE isn't installed).
-DOC_CONTRACT = [
-    # (label, paths_to_check_in_order, generator_skill, tier)
-    ("STRATEGY.md", ["STRATEGY.md"], "ce-strategy", "anchor"),
-    ("Repo guide", ["AGENTS.md", "CLAUDE.md", "GEMINI.md"], None, "anchor"),
-    ("ARCHITECTURE.md", ["ARCHITECTURE.md", "docs/ARCHITECTURE.md"],
-        "improve-codebase-architecture", "architecture"),
-    ("CONTEXT.md", ["CONTEXT.md", "context.md"],
-        "ce-agent-native-architecture", "architecture"),
-    ("ADRs", ["docs/adr", "docs/adrs", "docs/decisions"],
-        "improve-codebase-architecture", "architecture"),
-    ("Brainstorms", ["docs/brainstorms"], "ce-brainstorm", "workflow"),
-    ("Plans", ["docs/plans"], "ce-plan", "workflow"),
-]
-
-EXT_TO_LANG = {
-    ".py": "python", ".rb": "ruby", ".ts": "typescript", ".tsx": "typescript",
-    ".js": "javascript", ".jsx": "javascript", ".mjs": "javascript",
-    ".go": "go", ".rs": "rust", ".java": "java", ".kt": "kotlin",
-    ".swift": "swift", ".cs": "csharp", ".php": "php", ".clj": "clojure",
-    ".ex": "elixir", ".exs": "elixir", ".erl": "erlang", ".scala": "scala",
-    ".lua": "lua", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
-    ".sql": "sql", ".vue": "vue", ".svelte": "svelte",
-}
-
-SKIP_DIRS = {
-    "node_modules", "__pycache__", ".git", ".venv", "venv", "dist", "build",
-    ".next", ".nuxt", ".cache", "vendor", "target", ".pytest_cache",
-    ".agent-learning", "coverage", ".mypy_cache", ".ruff_cache",
-}
-
-
-def detect_repo(repo: pathlib.Path) -> dict:
-    """Profile the host repo. Read-only; bounded traversal."""
-    profile: dict = {
-        "name": repo.name,
-        "abspath": str(repo),
-        "has_git": (repo / ".git").is_dir(),
-        "languages": {},
-        "frameworks": [],
-        "has_tests": False,
-        "has_frontend": False,
-        "monorepo": False,
-        "package_managers": [],
-    }
-
-    ext_counts: dict[str, int] = {}
-    for dirpath, dirnames, filenames in os.walk(repo):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
-        for fname in filenames:
-            ext = pathlib.Path(fname).suffix.lower()
-            if ext:
-                ext_counts[ext] = ext_counts.get(ext, 0) + 1
-
-    for ext, count in ext_counts.items():
-        lang = EXT_TO_LANG.get(ext)
-        if lang:
-            profile["languages"][lang] = profile["languages"].get(lang, 0) + count
-
-    # Framework + package-manager hints (file-presence-based)
-    fm = profile["frameworks"]
-    pms = profile["package_managers"]
-    if (repo / "Gemfile").is_file():
-        pms.append("bundler")
-        if (repo / "config" / "application.rb").is_file():
-            fm.append("rails")
-    if (repo / "package.json").is_file():
-        pms.append("npm")
-        try:
-            pkg = json.loads((repo / "package.json").read_text(encoding="utf-8"))
-            deps = {**pkg.get("dependencies", {}), **pkg.get("devDependencies", {})}
-            for key, label in (
-                ("next", "nextjs"), ("react", "react"), ("vue", "vue"),
-                ("svelte", "svelte"), ("@sveltejs/kit", "sveltekit"),
-                ("express", "express"), ("fastify", "fastify"),
-                ("hono", "hono"), ("@cloudflare/workers-types", "cloudflare-workers"),
-            ):
-                if key in deps:
-                    fm.append(label)
-            if not fm or fm == ["node"]:
-                fm.append("node")
-        except Exception:
-            pass
-    if (repo / "pyproject.toml").is_file():
-        pms.append("pip/poetry/uv")
-        try:
-            text = (repo / "pyproject.toml").read_text(encoding="utf-8", errors="ignore").lower()
-            if "fastapi" in text:
-                fm.append("fastapi")
-            if "flask" in text:
-                fm.append("flask")
-            if "django" in text:
-                fm.append("django")
-        except Exception:
-            pass
-    if (repo / "manage.py").is_file():
-        fm.append("django")
-    if (repo / "wrangler.toml").is_file() or (repo / "wrangler.jsonc").is_file():
-        fm.append("cloudflare-workers")
-    if (repo / "Cargo.toml").is_file():
-        pms.append("cargo")
-    if (repo / "go.mod").is_file():
-        pms.append("go-modules")
-    if (repo / "pom.xml").is_file():
-        pms.append("maven")
-    if (repo / "build.gradle").is_file() or (repo / "build.gradle.kts").is_file():
-        pms.append("gradle")
-
-    # Tests
-    for tdir in ("tests", "test", "spec", "__tests__"):
-        if (repo / tdir).is_dir():
-            profile["has_tests"] = True
-            break
-
-    # Frontend
-    frontend_frameworks = {"react", "vue", "svelte", "sveltekit", "nextjs"}
-    if any(f in frontend_frameworks for f in fm):
-        profile["has_frontend"] = True
-
-    # Monorepo
-    if (repo / "pnpm-workspace.yaml").is_file() or (repo / "lerna.json").is_file():
-        profile["monorepo"] = True
-    if (repo / "packages").is_dir() and (repo / "package.json").is_file():
-        profile["monorepo"] = True
-    if (repo / "apps").is_dir() and (repo / "package.json").is_file():
-        profile["monorepo"] = True
-
-    # Dedupe + sort
-    profile["frameworks"] = sorted(set(fm))
-    profile["package_managers"] = sorted(set(pms))
-    return profile
+# Compatibility aliases for callers that imported these from alc_init before
+# repo-profile became its own domain module.
+detect_repo = repo_profile.detect
+check_doc_contract = repo_profile.doc_contract_rows
 
 
 def ensure_mcp(install: bool, quiet: bool) -> dict:
@@ -277,35 +136,9 @@ def collect_runtime_summary(state: StateHandle) -> dict[str, Any]:
         "recommendations": alc_query.get_recommendations(state),
         "pending_patches": alc_query.get_pending_patches(state),
         "ce_usage": alc_query.get_skill_usage_summary(
-            state, since="30d", prefix_filter=list(CE_SKILL_PREFIXES)
+            state, since="30d", prefix_filter=list(repo_profile.CE_SKILL_PREFIXES)
         ),
     }
-
-
-def check_doc_contract(repo: pathlib.Path) -> list[dict[str, Any]]:
-    """Probe the host repo for the documents ALC's playbook expects.
-
-    For each contract entry, returns whichever path actually exists (if any),
-    the generator skill responsible, and the tier. Treats files and dirs
-    uniformly (an empty dir still counts as 'present' — the contract is the
-    location, not the contents).
-    """
-    rows: list[dict[str, Any]] = []
-    for label, paths, generator, tier in DOC_CONTRACT:
-        found = None
-        for relpath in paths:
-            candidate = repo / relpath
-            if candidate.exists():
-                found = relpath
-                break
-        rows.append({
-            "label": label,
-            "paths_checked": paths,
-            "found": found,
-            "generator": generator,
-            "tier": tier,
-        })
-    return rows
 
 
 def write_session_context(state_root: pathlib.Path, repo_id: str, body: str) -> pathlib.Path:
@@ -342,7 +175,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"alc_init: repo={repo}", file=sys.stderr)
         print(f"alc_init: state={state_root}", file=sys.stderr)
 
-    profile = detect_repo(repo)
+    profile = repo_profile.detect(repo)
     if not args.quiet:
         top_lang = max(profile["languages"].items(), key=lambda x: x[1])[0] if profile["languages"] else "_none_"
         print(f"alc_init: top language={top_lang} "
@@ -372,13 +205,12 @@ def main(argv: list[str] | None = None) -> int:
 
     runtime_md = render_runtime_summary_md(runtime_summary)
     ce_usage_md = render_ce_usage_md(runtime_summary.get("ce_usage") or [])
-    doc_contract_rows = check_doc_contract(repo)
+    doc_contract_rows = repo_profile.doc_contract_rows(repo)
     doc_contract_md = render_doc_contract_md(doc_contract_rows, ce_installed)
 
     # Pass CE usage counts to playbook so per-section hints can include
     # "(N invocations tracked)" annotations.
-    usage_counts = {row["actor_name"]: row["count"]
-                    for row in (runtime_summary.get("ce_usage") or [])}
+    usage_counts = repo_profile.ce_usage_counts(runtime_summary.get("ce_usage") or [])
     playbook_md = ce_playbook.render(profile, ce_installed, usage_counts=usage_counts)
 
     if not args.quiet:
