@@ -1,7 +1,7 @@
 ---
 title: "refactor: Plan post-M6 architecture campaign"
 type: "refactor"
-status: "active"
+status: "completed"
 date: "2026-05-28"
 depends_on:
   - docs/plans/2026-05-28-007-fix-gate-id-hash-recipe-plan.md
