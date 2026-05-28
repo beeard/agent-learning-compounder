@@ -97,12 +97,21 @@ def backfill(
 
     if not rows:
         return 0
-    if repo is not None:
-        state = project_state(repo, state_dir=state_dir)
-        event_writer.write_events_batch(rows, source="transcript", state=state)
-    else:
-        event_writer.write_events_batch(rows, source="transcript", state_root=_state_root(state_dir))
-    return len(rows)
+    state = project_state(repo, state_dir=state_dir) if repo is not None else None
+    written = 0
+    skipped = 0
+    for row in rows:
+        try:
+            if state is not None:
+                event_writer.write_event(row, source="transcript", state=state)
+            else:
+                event_writer.write_event(row, source="transcript", state_root=_state_root(state_dir))
+            written += 1
+        except ValueError:
+            skipped += 1
+    if skipped:
+        print(f"skipped {skipped} rows that failed boundary checks", file=sys.stderr)
+    return written
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

@@ -325,10 +325,13 @@ def _emit_row(raw: dict[str, Any], event_type: str, source: str) -> dict[str, An
     chain = _correlation_chain(raw, event_id=event_id, parent_id=parent_id, source=source)
     payload = _extract_payload(raw, event_type, source)
     payload = {key: value for key, value in payload.items() if value is not None}
-    if "path" in payload:
-        normalized_path = _normalize_path(_coerce_str(payload["path"]))
-        if normalized_path:
-            payload["path"] = normalized_path
+    for path_key in _PATH_KEYS:
+        if path_key in payload:
+            normalized = _normalize_path(_coerce_str(payload[path_key]))
+            if normalized:
+                payload[path_key] = normalized
+            else:
+                payload.pop(path_key, None)
 
     event: dict[str, Any] = {
         "schema_version": 4,
