@@ -41,7 +41,7 @@ class ReleaseArchiveContentsTests(unittest.TestCase):
     def test_build_release_sanitizes_top_level_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = pathlib.Path(tmp) / "repo"
-            shutil.copytree(REPO_ROOT, repo, ignore=shutil.ignore_patterns(".git"))
+            shutil.copytree(REPO_ROOT, repo, ignore=shutil.ignore_patterns(".git", ".agent-learning", "node_modules"))
             shutil.rmtree(repo / "dist", ignore_errors=True)
             (repo / "scripts" / "__pycache__").mkdir(parents=True, exist_ok=True)
             (repo / "scripts" / "__pycache__" / "x.pyc").write_text("cache", encoding="utf-8")

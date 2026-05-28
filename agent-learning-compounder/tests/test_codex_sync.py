@@ -41,7 +41,7 @@ class CodexSyncScriptTests(unittest.TestCase):
         a no-op stub, exit 2 so the divergence is loud rather than silent."""
         with tempfile.TemporaryDirectory() as td:
             fake_root = Path(td) / "agent-learning-compounder"
-            shutil.copytree(REPO_ROOT, fake_root, dirs_exist_ok=False)
+            shutil.copytree(REPO_ROOT, fake_root, dirs_exist_ok=False, ignore=shutil.ignore_patterns(".git", ".agent-learning", "node_modules"))
             (fake_root / ".codex-plugin").mkdir(parents=True, exist_ok=True)
             (fake_root / ".codex-plugin" / "plugin.json").write_text('{"name":"x"}\n')
             fake_script = fake_root / "scripts" / "maintenance" / "sync-to-codex-plugin.sh"
