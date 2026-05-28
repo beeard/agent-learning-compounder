@@ -28,6 +28,7 @@
     "scripts/gates_inherit.py",
     "scripts/serve_dashboard.py",
     "scripts/alc_init.py",
+    "scripts/alc_live_check.py",
     "scripts/ce_playbook.py"
   ],
   "optional_extras": {

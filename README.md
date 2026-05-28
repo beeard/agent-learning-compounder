@@ -12,12 +12,18 @@
 [![npm](https://img.shields.io/npm/v/agent-learning-compounder?label=npm&color=cb3837&style=flat-square)](https://www.npmjs.com/package/agent-learning-compounder)
 [![MCP](https://img.shields.io/badge/MCP-20_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
 [![License](https://img.shields.io/badge/license-MIT-15803d?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-532_smoke_%2B_290_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
+[![Tests](https://img.shields.io/badge/tests-535_smoke_%2B_290_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
 
 <br/>
 
 ```bash
 npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
+```
+
+Pre-release live check from a source checkout:
+
+```bash
+python3 agent-learning-compounder/bin/alc_live_check --repo /path/to/repo
 ```
 
 </div>
@@ -197,7 +203,7 @@ from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 ```bash
 cd agent-learning-compounder
 python3 -m unittest discover -s fixtures/tests   # 290 unit + integration
-python3 -m unittest discover -s tests            # 532 post-install smoke
+python3 -m unittest discover -s tests            # 535 post-install smoke
 python3 scripts/run_pressure_tests.py            # 4 durable-write gates
 ```
 

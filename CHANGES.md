@@ -14,6 +14,9 @@ Clean public release line for the npm package.
   regression that renders `latest-dashboard.html` from a fresh bootstrapped repo.
 - Adds a stdlib static fallback for `serve_dashboard --repo ...` so a dashboard
   can be served even when optional FastAPI/uvicorn dependencies are absent.
+- Adds `bin/alc_live_check`, an interactive one-command live-repo installer and
+  verifier for hooks, warm-loop SQL, state JSON/HTML, static dashboard render,
+  and direct MCP `tools/list`.
 
 ## 2026.05.27+review7-plus2.3
 

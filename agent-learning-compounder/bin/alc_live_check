@@ -1,0 +1,366 @@
+#!/usr/bin/env python3
+"""Install ALC into a live repo and verify the operator-facing surfaces.
+
+Interactive by default. Use --yes and explicit flags for unattended runs.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import sqlite3
+import subprocess
+import sys
+from dataclasses import dataclass, field
+from typing import Any
+
+
+HERE = pathlib.Path(__file__).resolve().parent
+SKILL_ROOT = HERE.parent
+
+
+@dataclass
+class Check:
+    name: str
+    ok: bool
+    detail: str
+
+
+@dataclass
+class Context:
+    repo: pathlib.Path
+    runtime: str
+    verify: bool
+    apply_hooks: bool
+    install_deps: bool
+    dashboard_port: int
+    serve_dashboard: bool
+    skip_install: bool
+    checks: list[Check] = field(default_factory=list)
+
+    def add(self, name: str, ok: bool, detail: str) -> None:
+        self.checks.append(Check(name, ok, detail))
+
+
+def find_installer() -> pathlib.Path | None:
+    for root in [SKILL_ROOT, *SKILL_ROOT.parents]:
+        candidate = root / "install.sh"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def prompt_text(label: str, default: str) -> str:
+    raw = input(f"{label} [{default}]: ").strip()
+    return raw or default
+
+
+def prompt_bool(label: str, default: bool) -> bool:
+    suffix = "Y/n" if default else "y/N"
+    raw = input(f"{label} [{suffix}]: ").strip().lower()
+    if not raw:
+        return default
+    return raw in {"y", "yes", "1", "true", "on"}
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--repo", type=pathlib.Path, help="Live repo to install/check.")
+    parser.add_argument("--runtime", choices=("codex", "claude", "all", "auto"), default=None)
+    parser.add_argument("--verify", action="store_true", default=None, help="Run installer --verify.")
+    parser.add_argument("--no-verify", action="store_false", dest="verify")
+    parser.add_argument("--apply-hooks", action="store_true", default=None, help="Apply runtime hooks.")
+    parser.add_argument("--no-apply-hooks", action="store_false", dest="apply_hooks")
+    parser.add_argument("--install-deps", action="store_true", default=None, help="Let alc_init install optional deps.")
+    parser.add_argument("--no-install-deps", action="store_false", dest="install_deps")
+    parser.add_argument("--dashboard-port", type=int, default=None)
+    parser.add_argument("--serve-dashboard", action="store_true", default=None, help="Start dashboard server after checks.")
+    parser.add_argument("--no-serve-dashboard", action="store_false", dest="serve_dashboard")
+    parser.add_argument("--skip-install", action="store_true", help="Only run checks against an existing install.")
+    parser.add_argument("--yes", action="store_true", help="Accept defaults for omitted settings.")
+    return parser.parse_args(argv)
+
+
+def build_context(args: argparse.Namespace) -> Context:
+    interactive = not args.yes and sys.stdin.isatty()
+    repo = args.repo
+    if repo is None:
+        value = prompt_text("Live repo path", os.getcwd()) if interactive else os.getcwd()
+        repo = pathlib.Path(value)
+    runtime = args.runtime
+    if runtime is None:
+        runtime = prompt_text("Runtime codex|claude|all|auto", "codex") if interactive else "codex"
+    verify = args.verify
+    if verify is None:
+        verify = prompt_bool("Run installer verification", True) if interactive else True
+    apply_hooks = args.apply_hooks
+    if apply_hooks is None:
+        apply_hooks = prompt_bool("Apply runtime hooks", True) if interactive else True
+    install_deps = args.install_deps
+    if install_deps is None:
+        install_deps = prompt_bool("Install optional MCP/dashboard deps if missing", False) if interactive else False
+    dashboard_port = args.dashboard_port
+    if dashboard_port is None:
+        raw_port = prompt_text("Dashboard port", "41089") if interactive else "41089"
+        dashboard_port = int(raw_port)
+    serve_dashboard = args.serve_dashboard
+    if serve_dashboard is None:
+        serve_dashboard = prompt_bool("Start dashboard server and keep it running", False) if interactive else False
+    return Context(
+        repo=repo.expanduser().resolve(),
+        runtime=runtime,
+        verify=bool(verify),
+        apply_hooks=bool(apply_hooks),
+        install_deps=bool(install_deps),
+        dashboard_port=dashboard_port,
+        serve_dashboard=bool(serve_dashboard),
+        skip_install=args.skip_install,
+    )
+
+
+def run(command: list[str], *, cwd: pathlib.Path | None = None, input_text: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        command,
+        cwd=str(cwd) if cwd else None,
+        input=input_text,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+
+
+def runtime_candidates(repo: pathlib.Path, runtime: str) -> list[pathlib.Path]:
+    candidates: list[pathlib.Path] = []
+    if runtime in {"codex", "all", "auto"}:
+        candidates.append(repo / ".agents" / "skills" / "agent-learning-compounder")
+    if runtime in {"claude", "all", "auto"}:
+        candidates.append(repo / ".claude" / "skills" / "agent-learning-compounder")
+    candidates.append(SKILL_ROOT)
+    return candidates
+
+
+def find_skill(repo: pathlib.Path, runtime: str) -> pathlib.Path:
+    for candidate in runtime_candidates(repo, runtime):
+        if (candidate / "bin" / "alc_init").is_file():
+            return candidate
+    raise FileNotFoundError("could not find installed agent-learning-compounder skill root")
+
+
+def read_manifest(repo: pathlib.Path) -> dict[str, Any]:
+    return json.loads((repo / ".agent-learning.json").read_text(encoding="utf-8"))
+
+
+def run_install(ctx: Context) -> None:
+    if ctx.skip_install:
+        ctx.add("install", True, "skipped by --skip-install")
+        return
+    installer = find_installer()
+    if installer is None:
+        ctx.add("install", False, "install.sh not found; rerun from source checkout or use --skip-install")
+        return
+    command = [str(installer), "--bootstrap-repo", str(ctx.repo), "--runtime", ctx.runtime]
+    if ctx.verify:
+        command.append("--verify")
+    if ctx.apply_hooks:
+        command.append("--apply-runtime-hooks")
+    result = run(command, cwd=installer.parent)
+    ok = result.returncode == 0
+    detail = "bootstrapped" if ok else (result.stderr or result.stdout).strip()[-500:]
+    ctx.add("install", ok, detail)
+
+
+def smoke_hook(ctx: Context, skill: pathlib.Path) -> None:
+    payload = {
+        "session_id": "alc-live-check",
+        "tool_name": "exec_command",
+        "tool_input": {"command": "true"},
+    }
+    result = run(
+        [
+            sys.executable,
+            str(skill / "bin" / "install_runtime_hooks"),
+            "--adapter",
+            "--repo",
+            str(ctx.repo),
+            "--runtime",
+            "codex" if ctx.runtime in {"codex", "all", "auto"} else "claude",
+            "--event",
+            "after_tool",
+        ],
+        input_text=json.dumps(payload),
+    )
+    ctx.add("hook adapter", result.returncode == 0, "synthetic after_tool event accepted" if result.returncode == 0 else result.stderr.strip())
+
+
+def smoke_mcp(ctx: Context, skill: pathlib.Path) -> None:
+    request = "\n".join(
+        [
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {},
+                        "clientInfo": {"name": "alc-live-check", "version": "0"},
+                    },
+                }
+            ),
+            json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}),
+            json.dumps({"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}),
+            "",
+        ]
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(skill)
+    result = subprocess.run(
+        [sys.executable, "-u", str(skill / "alc_mcp" / "server.py")],
+        input=request,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        check=False,
+    )
+    count = 0
+    for line in result.stdout.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if row.get("id") == 2:
+            count = len(row.get("result", {}).get("tools", []))
+    ctx.add("mcp tools/list", result.returncode == 0 and count > 0, f"{count} tools")
+
+
+def check_sql(ctx: Context, state_dir: pathlib.Path) -> None:
+    db = state_dir / "events.sqlite"
+    if not db.exists():
+        ctx.add("sqlite", False, f"missing {db}")
+        return
+    con = sqlite3.connect(db)
+    try:
+        count = con.execute("select count(*) from events").fetchone()[0]
+        latest = con.execute("select event, actor_kind, actor_name, session_id from events order by ts desc limit 1").fetchone()
+    finally:
+        con.close()
+    ctx.add("sqlite", count > 0, f"{count} events; latest={latest}")
+
+
+def run_checks(ctx: Context) -> pathlib.Path | None:
+    if not ctx.repo.is_dir():
+        ctx.add("repo path", False, f"not a directory: {ctx.repo}")
+        return None
+    ctx.add("repo path", True, str(ctx.repo))
+    try:
+        skill = find_skill(ctx.repo, ctx.runtime)
+        ctx.add("skill root", True, str(skill))
+    except Exception as error:
+        ctx.add("skill root", False, str(error))
+        return None
+
+    bundle = skill / "dashboard" / "web" / "dist" / "index.html"
+    ctx.add("dashboard bundle", bundle.exists(), str(bundle))
+
+    try:
+        manifest = read_manifest(ctx.repo)
+        ctx.add("manifest", True, str(ctx.repo / ".agent-learning.json"))
+        state_root = pathlib.Path(manifest["state_dir"])
+        repo_state = pathlib.Path(manifest["repo_state_dir"])
+    except Exception as error:
+        ctx.add("manifest", False, str(error))
+        return skill
+
+    if ctx.apply_hooks:
+        hook_targets = []
+        if ctx.runtime in {"codex", "all", "auto"}:
+            hook_targets.append(ctx.repo / ".codex" / "hooks.json")
+        if ctx.runtime in {"claude", "all"}:
+            hook_targets.append(ctx.repo / ".claude" / "settings.local.json")
+        existing = [str(path) for path in hook_targets if path.exists()]
+        ctx.add("runtime hooks", bool(existing), ", ".join(existing) if existing else "no hook config found")
+
+    init_cmd = [sys.executable, str(skill / "bin" / "alc_init"), "--repo", str(ctx.repo)]
+    if ctx.install_deps:
+        init_cmd.append("--install-deps")
+    init = run(init_cmd)
+    ctx.add("alc_init", init.returncode == 0, init.stdout.strip()[-500:] if init.returncode == 0 else init.stderr.strip())
+
+    smoke_hook(ctx, skill)
+
+    warm = run([sys.executable, str(skill / "bin" / "alc_bootstrap_pipeline"), "--repo", str(ctx.repo)])
+    ctx.add("warm loop", warm.returncode == 0, warm.stdout.strip() or warm.stderr.strip())
+
+    surface = run([sys.executable, str(skill / "bin" / "render_state_surface"), "--repo", str(ctx.repo), "--format", "json"])
+    if surface.returncode == 0:
+        try:
+            summary = json.loads(surface.stdout)
+            detail = f"recent_activity_24h={summary.get('recent_activity_24h')} mcp_status={summary.get('mcp_status')}"
+        except json.JSONDecodeError:
+            detail = surface.stdout.strip()[-500:]
+        ctx.add("state json", True, detail)
+    else:
+        ctx.add("state json", False, surface.stderr.strip())
+
+    html = run([sys.executable, str(skill / "bin" / "render_state_surface"), "--repo", str(ctx.repo), "--format", "html"])
+    dashboard_dir = pathlib.Path(html.stdout.strip()) if html.returncode == 0 and html.stdout.strip() else repo_state / "dashboard"
+    ctx.add("state html", html.returncode == 0 and (dashboard_dir / "dashboard.html").exists(), str(dashboard_dir))
+
+    rendered = run([sys.executable, str(skill / "bin" / "render_dashboard"), "--personal", str(state_root)])
+    latest_dashboard = state_root / "reports" / "agent-learning" / "latest-dashboard.html"
+    ctx.add("static dashboard", rendered.returncode == 0 and latest_dashboard.exists(), str(latest_dashboard))
+
+    check_sql(ctx, repo_state)
+    smoke_mcp(ctx, skill)
+    return skill
+
+
+def print_report(ctx: Context) -> int:
+    print("\nALC live check report")
+    print(f"repo: {ctx.repo}")
+    print(f"runtime: {ctx.runtime}")
+    print("")
+    failed = 0
+    for check in ctx.checks:
+        marker = "PASS" if check.ok else "FAIL"
+        if not check.ok:
+            failed += 1
+        print(f"{marker}  {check.name}: {check.detail}")
+    print("")
+    if failed:
+        print(f"RESULT: FAIL ({failed} checks failed)")
+        return 1
+    print("RESULT: PASS")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ctx = build_context(parse_args(argv))
+    run_install(ctx)
+    skill = run_checks(ctx)
+    code = print_report(ctx)
+    if code == 0 and ctx.serve_dashboard and skill is not None:
+        print(f"Starting dashboard: http://127.0.0.1:{ctx.dashboard_port}/")
+        return run(
+            [
+                sys.executable,
+                str(skill / "bin" / "serve_dashboard"),
+                "--repo",
+                str(ctx.repo),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(ctx.dashboard_port),
+            ]
+        ).returncode
+    if code == 0:
+        print(f"Dashboard command: python3 {skill / 'bin' / 'serve_dashboard'} --repo {ctx.repo} --host 127.0.0.1 --port {ctx.dashboard_port}")
+    return code
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

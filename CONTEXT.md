@@ -81,7 +81,7 @@ symlinks.
 ## 4. Two test directories (different purposes)
 
 ```
-agent-learning-compounder/tests/              ← post-install smoke (small, ~532 tests)
+agent-learning-compounder/tests/              ← post-install smoke (small, ~535 tests)
 agent-learning-compounder/fixtures/tests/     ← unit + integration (29 files, ~290 tests)
 ```
 
