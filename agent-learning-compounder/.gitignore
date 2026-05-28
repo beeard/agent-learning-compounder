@@ -14,6 +14,9 @@ venv/
 # Node / dashboard
 dashboard/web/node_modules/
 dashboard/web/dist/
+!dashboard/web/dist/
+!dashboard/web/dist/index.html
+dashboard/web/*.tsbuildinfo
 node_modules/
 
 # Logs and runtime state

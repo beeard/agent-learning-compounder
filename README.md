@@ -1,6 +1,6 @@
 <div align="center">
 
-# agent-learning-compounder
+# Agent Learning Compounder
 
 ### **Compound agent memory. Sessions feed it. Sessions read it.**
 
@@ -8,11 +8,11 @@
 
 <br/>
 
-[![Release](https://img.shields.io/badge/release-2026.05.27%2Breview7--plus2.3-2563eb?style=flat-square)](CHANGES.md)
+[![Release](https://img.shields.io/badge/release-0.1.0-2563eb?style=flat-square)](CHANGES.md)
 [![npm](https://img.shields.io/npm/v/agent-learning-compounder?label=npm&color=cb3837&style=flat-square)](https://www.npmjs.com/package/agent-learning-compounder)
 [![MCP](https://img.shields.io/badge/MCP-20_stdio_tools-f59e0b?style=flat-square)](agent-learning-compounder/.mcp.json)
 [![License](https://img.shields.io/badge/license-MIT-15803d?style=flat-square)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-529_smoke_%2B_289_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
+[![Tests](https://img.shields.io/badge/tests-532_smoke_%2B_290_unit_%2B_4_pressure-15803d?style=flat-square)](#verify)
 
 <br/>
 
@@ -186,7 +186,7 @@ from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 | [`STRATEGY.md`](STRATEGY.md) | Target problem · users · success signals · active tracks |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | Five-minute mental model with diagrams |
 | [`CONTEXT.md`](CONTEXT.md) | For LLM agents landing in this repo |
-| [`CHANGES.md`](CHANGES.md) | Release notes (latest: `2026.05.27+review7-plus2.3`) |
+| [`CHANGES.md`](CHANGES.md) | Release notes (latest: `0.1.0`) |
 | [`docs/QUICKSTART.md`](docs/QUICKSTART.md) | First-time install walk-through |
 | [`agent-learning-compounder/reference-lib/`](agent-learning-compounder/reference-lib/) | Per-subsystem deep dives (architecture, threat-model, output-schema, gate-registry, hook-telemetry, …) |
 
@@ -196,8 +196,8 @@ from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 
 ```bash
 cd agent-learning-compounder
-python3 -m unittest discover -s fixtures/tests   # 289 unit + integration
-python3 -m unittest discover -s tests            # 529 post-install smoke
+python3 -m unittest discover -s fixtures/tests   # 290 unit + integration
+python3 -m unittest discover -s tests            # 532 post-install smoke
 python3 scripts/run_pressure_tests.py            # 4 durable-write gates
 ```
 

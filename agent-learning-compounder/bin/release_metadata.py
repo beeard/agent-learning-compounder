@@ -44,10 +44,10 @@ class ReleaseMetadata:
 
 RELEASE_METADATA = ReleaseMetadata(
     name=PROJECT_NAME,
-    manifest_version="2026.05.27+review7-plus2.3",
-    plugin_version="2026.05.27+review7-plus2.3",
-    npm_version="2026.5.27-review7.plus2.3",
-    marketplace_version="2026.5.27-review7.plus2.3",
+    manifest_version="0.1.0",
+    plugin_version="0.1.0",
+    npm_version="0.1.0",
+    marketplace_version="0.1.0",
     description=(
         "Distills repo facts, session telemetry, and skill-health signals into "
         "durable, evidence-backed agent memory. Installs as a Codex skill, a "
@@ -74,4 +74,3 @@ RELEASE_METADATA = ReleaseMetadata(
     ),
     marketplace_category="workflow",
 )
-

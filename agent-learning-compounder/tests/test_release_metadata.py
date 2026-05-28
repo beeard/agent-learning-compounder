@@ -93,7 +93,7 @@ class ReleaseMetadataTests(unittest.TestCase):
     def test_readme_has_no_stale_release_family_mentions(self) -> None:
         readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
         versions = set(re.findall(r"2026\.\d{2}\.\d{2}\+review\d+-plus\d+\.\d+", readme))
-        self.assertEqual(versions, {METADATA.manifest_version})
+        self.assertEqual(versions, set())
 
 
 if __name__ == "__main__":

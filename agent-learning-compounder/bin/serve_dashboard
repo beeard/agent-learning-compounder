@@ -8,7 +8,9 @@ deliberate trusted-network exposure).
 from __future__ import annotations
 
 import argparse
+import http.server
 import sys
+import urllib.parse
 from pathlib import Path
 
 
@@ -68,27 +70,22 @@ def main(argv: list[str] | None = None):
     if err is not None:
         print(err, file=sys.stderr)
         return 2
-    try:
-        import uvicorn
-    except ImportError:
-        print(
-            "uvicorn not installed; from the installed skill root run "
-            "pip install -r requirements-optional.txt "
-            "(archive root: pip install -r agent-learning-compounder/requirements-optional.txt)",
-            file=sys.stderr,
-        )
-        return 2
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "bin"))
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from dashboard import build_app
     from dashboard_url_publisher import clear_live_url, publish_live_url
     from state_handle import StateHandle
 
     repo = args.repo.resolve() if args.repo else None
-    app = build_app(
-        personal=args.personal.resolve() if args.personal else None,
-        repo=repo,
-    )
+    try:
+        import uvicorn
+        from dashboard import build_app
+
+        app = build_app(
+            personal=args.personal.resolve() if args.personal else None,
+            repo=repo,
+        )
+    except ImportError:
+        return serve_static_fallback(args)
     marker_state = None
     marker_token = None
     if repo is not None:
@@ -113,6 +110,67 @@ def main(argv: list[str] | None = None):
     finally:
         if marker_state is not None:
             clear_live_url(marker_state, marker_token)
+
+
+def serve_static_fallback(args: argparse.Namespace) -> int:
+    """Serve a generated static dashboard without FastAPI/uvicorn."""
+    from dashboard_url_publisher import clear_live_url, publish_live_url
+    from render_dashboard import DEFAULT_BUNDLE, render as render_dashboard
+    from render_state_surface import render_html
+    from state_handle import StateHandle
+
+    repo = args.repo.resolve() if args.repo else None
+    marker_state = None
+    marker_token = None
+    if repo is not None:
+        marker_state = StateHandle.for_repo(repo)
+        dashboard_dir = render_html(marker_state)
+    elif args.personal is not None:
+        personal = args.personal.resolve()
+        latest = render_dashboard(personal, DEFAULT_BUNDLE, history_limit=180)
+        dashboard_dir = latest.parent
+    else:
+        print(
+            "uvicorn not installed and no --repo/--personal was provided for static fallback. "
+            "Install optional deps with: pip install -r requirements-optional.txt",
+            file=sys.stderr,
+        )
+        return 2
+
+    if marker_state is not None:
+        marker_token = publish_live_url(
+            marker_state,
+            host=args.host,
+            port=args.port,
+            surface="stdlib",
+        )
+
+    class DashboardHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *handler_args, **handler_kwargs):
+            super().__init__(*handler_args, directory=str(dashboard_dir), **handler_kwargs)
+
+        def do_GET(self):
+            parsed = urllib.parse.urlsplit(self.path)
+            if parsed.path in {"", "/"}:
+                target = "dashboard.html" if (dashboard_dir / "dashboard.html").exists() else "latest-dashboard.html"
+                self.path = "/" + target
+            return super().do_GET()
+
+    server = http.server.ThreadingHTTPServer((args.host, args.port), DashboardHandler)
+    print(
+        f"[serve_dashboard] static dashboard on http://{args.host}:{args.port}/  "
+        f"root={dashboard_dir}",
+        file=sys.stderr,
+    )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        server.server_close()
+        if marker_state is not None:
+            clear_live_url(marker_state, marker_token)
+    return 0
 
 
 if __name__ == "__main__":

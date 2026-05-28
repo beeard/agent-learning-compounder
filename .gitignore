@@ -6,6 +6,9 @@ __pycache__/
 .venv/
 dist/
 node_modules/
+!agent-learning-compounder/dashboard/web/dist/
+!agent-learning-compounder/dashboard/web/dist/index.html
+*.tsbuildinfo
 .runtime/
 
 # agent-learning-compounder: hook config contains absolute $HOME paths

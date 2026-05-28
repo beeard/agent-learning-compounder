@@ -62,7 +62,12 @@ class ReleaseLayoutTests(unittest.TestCase):
                 target.mkdir(parents=True, exist_ok=True)
                 (target / "leak.txt").write_text("cache", encoding="utf-8")
             for pattern in release_layout.SANITIZER_FILE_EXCLUSIONS:
-                name = "sample.pyc" if "*" in pattern else pattern
+                wildcard_names = {
+                    "*.pyc": "sample.pyc",
+                    "*.pyo": "sample.pyo",
+                    "*.tsbuildinfo": "sample.tsbuildinfo",
+                }
+                name = wildcard_names.get(pattern, pattern)
                 target = root / "nested" / name
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text("cache", encoding="utf-8")
@@ -76,6 +81,9 @@ class ReleaseLayoutTests(unittest.TestCase):
             template_partial = root / "dashboard" / "templates" / "_gates.html"
             template_partial.parent.mkdir(parents=True, exist_ok=True)
             template_partial.write_text("template", encoding="utf-8")
+            dashboard_bundle = root / "dashboard" / "web" / "dist" / "index.html"
+            dashboard_bundle.parent.mkdir(parents=True, exist_ok=True)
+            dashboard_bundle.write_text("<html></html>", encoding="utf-8")
 
             command = (
                 f". {REPO_ROOT / 'scripts' / 'sanitize_skill_tree.sh'} && "
@@ -98,6 +106,7 @@ class ReleaseLayoutTests(unittest.TestCase):
             self.assertTrue(survivor_file.exists())
             self.assertFalse(asset_source.exists())
             self.assertTrue(template_partial.exists())
+            self.assertTrue(dashboard_bundle.exists())
 
     def test_package_and_manifest_policy_match_layout_module(self) -> None:
         package = _json(REPO_ROOT / "package.json")
@@ -118,12 +127,14 @@ class ReleaseLayoutTests(unittest.TestCase):
         self.assertIn("bootstrap.sh", rendered)
         self.assertIn("install.sh", rendered)
         self.assertIn("agent-learning-compounder/AGENTS.md", rendered)
+        self.assertIn("agent-learning-compounder/dashboard/web/dist/index.html", rendered)
         self.assertNotIn("docs/dev/architecture-review-closeout-2026-05-27.md", rendered)
         self.assertFalse(any(path.startswith("docs/plans/") for path in rendered))
         self.assertFalse(any(path.startswith("docs/history/") for path in rendered))
         self.assertFalse(any(path.startswith("docs/decisions/") for path in rendered))
         self.assertFalse(any("__pycache__" in path for path in rendered))
         self.assertFalse(any(path.endswith(".pyc") for path in rendered))
+        self.assertFalse(any(path.endswith(".tsbuildinfo") for path in rendered))
         self.assertFalse(any("/.pytest_cache/" in path for path in rendered))
 
 

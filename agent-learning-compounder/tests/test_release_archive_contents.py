@@ -37,7 +37,8 @@ class ReleaseArchiveContentsTests(unittest.TestCase):
     def test_build_release_sanitizes_top_level_paths(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo = pathlib.Path(tmp) / "repo"
-            shutil.copytree(REPO_ROOT, repo, ignore=shutil.ignore_patterns(".git", "dist"))
+            shutil.copytree(REPO_ROOT, repo, ignore=shutil.ignore_patterns(".git"))
+            shutil.rmtree(repo / "dist", ignore_errors=True)
             (repo / "scripts" / "__pycache__").mkdir(parents=True, exist_ok=True)
             (repo / "scripts" / "__pycache__" / "x.pyc").write_text("cache", encoding="utf-8")
             (repo / "docs" / ".pytest_cache").mkdir(parents=True, exist_ok=True)
@@ -65,6 +66,9 @@ class ReleaseArchiveContentsTests(unittest.TestCase):
                 )
                 entries = release_manifest.inspect_tree(root)
             self.assertEqual(release_manifest.validate_no_excluded(entries), [])
+            paths = {entry.path for entry in entries}
+            self.assertIn("agent-learning-compounder/dashboard/web/dist/index.html", paths)
+            self.assertFalse(any(path.endswith(".tsbuildinfo") for path in paths))
 
 
 if __name__ == "__main__":

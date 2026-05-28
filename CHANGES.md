@@ -1,5 +1,20 @@
 # Changes
 
+## 0.1.0
+
+Clean public release line for the npm package.
+
+- Resets package/plugin/manifest versioning to a conventional low semver
+  series (`0.1.0`) instead of the internal review/build history labels.
+- Ships the built React dashboard bundle in npm, tar, and zip artifacts.
+- Keeps the dashboard bundle through install/release sanitization while still
+  stripping caches, `node_modules`, generic `dist/`, and TypeScript build-info
+  files.
+- Makes `render_dashboard` work from a packaged install and adds an install
+  regression that renders `latest-dashboard.html` from a fresh bootstrapped repo.
+- Adds a stdlib static fallback for `serve_dashboard --repo ...` so a dashboard
+  can be served even when optional FastAPI/uvicorn dependencies are absent.
+
 ## 2026.05.27+review7-plus2.3
 
 Close the warm-loop seam — `replay_hook_events` → `index_events` — into

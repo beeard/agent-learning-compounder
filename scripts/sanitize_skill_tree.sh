@@ -9,7 +9,7 @@
 #   sanitize_skill_tree /path/to/agent-learning-compounder
 
 SANITIZE_DIR_EXCLUDES='__pycache__ .pytest_cache .agent-learning node_modules dist'
-SANITIZE_FILE_EXCLUDES='*.pyc *.pyo .agent-learning.json'
+SANITIZE_FILE_EXCLUDES='*.pyc *.pyo *.tsbuildinfo .agent-learning.json'
 
 sanitize_skill_tree() {
   root="$1"
@@ -17,7 +17,15 @@ sanitize_skill_tree() {
     echo "sanitize_skill_tree: not a directory: $root" >&2
     return 1
   fi
-  find "$root" \( -name '__pycache__' -o -name '.pytest_cache' -o -name '.agent-learning' -o -name 'node_modules' -o -name 'dist' \) -type d -prune -exec rm -rf {} +
-  find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
+  find "$root" \( \
+    -name '__pycache__' -o \
+    -name '.pytest_cache' -o \
+    -name '.agent-learning' -o \
+    -name 'node_modules' -o \
+    \( -name 'dist' \
+      ! -path "$root/dashboard/web/dist" \
+      ! -path "$root/agent-learning-compounder/dashboard/web/dist" \) \
+  \) -type d -prune -exec rm -rf {} +
+  find "$root" \( -name '*.pyc' -o -name '*.pyo' -o -name '*.tsbuildinfo' -o -name '.agent-learning.json' \) -type f -exec rm -f {} +
   find "$root" \( -path '*/assets/_*.html' -o -path '*/assets/_*.png' \) -type f -exec rm -f {} +
 }

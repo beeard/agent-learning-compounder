@@ -123,6 +123,64 @@ class ServeDashboardTests(unittest.TestCase):
 
         dashboard_url_publisher.clear_live_url(self.state, replacement_tokens[0])
 
+    def test_static_fallback_serves_repo_dashboard_without_uvicorn(self) -> None:
+        observed: list[str] = []
+        repo = self.repo
+
+        class FakeServer:
+            def __init__(self, server_address, handler_cls):  # noqa: ANN001
+                self.server_address = server_address
+                self.handler_cls = handler_cls
+                self.closed = False
+
+            def serve_forever(self) -> None:
+                observed.append(dashboard_url(repo))
+                raise KeyboardInterrupt
+
+            def server_close(self) -> None:
+                self.closed = True
+
+        self.state.dashboard_dir.mkdir(parents=True, exist_ok=True)
+        args = SERVE.parse_args(["--repo", str(self.repo), "--host", "127.0.0.1", "--port", "41037"])
+        with (
+            patch("render_state_surface.render_html", return_value=self.state.dashboard_dir),
+            patch.object(SERVE.http.server, "ThreadingHTTPServer", FakeServer),
+        ):
+            result = SERVE.serve_static_fallback(args)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(observed, ["http://127.0.0.1:41037/"])
+        self.assertFalse((self.state.dashboard_dir / "server.json").exists())
+
+    def test_main_falls_back_when_fastapi_dependency_is_missing(self) -> None:
+        observed: list[str] = []
+        repo = self.repo
+
+        class FakeServer:
+            def __init__(self, server_address, handler_cls):  # noqa: ANN001
+                self.server_address = server_address
+                self.handler_cls = handler_cls
+
+            def serve_forever(self) -> None:
+                observed.append(dashboard_url(repo))
+                raise KeyboardInterrupt
+
+            def server_close(self) -> None:
+                pass
+
+        fake_uvicorn = SimpleNamespace(run=lambda *args, **kwargs: None)
+        fake_dashboard = SimpleNamespace(build_app=lambda **kwargs: (_ for _ in ()).throw(ImportError("fastapi required")))
+        self.state.dashboard_dir.mkdir(parents=True, exist_ok=True)
+        with (
+            patch.dict(sys.modules, {"uvicorn": fake_uvicorn, "dashboard": fake_dashboard}),
+            patch("render_state_surface.render_html", return_value=self.state.dashboard_dir),
+            patch.object(SERVE.http.server, "ThreadingHTTPServer", FakeServer),
+        ):
+            result = SERVE.main(["--repo", str(self.repo), "--host", "127.0.0.1", "--port", "41038"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(observed, ["http://127.0.0.1:41038/"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -42,7 +42,15 @@ SANITIZER_DIR_EXCLUSIONS = (
 SANITIZER_FILE_EXCLUSIONS = (
     "*.pyc",
     "*.pyo",
+    "*.tsbuildinfo",
     ".agent-learning.json",
+)
+
+SANITIZER_PATH_ALLOWLIST = (
+    "agent-learning-compounder/dashboard/web/dist",
+    "agent-learning-compounder/dashboard/web/dist/index.html",
+    "dashboard/web/dist",
+    "dashboard/web/dist/index.html",
 )
 
 SANITIZER_PATH_EXCLUSIONS = (
@@ -60,6 +68,7 @@ MANIFEST_EXCLUDED_FROM_PACKAGE = (
     "dist",
     "*.pyc",
     "*.pyo",
+    "*.tsbuildinfo",
     ".agent-learning.json",
     "agent-learning-compounder/assets/_*.html",
     "agent-learning-compounder/assets/_*.png",
@@ -90,7 +99,9 @@ NPM_FILES = (
     "scripts/alc-install.mjs",
     "scripts/sanitize_skill_tree.sh",
     "scripts/build_release.sh",
+    "agent-learning-compounder/dashboard/web/dist/index.html",
     "agent-learning-compounder/",
+    "!agent-learning-compounder/dashboard/web/*.tsbuildinfo",
     "!agent-learning-compounder/assets/_*.html",
     "!agent-learning-compounder/assets/_*.png",
     ".claude-plugin/marketplace.json",
@@ -115,10 +126,13 @@ def is_build_pruned(relative_path: pathlib.Path | str) -> bool:
 
 
 def is_sanitizer_excluded(relative_path: pathlib.Path | str) -> bool:
+    posix_path = pathlib.PurePosixPath(str(relative_path)).as_posix()
+    if posix_path in SANITIZER_PATH_ALLOWLIST:
+        return False
     parts = _normalized_parts(relative_path)
     if any(part in SANITIZER_DIR_EXCLUSIONS for part in parts):
         return True
-    path = pathlib.PurePosixPath(str(relative_path)).as_posix()
+    path = posix_path
     name = pathlib.PurePosixPath(path).name
     return any(fnmatch.fnmatch(name, pattern) for pattern in SANITIZER_FILE_EXCLUSIONS) or any(
         fnmatch.fnmatch(path, pattern) for pattern in SANITIZER_PATH_EXCLUSIONS

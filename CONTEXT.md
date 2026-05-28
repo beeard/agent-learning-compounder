@@ -16,7 +16,7 @@ When you change behavior, the consumer is a fresh repo that just installed
 the package. Paths, imports, and entrypoints must work from the **installed
 location**, not just from this working tree.
 
-Production version string: `2026.05.27+review7-plus2.3` (single source of
+Production version string: `0.1.0` (single source of
 truth in `MANIFEST.json`, mirrored to README, plugin.json, marketplace.json).
 
 ## 2. Three install paths (when each is preferred)
@@ -81,8 +81,8 @@ symlinks.
 ## 4. Two test directories (different purposes)
 
 ```
-agent-learning-compounder/tests/              ← post-install smoke (small, ~529 tests)
-agent-learning-compounder/fixtures/tests/     ← unit + integration (29 files, ~289 tests)
+agent-learning-compounder/tests/              ← post-install smoke (small, ~532 tests)
+agent-learning-compounder/fixtures/tests/     ← unit + integration (29 files, ~290 tests)
 ```
 
 The `fixtures/` prefix on the second one reflects co-location with

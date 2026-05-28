@@ -93,6 +93,36 @@ class InstallBootstrapTests(unittest.TestCase):
             self.assertTrue(hook_log.exists())
             self.assertEqual(hook_log.stat().st_mode & 0o777, 0o600)
 
+    def test_bootstrap_repo_ships_renderable_dashboard_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+
+            result = run_install("--bootstrap-repo", repo, "--runtime", "codex")
+            self.assertEqual(result.returncode, 0, f"{result.stderr}\n{result.stdout}")
+
+            skill_root = repo / ".agents" / "skills" / "agent-learning-compounder"
+            bundle = skill_root / "dashboard" / "web" / "dist" / "index.html"
+            self.assertTrue(bundle.exists())
+
+            render = subprocess.run(
+                [
+                    "python3",
+                    str(skill_root / "bin" / "render_dashboard"),
+                    "--personal",
+                    str(repo / ".agent-learning"),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(render.returncode, 0, f"{render.stderr}\n{render.stdout}")
+            rendered = repo / ".agent-learning" / "reports" / "agent-learning" / "latest-dashboard.html"
+            self.assertTrue(rendered.exists())
+            self.assertIn('"personal_root"', rendered.read_text(encoding="utf-8"))
+
     def test_bootstrap_repo_apply_runtime_hooks_flag(self):
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = pathlib.Path(tmp)

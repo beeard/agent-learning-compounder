@@ -20,7 +20,7 @@ import release_layout
 import release_metadata
 
 
-EXCLUDED_LABEL = "__pycache__|*.pyc|*.pyo|.pytest_cache|node_modules|dist|.agent-learning"
+EXCLUDED_LABEL = "__pycache__|*.pyc|*.pyo|*.tsbuildinfo|.pytest_cache|node_modules|dist|.agent-learning"
 
 
 @dataclass(frozen=True)

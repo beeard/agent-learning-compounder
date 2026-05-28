@@ -135,10 +135,8 @@ copy_skill() {
   sanitize_skill_tree "$dest"
 }
 
-# Build the React dashboard bundle so consumers don't land on the
-# missing-bundle fallback. sanitize_skill_tree always strips dist/, so
-# any pre-built bundle in the source tree never makes it past install --
-# we have to (re)build here.
+# Ensure the React dashboard bundle exists. Published packages ship a built
+# single-file bundle; source checkouts can rebuild it with pnpm.
 build_dashboard_bundle() {
   dest="$1"
   bundle_root="$dest/dashboard/web"
@@ -148,11 +146,16 @@ build_dashboard_bundle() {
     return 0
   fi
 
-  if ! command -v pnpm >/dev/null 2>&1; then
-    echo "skipping dashboard build: pnpm not found in PATH." >&2
-    echo "  the dashboard will show the fallback HTML until you run:" >&2
-    echo "    cd \"$bundle_root\" && pnpm install && pnpm build" >&2
+  if [ -f "$bundle_file" ]; then
+    echo "using shipped dashboard bundle: $bundle_file" >&2
     return 0
+  fi
+
+  if ! command -v pnpm >/dev/null 2>&1; then
+    echo "dashboard bundle missing and pnpm not found in PATH." >&2
+    echo "  expected packaged bundle: $bundle_file" >&2
+    echo "  source checkout repair: cd \"$bundle_root\" && pnpm install && pnpm build" >&2
+    return 1
   fi
 
   echo "building dashboard React bundle (pnpm install + pnpm build)..." >&2
@@ -161,14 +164,17 @@ build_dashboard_bundle() {
       echo "  built $bundle_file" >&2
     else
       echo "  pnpm build completed but $bundle_file is missing" >&2
+      rm -rf "$bundle_root/node_modules"
+      return 1
     fi
     # node_modules is dev-only at this point; the built dist is all the
     # dashboard needs at runtime. Drop it to save ~200MB per install.
     rm -rf "$bundle_root/node_modules"
   else
-    echo "  pnpm build failed; the dashboard will show the fallback HTML." >&2
+    echo "  pnpm build failed; dashboard bundle is required for install." >&2
     echo "  retry with: cd \"$bundle_root\" && pnpm install && pnpm build" >&2
     rm -rf "$bundle_root/node_modules"
+    return 1
   fi
 }
 

@@ -7,7 +7,7 @@
   },
   "metadata": {
     "description": "Marketplace shell for the agent-learning-compounder plugin.",
-    "version": "2026.5.27-review7.plus2.3"
+    "version": "0.1.0"
   },
   "plugins": [
     {
