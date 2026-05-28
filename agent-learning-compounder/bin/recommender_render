@@ -13,9 +13,9 @@ from typing import Any
 from state_handle import StateHandle, atomic_write_text
 
 try:
-    from recommender_generators import GENERATORS, render as render_bundle
+    from recommender_generators import GENERATORS, get_spec, render as render_bundle
 except ImportError:  # pragma: no cover
-    from bin.recommender_generators import GENERATORS, render as render_bundle
+    from bin.recommender_generators import GENERATORS, get_spec, render as render_bundle
 
 try:
     from exec_sandbox import run as run_in_sandbox
@@ -88,6 +88,7 @@ def _validate_recommendation(rec: dict[str, Any], *, prevalidate: bool, state: S
 
     if kind not in GENERATORS:
         return None, {"kind": kind, "recommendation_id": sid, "reason": "unsupported kind"}
+    spec = get_spec(kind)
 
     if prevalidate:
         command = str(rec.get("validation_command", "")).strip()
@@ -108,7 +109,7 @@ def _validate_recommendation(rec: dict[str, Any], *, prevalidate: bool, state: S
     except Exception as exc:
         return None, {"kind": kind, "recommendation_id": sid, "reason": str(exc)}
 
-    if kind == "workflow_chain":
+    if spec.output_class == "suggestion":
         return {"kind": kind, "recommendation_id": sid, "suggestion": bundle.get("suggestion", {})}, None
 
     return {"kind": kind, "bundle": bundle}, None

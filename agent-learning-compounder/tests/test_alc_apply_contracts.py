@@ -60,10 +60,12 @@ Use this agent when bounded follow-up is needed.
 
 class AlcApplyContractsTests(unittest.TestCase):
     def test_generators_targets_subset_of_dsl_targets(self) -> None:
-        from recommender_generators import GENERATORS  # noqa: F401
+        from recommender_generators import GENERATORS
 
         generated = alc_apply_contracts._extract_generator_target_types()
         self.assertLessEqual(generated, set(alc_apply_contracts.DSL_TARGETS.keys()))
+        self.assertEqual(generated, {"skill", "agent"})
+        self.assertIsNone(GENERATORS["workflow_chain"].target_type)
 
     def test_self_validation_on_import(self) -> None:
         env = os.environ.copy()

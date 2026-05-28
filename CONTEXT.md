@@ -164,13 +164,13 @@ consumer — `alc_query` controls schema evolution. (See § 6.)
 ## 6. The named catalogs (KTD-15 family)
 
 ALC uses **stable IDs over cute names.** When adding analyst queries,
-generators, MCP tools, or propose ops, add the catalog entry first; then
+generators, MCP tools, or propose ops, add the registry entry first; then
 implement against the ID.
 
 | Catalog | IDs | Source of truth |
 |---|---|---|
 | Analyst queries | Q1–Qn | `bin/analyst_queries.py::QUERY_SPECS`; mirror: `reference-lib/analyst-queries-catalog` |
-| Generators (patch emitters) | G1–G5 | `reference-lib/generator-catalog` (`bin.recommender_generators.GENERATORS`) |
+| Generators (patch and suggestion emitters) | G1–Gn | `bin/recommender_generators.py::GENERATORS`; mirrors: `reference-lib/generator-catalog`, `skills/alc-core/references/generator-catalog.md` |
 | MCP tools | M1–M20 | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | `reference-lib/propose-catalog` |
 | Hermes-DSL targets | `skill` / `agent` / `command` / `hook` | `reference-lib/hermes-dsl-spec` |

@@ -149,15 +149,17 @@ ALC uses **stable IDs over cute names**. Five catalogs:
 | Catalog | IDs | What | Source of truth |
 |---|---|---|---|
 | Analyst queries | Q1–Qn | What questions the analyst suite answers | `bin/analyst_queries.py::QUERY_SPECS`; mirror: `reference-lib/analyst-queries-catalog` |
-| Generators | G1–G5 | Patch-emitting recommenders | `reference-lib/generator-catalog` (`bin.recommender_generators.GENERATORS`) |
+| Generators | G1–Gn | Patch and suggestion recommenders | `bin/recommender_generators.py::GENERATORS`; mirrors: `reference-lib/generator-catalog`, `skills/alc-core/references/generator-catalog.md` |
 | MCP tools | M1–M20 | Stdio MCP catalog | `reference-lib/mcp-catalog` (`alc_mcp.catalog.MCP_TOOLS`) |
 | Propose ops | UP1–UP5 | Write-side propose surface | `reference-lib/propose-catalog` |
 | Hermes-DSL targets | `skill` / `agent` / `command` / `hook` | What `alc_apply` is allowed to write | `reference-lib/hermes-dsl-spec` |
 
 If you're adding a new analyst query, generator, or MCP tool, add it to
-the catalog first, then implement against the ID. Analyst queries use
-`bin/analyst_queries.py::QuerySpec`; dispatch and the public reference
-mirror are derived from that catalog.
+the registry first, then implement against the ID. Analyst queries use
+`bin/analyst_queries.py::QuerySpec`; recommender generators use
+`bin/recommender_generators.py::GeneratorSpec`. Dispatch, output class,
+target-type metadata, and public reference mirrors are derived from those
+registries.
 
 ### 2.6 The hook entry: `render_state_surface`
 

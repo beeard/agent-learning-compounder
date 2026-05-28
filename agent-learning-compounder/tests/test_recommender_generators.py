@@ -6,6 +6,8 @@ import shutil
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
+from unittest import mock
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -49,14 +51,41 @@ class RecommenderGeneratorsTests(unittest.TestCase):
         return root
 
     def test_generators_register_minimum_kinds(self) -> None:
-        expected = {
+        expected = [
             "anomaly_investigate",
             "skill_routing_review",
             "model_swap_candidate",
             "agent_spawn_suggestion",
             "workflow_chain",
-        }
-        self.assertEqual(set(recommender_generators.GENERATORS), expected)
+        ]
+        self.assertEqual(list(recommender_generators.GENERATORS), expected)
+        self.assertEqual(recommender_generators.supported_kinds(), expected)
+
+    def test_generator_registry_contract_owns_identity_and_output_metadata(self) -> None:
+        ids = []
+        for kind, spec in recommender_generators.GENERATORS.items():
+            ids.append(spec.id)
+            self.assertEqual(spec.kind, kind)
+            self.assertRegex(spec.id, r"^G[1-5]$")
+            self.assertTrue(spec.summary)
+            self.assertEqual(spec.version, 1)
+            self.assertTrue(callable(spec.generator))
+            self.assertIn(spec.output_class, {"patch_bundle", "suggestion"})
+            if spec.output_class == "patch_bundle":
+                self.assertIn(spec.target_type, {"skill", "agent"})
+            else:
+                self.assertIsNone(spec.target_type)
+        self.assertEqual(ids, ["G1", "G2", "G3", "G4", "G5"])
+
+    def test_registry_contract_rejects_patch_spec_without_target_type(self) -> None:
+        broken = dict(recommender_generators.GENERATORS)
+        spec = broken["anomaly_investigate"]
+        broken["anomaly_investigate"] = replace(
+            spec,
+            output=recommender_generators.GeneratorOutput(output_class="patch_bundle"),
+        )
+        with self.assertRaisesRegex(recommender_generators.ValidationError, "missing target_type"):
+            recommender_generators._validate_registry_contract(broken)
 
     def _write_target(self, path: pathlib.Path, body: str = "agent-file\n") -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -141,6 +170,33 @@ class RecommenderGeneratorsTests(unittest.TestCase):
                 self.assertEqual(spec["old_string"], revert["new_string"])
                 self.assertEqual(spec["new_string"], revert["old_string"])
             self.assertEqual(set(payload.keys()), {"skill_manage_op", "preflight", "revert_op"})
+
+    def test_render_dispatches_through_registry_callable(self) -> None:
+        observed = {}
+
+        def fake_generator(rec: dict[str, object]) -> dict[str, object]:
+            observed["rec"] = dict(rec)
+            return {
+                "suggestion": {
+                    "kind": "workflow_chain",
+                    "title": "Fake",
+                    "steps": [],
+                }
+            }
+
+        original = recommender_generators.GENERATORS["workflow_chain"]
+        fake_spec = replace(original, generator=fake_generator)
+        with mock.patch.dict(recommender_generators.GENERATORS, {"workflow_chain": fake_spec}):
+            payload = recommender_generators.render(
+                {"kind": "workflow_chain", "recommendation_id": "wf-callable", "title": "Original"}
+            )
+
+        self.assertEqual(observed["rec"]["recommendation_id"], "wf-callable")
+        self.assertEqual(payload["suggestion"]["title"], "Fake")
+
+    def test_unsupported_kind_raises_validation_error(self) -> None:
+        with self.assertRaisesRegex(recommender_generators.ValidationError, "unsupported recommendation kind"):
+            recommender_generators.render({"kind": "future_generator", "recommendation_id": "f-1"})
 
     def test_render_workflow_chain_is_suggestion_payload(self) -> None:
         payload = recommender_generators.render(

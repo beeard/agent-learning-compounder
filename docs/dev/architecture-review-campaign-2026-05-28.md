@@ -15,7 +15,7 @@ coherent slice and leave this queue current.
 | 3 | Dashboard URL Publisher Module | Complete | `agent-learning-compounder/bin/dashboard_url_publisher.py`; parity in `agent-learning-compounder/tests/test_dashboard_url_publisher.py`, launcher coverage in `agent-learning-compounder/tests/test_serve_dashboard.py`, and stdlib coverage in `agent-learning-compounder/tests/test_dashboard_readonly.py`. |
 | 4 | Analyst Query Catalog Module | Complete | `agent-learning-compounder/bin/analyst_queries.py::QUERY_SPECS`; parity in `agent-learning-compounder/tests/test_analyst_queries.py`, `agent-learning-compounder/tests/test_capability_parity.py`, and `agent-learning-compounder/tests/test_render_catalogs.py`; mirror in `agent-learning-compounder/reference-lib/analyst-queries-catalog`. |
 | 5 | Runtime Install Target Module | Complete | `agent-learning-compounder/bin/runtime_topology.py`; target-policy parity in `agent-learning-compounder/tests/test_runtime_topology.py` and shell behavior coverage in `agent-learning-compounder/tests/test_install_targets.py`. |
-| 6 | Recommender Generator Registry Seam | Queued | Make the generator registry the execution seam for identity, validation, reference output, and rendering. |
+| 6 | Recommender Generator Registry Seam | Complete | `agent-learning-compounder/bin/recommender_generators.py::GENERATORS`; renderer routing in `agent-learning-compounder/bin/recommender_render`, target coverage in `agent-learning-compounder/bin/alc_apply_contracts.py`, catalog parity in `agent-learning-compounder/tests/test_render_catalogs.py`, and behavior coverage in `agent-learning-compounder/tests/test_recommender_generators.py` / `agent-learning-compounder/tests/test_recommender_render.py`. |
 
 ## Current Slice Evidence
 
@@ -39,11 +39,16 @@ coherent slice and leave this queue current.
   topology tests plus temp-home `install.sh` parity tests. `install.sh` remains
   the execution adapter for copying, backups, verification, dashboard builds,
   bootstrap hooks, and first-run indexing.
+- Recommender generator identity, G-ID order, callable dispatch, output class,
+  target-type metadata, and generator catalog mirrors now route through
+  `bin/recommender_generators.py::GENERATORS`. `recommender_render` classifies
+  patch bundles versus suggestions from registry metadata, `workflow_chain`
+  remains suggestion-only, and `alc_apply_contracts` derives generator-emitted
+  Hermes-DSL target types from the registry instead of a fallback map.
 - Public command names and intended runtime install semantics were not changed.
 
 ## Next Planning Rule
 
-The next plan should start at order 6 unless a later architecture review
-explicitly supersedes this campaign. Re-read the source review and current code
-before planning; do not assume this file captures implementation details for
-the queued items.
+The six shallow-seam recommendations from the source review are complete.
+Start the next plan from a fresh architecture review or from newly discovered
+evidence, not from this campaign queue.

@@ -206,12 +206,15 @@ What we're actively investing in vs. parked.
 
 - **No raw-data leakage.** Threat-model review every release. New
   signals get vetted against the allowlist, not added to it.
-- **Naming consistency.** Q1–Qn analyst queries, G1–G5 generators,
-  M1–M10 MCP catalog, `DSL_TARGETS` for Hermes-DSL. Cute names get
+- **Naming consistency.** Q1–Qn analyst queries, G1–Gn generators,
+  M1–M20 MCP catalog, `DSL_TARGETS` for Hermes-DSL. Cute names get
   pushed back on; named-catalog over ad-hoc terms (see
   `bin/analyst_queries.py::QUERY_SPECS`,
+  `bin/recommender_generators.py::GENERATORS`,
   `reference-lib/analyst-queries-catalog`, `generator-catalog`,
-  `mcp-catalog`).
+  `mcp-catalog`). Generator entries own callable dispatch, output class,
+  and target-type metadata before renderer or apply-contract adapters consume
+  them.
 
 ---
 

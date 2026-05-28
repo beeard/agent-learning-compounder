@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 
+from dataclasses import replace
 from unittest import mock
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -13,6 +14,7 @@ BIN = ROOT / "bin"
 if str(BIN) not in sys.path:
     sys.path.insert(0, str(BIN))
 
+import recommender_generators
 from recommender_render import run
 
 
@@ -142,6 +144,46 @@ class RecommenderRenderTests(unittest.TestCase):
             self.assertEqual(len(suggestions), 0)
             self.assertIn("bad-1", skipped[0]["recommendation_id"])
             self.assertEqual(len(list(state.repo_state_dir.glob("patches/*.json"))), 1)
+
+    def test_future_suggestion_class_routes_without_kind_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = pathlib.Path(tmp)
+            repo = tmp_path / "repo"
+            repo.mkdir()
+            state = self._make_state(repo)
+            state.reports_dir.mkdir(parents=True, exist_ok=True)
+
+            future_kind = "workflow_review"
+
+            def fake_generator(rec: dict[str, object]) -> dict[str, object]:
+                return {
+                    "suggestion": {
+                        "kind": future_kind,
+                        "title": str(rec.get("title") or "Future workflow"),
+                        "steps": ["inspect"],
+                    }
+                }
+
+            future_spec = replace(
+                recommender_generators.GENERATORS["workflow_chain"],
+                id="G6",
+                kind=future_kind,
+                summary="Emit future workflow suggestion.",
+                generator=fake_generator,
+            )
+            self._write_file(
+                state.reports_dir / "recommendations.json",
+                json.dumps([{"kind": future_kind, "recommendation_id": "future-1", "title": "Future workflow"}], indent=2),
+            )
+
+            with mock.patch.dict(recommender_generators.GENERATORS, {future_kind: future_spec}):
+                written, suggestions, skipped = run(state)
+
+            self.assertEqual(written, 0)
+            self.assertEqual(skipped, [])
+            self.assertEqual(len(suggestions), 1)
+            self.assertEqual(suggestions[0]["kind"], future_kind)
+            self.assertFalse((state.repo_state_dir / "patches").exists())
 
 
 if __name__ == "__main__":

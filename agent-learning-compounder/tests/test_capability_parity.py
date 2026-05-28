@@ -18,6 +18,7 @@ import alc_propose
 import alc_query
 import analyst_queries
 import recommender_generators
+import render_catalogs
 from alc_mcp.catalog import MCP_TOOLS
 
 
@@ -86,6 +87,17 @@ class CapabilityParityTests(unittest.TestCase):
         query_ids = {str(query["id"]) for query in analyst_queries.QUERIES}
         self.assertTrue(query_ids)
         self.assertEqual(set(analyst_queries.QUERY_FUNCS), query_ids)
+
+    def test_m3_recommendation_partner_covers_dispatchable_generator_catalog(self) -> None:
+        rendered, count = render_catalogs._render_catalog_payload(
+            "generator-catalog",
+            "bin.recommender_generators",
+            "GENERATORS",
+        )
+        self.assertEqual(count, len(recommender_generators.GENERATORS))
+        for spec in recommender_generators.GENERATORS.values():
+            self.assertIn(f"| {spec.id} | {spec.kind} |", rendered)
+            self.assertIn(spec.output_class, rendered)
 
     def test_capability_parity_document_covers_every_mid(self) -> None:
         text = PARITY.read_text(encoding="utf-8")

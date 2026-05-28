@@ -7,6 +7,7 @@ import argparse
 import importlib
 import json
 import pathlib
+from dataclasses import asdict, is_dataclass
 from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -17,10 +18,21 @@ def _to_entries(obj: Any) -> list[dict[str, Any]]:
     if obj is None:
         return []
     if isinstance(obj, dict):
-        return list(obj.values())
+        values = list(obj.values())
+        return [entry for entry in (_entry_to_dict(value) for value in values) if entry]
     if isinstance(obj, (list, tuple)):
-        return [item for item in obj if isinstance(item, dict)]
+        return [entry for entry in (_entry_to_dict(item) for item in obj) if entry]
     return []
+
+
+def _entry_to_dict(entry: Any) -> dict[str, Any]:
+    if isinstance(entry, dict):
+        return entry
+    if hasattr(entry, "catalog_entry"):
+        return dict(entry.catalog_entry())
+    if is_dataclass(entry):
+        return asdict(entry)
+    return {}
 
 
 def _safe_get(entry: dict[str, Any], name: str, default: str = "") -> Any:
@@ -103,6 +115,8 @@ def _render_catalog_payload(name: str, module_path: str, attr: str) -> tuple[str
         return _render_analyst_queries_catalog(entries), len(entries)
 
     headers = ["id", "kind", "summary", "backing", "version"]
+    if module_path == "bin.recommender_generators" and attr == "GENERATORS":
+        headers = ["id", "kind", "summary", "backing", "version", "output_class", "target_type"]
     body = _render_table(entries, headers)
     return _readme_header(name, f"{module_path}.{attr}") + body, len(entries)
 
@@ -118,6 +132,7 @@ def _default_specs() -> list[tuple[str, str, str, pathlib.Path]]:
     return [
         ("mcp-catalog", "alc_mcp.catalog", "MCP_TOOLS", ROOT / "skills" / "alc-core" / "references" / "mcp-catalog.md"),
         ("query-catalog", "bin.analyst_queries", "QUERIES", ROOT / "reference-lib" / "analyst-queries-catalog"),
+        ("generator-catalog", "bin.recommender_generators", "GENERATORS", ROOT / "reference-lib" / "generator-catalog"),
         ("generator-catalog", "bin.recommender_generators", "GENERATORS", ROOT / "skills" / "alc-core" / "references" / "generator-catalog.md"),
         ("propose-catalog", "bin.analyst_queries", "PROPOSALS", ROOT / "skills" / "alc-core" / "references" / "propose-catalog.md"),
     ]
@@ -132,6 +147,11 @@ def render_catalogs(specs: list[tuple[str, str, str, pathlib.Path]] | None = Non
             rendered.append((path, count))
         except ModuleNotFoundError:
             # Optional registries may not exist yet in early phases.
+            continue
+        except RuntimeError as exc:
+            if "was empty or unsupported" not in str(exc):
+                raise
+            # Optional registries may exist before they have entries.
             continue
     return rendered
 

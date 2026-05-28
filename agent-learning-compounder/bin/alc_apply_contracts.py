@@ -197,31 +197,7 @@ class Executor(abc.ABC):
 
 
 def _extract_generator_target_types() -> set[str]:
-    target_types: set[str] = set()
-    fallback_map = {
-        "anomaly_investigate": "skill",
-        "skill_routing_review": "skill",
-        "model_swap_candidate": "agent",
-        "agent_spawn_suggestion": "agent",
-        "workflow_chain": None,
-    }
-    for spec in GENERATORS.values():
-        target_type: str | None = None
-        output = getattr(spec, "output", None)
-        if output is not None:
-            if isinstance(output, dict):
-                candidate = output.get("target_type")
-            else:
-                candidate = getattr(output, "target_type", None)
-            if isinstance(candidate, str):
-                target_type = candidate
-        if target_type is None and isinstance(spec, dict):
-            kind = spec.get("kind")
-            if kind in fallback_map:
-                target_type = fallback_map[kind]
-        if target_type:
-            target_types.add(target_type)
-    return target_types
+    return set(recommender_generators.patch_target_types())
 
 
 def _validate_generators_subset() -> None:

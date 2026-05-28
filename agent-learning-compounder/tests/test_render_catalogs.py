@@ -12,6 +12,7 @@ if str(BIN) not in sys.path:
 
 import render_catalogs
 import analyst_queries
+import recommender_generators
 
 
 def write_module(path: Path, body: str) -> None:
@@ -76,3 +77,24 @@ CATALOG = [
 
         reference = Path(__file__).resolve().parents[1] / "reference-lib" / "analyst-queries-catalog"
         self.assertEqual(reference.read_text(encoding="utf-8"), rendered)
+
+    def test_generator_catalog_render_matches_checked_in_mirrors(self) -> None:
+        rendered, count = render_catalogs._render_catalog_payload(
+            "generator-catalog",
+            "bin.recommender_generators",
+            "GENERATORS",
+        )
+        self.assertEqual(count, len(recommender_generators.GENERATORS))
+        self.assertIn("| G1 | anomaly_investigate |", rendered)
+        self.assertIn("| G5 | workflow_chain |", rendered)
+        self.assertIn("| output_class |", rendered)
+        self.assertIn("patch_bundle", rendered)
+        self.assertIn("suggestion", rendered)
+
+        root = Path(__file__).resolve().parents[1]
+        mirrors = [
+            root / "reference-lib" / "generator-catalog",
+            root / "skills" / "alc-core" / "references" / "generator-catalog.md",
+        ]
+        for mirror in mirrors:
+            self.assertEqual(mirror.read_text(encoding="utf-8"), rendered, str(mirror))

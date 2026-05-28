@@ -69,6 +69,11 @@ meta tool.
   shape, consumer metadata, SQL skeleton summaries, and callable dispatch.
   `QUERIES`, `QUERY_FUNCS`, `query_by_id()`, and
   `reference-lib/analyst-queries-catalog` are derived or guarded mirrors.
+- `bin/recommender_generators.py::GENERATORS` owns recommender generator
+  identity, G-ID order, callable dispatch, output class, target-type metadata,
+  and generator catalog mirrors. Add or change generators through
+  `GeneratorSpec` first; `recommender_render`, `alc_apply_contracts`, and
+  catalog references are adapters around that registry.
 
 ## Operating rules
 

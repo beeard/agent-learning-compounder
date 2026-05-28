@@ -7,6 +7,7 @@ import hashlib
 import re
 import textwrap
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,13 +22,6 @@ ALLOWED_AGENT_COLORS = {"blue", "cyan", "green", "yellow", "red", "magenta"}
 AGENT_NAME_RE = re.compile(r"^[a-z][a-z0-9-]{2,49}$")
 MIN_AGENT_WORDS = 500
 MAX_AGENT_WORDS = 3000
-SUPPORTED_KIND = {
-    "anomaly_investigate",
-    "skill_routing_review",
-    "model_swap_candidate",
-    "agent_spawn_suggestion",
-    "workflow_chain",
-}
 
 
 class ValidationError(ValueError):
@@ -37,13 +31,42 @@ class ValidationError(ValueError):
 GeneratorFn = Callable[[dict[str, Any]], dict[str, Any]]
 
 
-SPEC_ORDER = [
-    "anomaly_investigate",
-    "skill_routing_review",
-    "model_swap_candidate",
-    "agent_spawn_suggestion",
-    "workflow_chain",
-]
+@dataclass(frozen=True)
+class GeneratorOutput:
+    """Output contract consumed by renderer and apply-contract adapters."""
+
+    output_class: str
+    target_type: str | None = None
+
+
+@dataclass(frozen=True)
+class GeneratorSpec:
+    id: str
+    kind: str
+    summary: str
+    backing: str
+    version: int
+    generator: GeneratorFn
+    output: GeneratorOutput
+
+    @property
+    def output_class(self) -> str:
+        return self.output.output_class
+
+    @property
+    def target_type(self) -> str | None:
+        return self.output.target_type
+
+    def catalog_entry(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "kind": self.kind,
+            "summary": self.summary,
+            "backing": self.backing,
+            "version": self.version,
+            "output_class": self.output_class,
+            "target_type": self.target_type or "",
+        }
 
 
 def _sha256_text(value: str) -> str:
@@ -84,7 +107,7 @@ def _coerce_rec_id(rec: dict[str, Any]) -> str:
 
 def _coerce_kind(rec: dict[str, Any]) -> str:
     kind = _coerce_str(rec.get("kind"), field="kind").strip()
-    if kind not in SUPPORTED_KIND:
+    if kind not in GENERATORS:
         raise ValidationError(f"unsupported recommendation kind: {kind}")
     return kind
 
@@ -201,11 +224,14 @@ def _validate_agent_content(content: str) -> None:
         raise ValidationError(f"agent body must be between {MIN_AGENT_WORDS} and {MAX_AGENT_WORDS} words")
 
 
-def _validate_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if kind == "workflow_chain":
+def _validate_payload(spec: GeneratorSpec, payload: dict[str, Any]) -> dict[str, Any]:
+    if spec.output_class == "suggestion":
         if not isinstance(payload, dict) or not payload.get("suggestion"):
-            raise ValidationError("workflow_chain generator must return suggestion payload")
+            raise ValidationError(f"{spec.kind} generator must return suggestion payload")
         return payload
+
+    if spec.output_class != "patch_bundle":
+        raise ValidationError(f"unsupported output_class: {spec.output_class}")
 
     for key in ("skill_manage_op", "preflight", "revert_op"):
         if key not in payload:
@@ -222,6 +248,10 @@ def _validate_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
         raise ValidationError("unsupported action")
     if op.get("target_type") not in {"skill", "agent", "command", "hook"}:
         raise ValidationError("unsupported target_type")
+    if not spec.target_type:
+        raise ValidationError(f"{spec.kind} patch generator missing target_type metadata")
+    if op.get("target_type") != spec.target_type:
+        raise ValidationError(f"{spec.kind} emitted target_type={op.get('target_type')} expected {spec.target_type}")
     if not op.get("target"):
         raise ValidationError("target is required")
 
@@ -486,73 +516,100 @@ def _build_workflow_chain(rec: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _dispatcher(kind: str) -> GeneratorFn:
-    if kind == "anomaly_investigate":
-        return _build_anomaly_patch
-    if kind == "skill_routing_review":
-        return _build_routing_patch
-    if kind == "model_swap_candidate":
-        return _build_model_swap_patch
-    if kind == "agent_spawn_suggestion":
-        return _build_agent_spawn
-    if kind == "workflow_chain":
-        return _build_workflow_chain
-    raise ValidationError(f"unsupported kind: {kind}")
-
-
-def _make_spec(kind: str, summary: str, version: int, generator: GeneratorFn) -> dict[str, Any]:
-    return {
-        "id": "G" + str(SPEC_ORDER.index(kind) + 1),
-        "kind": kind,
-        "summary": summary,
-        "backing": "bin.recommender_generators",
-        "version": version,
-        "generator": generator,
-    }
-
-
-GENERATORS: dict[str, dict[str, Any]] = {
-    "anomaly_investigate": _make_spec(
-        "anomaly_investigate",
-        "Patch SKILL.md with an anomaly investigation note for deterministic reviewer follow-up.",
-        1,
-        _build_anomaly_patch,
+GENERATORS: dict[str, GeneratorSpec] = {
+    "anomaly_investigate": GeneratorSpec(
+        id="G1",
+        kind="anomaly_investigate",
+        summary="Patch SKILL.md with an anomaly investigation note for deterministic reviewer follow-up.",
+        backing="bin.recommender_generators",
+        version=1,
+        generator=_build_anomaly_patch,
+        output=GeneratorOutput(output_class="patch_bundle", target_type="skill"),
     ),
-    "skill_routing_review": _make_spec(
-        "skill_routing_review",
-        "Patch gate registry with a routing review recommendation for deterministic handling.",
-        1,
-        _build_routing_patch,
+    "skill_routing_review": GeneratorSpec(
+        id="G2",
+        kind="skill_routing_review",
+        summary="Patch gate registry with a routing review recommendation for deterministic handling.",
+        backing="bin.recommender_generators",
+        version=1,
+        generator=_build_routing_patch,
+        output=GeneratorOutput(output_class="patch_bundle", target_type="skill"),
     ),
-    "model_swap_candidate": _make_spec(
-        "model_swap_candidate",
-        "Patch agent model field exactly with old/new string swap for controlled model updates.",
-        1,
-        _build_model_swap_patch,
+    "model_swap_candidate": GeneratorSpec(
+        id="G3",
+        kind="model_swap_candidate",
+        summary="Patch agent model field exactly with old/new string swap for controlled model updates.",
+        backing="bin.recommender_generators",
+        version=1,
+        generator=_build_model_swap_patch,
+        output=GeneratorOutput(output_class="patch_bundle", target_type="agent"),
     ),
-    "agent_spawn_suggestion": _make_spec(
-        "agent_spawn_suggestion",
-        "Create a new validated agent markdown file in alc-agents/dev for bounded execution.",
-        1,
-        _build_agent_spawn,
+    "agent_spawn_suggestion": GeneratorSpec(
+        id="G4",
+        kind="agent_spawn_suggestion",
+        summary="Create a new validated agent markdown file in alc-agents/dev for bounded execution.",
+        backing="bin.recommender_generators",
+        version=1,
+        generator=_build_agent_spawn,
+        output=GeneratorOutput(output_class="patch_bundle", target_type="agent"),
     ),
-    "workflow_chain": _make_spec(
-        "workflow_chain",
-        "Emit structured workflow-chain suggestion for dashboard-only rendering.",
-        1,
-        _build_workflow_chain,
+    "workflow_chain": GeneratorSpec(
+        id="G5",
+        kind="workflow_chain",
+        summary="Emit structured workflow-chain suggestion for dashboard-only rendering.",
+        backing="bin.recommender_generators",
+        version=1,
+        generator=_build_workflow_chain,
+        output=GeneratorOutput(output_class="suggestion"),
     ),
 }
 
 
+def _validate_registry_contract(registry: dict[str, GeneratorSpec] = GENERATORS) -> None:
+    seen_ids: set[str] = set()
+    for kind, spec in registry.items():
+        if spec.kind != kind:
+            raise ValidationError(f"registry key/spec kind mismatch: {kind}")
+        if not spec.id or spec.id in seen_ids:
+            raise ValidationError(f"duplicate or missing generator id: {spec.id}")
+        seen_ids.add(spec.id)
+        if not spec.summary:
+            raise ValidationError(f"{kind} missing summary")
+        if not isinstance(spec.version, int) or spec.version < 1:
+            raise ValidationError(f"{kind} missing version")
+        if not callable(spec.generator):
+            raise ValidationError(f"{kind} missing callable backing")
+        if spec.output_class not in {"patch_bundle", "suggestion"}:
+            raise ValidationError(f"{kind} unsupported output_class: {spec.output_class}")
+        if spec.output_class == "patch_bundle" and not spec.target_type:
+            raise ValidationError(f"{kind} patch generator missing target_type metadata")
+        if spec.output_class == "suggestion" and spec.target_type:
+            raise ValidationError(f"{kind} suggestion generator must not declare target_type")
+
+
 def supported_kinds() -> list[str]:
-    return sorted(GENERATORS)
+    return list(GENERATORS)
+
+
+def get_spec(kind: str) -> GeneratorSpec:
+    if kind not in GENERATORS:
+        raise ValidationError(f"unsupported recommendation kind: {kind}")
+    return GENERATORS[kind]
+
+
+def output_class_for(kind: str) -> str:
+    return get_spec(kind).output_class
+
+
+def patch_target_types() -> set[str]:
+    return {spec.target_type for spec in GENERATORS.values() if spec.output_class == "patch_bundle" and spec.target_type}
 
 
 def render(rec: dict[str, Any]) -> dict[str, Any]:
     kind = _coerce_kind(rec)
-    payload = _dispatcher(kind)(dict(rec))
-    return _validate_payload(kind, payload)
+    spec = get_spec(kind)
+    payload = spec.generator(dict(rec))
+    return _validate_payload(spec, payload)
 
 
 def build_bundle(rec: dict[str, Any]) -> dict[str, Any]:
@@ -563,11 +620,19 @@ def generate_for(rec: dict[str, Any]) -> dict[str, Any]:
     return render(rec)
 
 
+_validate_registry_contract()
+
+
 __all__ = [
     "ValidationError",
+    "GeneratorOutput",
+    "GeneratorSpec",
     "GENERATORS",
     "render",
     "build_bundle",
     "generate_for",
+    "get_spec",
+    "output_class_for",
+    "patch_target_types",
     "supported_kinds",
 ]
