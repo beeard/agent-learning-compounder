@@ -9,9 +9,9 @@ import json
 import math
 import pathlib
 import sys
+from contextlib import closing
 from typing import Any
 
-from artifact_writer import write_artifact
 from analyst_queries import (
     load_samples_rows,
     open_events_db,
@@ -96,8 +96,7 @@ def _score_rows(recommendations: list[dict[str, Any]], weights: dict[str, float]
 
 
 def _run_from_events(state_handle: Any, limit: int) -> dict[str, Any]:
-    conn = open_events_db(state_handle)
-    with conn:
+    with closing(open_events_db(state_handle)) as conn, conn:
         recommendations: list[dict[str, Any]] = []
 
         for row in query_q1_longest_by_skill(conn, min_events=2):
@@ -239,9 +238,10 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    payload = run(state_handle, limit=args.limit)
     try:
-        write_artifact("recommendations", payload, state_handle)
+        from analyst_run import run_registered
+
+        run_registered("score", state_handle, overrides={"score": {"limit": args.limit}})
     except Exception as exc:
         print(f"failed to write recommendations artifact: {exc}", file=sys.stderr)
         return 2

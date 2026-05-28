@@ -9,9 +9,9 @@ import json
 import pathlib
 import sys
 from collections import defaultdict
+from contextlib import closing
 from typing import Any
 
-from artifact_writer import write_artifact
 from analyst_queries import load_samples_rows, open_events_db, query_q6_time_of_day_sessions
 from state_handle import StateHandle
 
@@ -153,7 +153,7 @@ def run(state_handle: Any) -> dict[str, Any]:
     except FileNotFoundError:
         return _fallback_payload(state_handle)
 
-    with conn:
+    with closing(conn) as conn, conn:
         return {
             "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "fallback_mode": False,
@@ -180,8 +180,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        payload = run(state)
-        write_artifact("patterns", payload, state)
+        from analyst_run import run_registered
+
+        run_registered("patterns", state)
     except Exception as exc:
         print(f"failed to write patterns artifact: {exc}", file=sys.stderr)
         return 2

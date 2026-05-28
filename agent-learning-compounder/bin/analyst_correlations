@@ -7,9 +7,9 @@ import argparse
 import datetime as dt
 import pathlib
 import sys
+from contextlib import closing
 from typing import Any
 
-from artifact_writer import write_artifact
 from analyst_queries import (
     load_samples_rows,
     open_events_db,
@@ -70,7 +70,7 @@ def run(state_handle: Any) -> dict[str, Any]:
             "time_of_day_sessions": [],
         }
 
-    with conn:
+    with closing(conn) as conn, conn:
         gate_rows = query_gate_with_evidence(conn)
         for row in gate_rows:
             _attach_event_ids(row)
@@ -109,9 +109,10 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    result = run(state_handle)
     try:
-        write_artifact("correlations", result, state_handle)
+        from analyst_run import run_registered
+
+        run_registered("correlations", state_handle)
     except Exception as exc:
         print(f"failed to write correlations artifact: {exc}", file=sys.stderr)
         return 2

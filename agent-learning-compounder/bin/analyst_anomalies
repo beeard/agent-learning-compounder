@@ -8,9 +8,9 @@ import datetime as dt
 import math
 import pathlib
 import sys
+from contextlib import closing
 from typing import Any
 
-from artifact_writer import write_artifact
 from analyst_queries import load_samples_rows, open_events_db
 from state_handle import StateHandle
 
@@ -168,7 +168,7 @@ def run(state_handle: Any, *, min_n: int = 4, z_threshold: float = 4.0) -> dict[
             "session_rollups": [],
         }
 
-    with conn:
+    with closing(conn) as conn, conn:
         rows = [
             {
                 "event_id": row["event_id"],
@@ -273,9 +273,14 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
-    result = run(state_handle, min_n=args.min_n, z_threshold=args.z_threshold)
     try:
-        write_artifact("anomalies", result, state_handle)
+        from analyst_run import run_registered
+
+        run_registered(
+            "anomalies",
+            state_handle,
+            overrides={"anomalies": {"min_n": args.min_n, "z_threshold": args.z_threshold}},
+        )
     except Exception as exc:
         print(f"failed to write anomalies artifact: {exc}", file=sys.stderr)
         return 2

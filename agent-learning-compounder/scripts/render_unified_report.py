@@ -166,7 +166,7 @@ def _pipeline_commands(state: StateHandle, corpus: pathlib.Path, baseline: pathl
             "--corpus",
             str(corpus),
         ],
-        [sys.executable, str(BIN / "analyst_score"), "--state", str(state.repo_state_dir)],
+        [sys.executable, str(BIN / "analyst_run.py"), "--state", str(state.repo_state_dir)],
         [
             sys.executable,
             str(BIN / "recommender_render"),

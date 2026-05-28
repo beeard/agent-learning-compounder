@@ -109,10 +109,13 @@ def _seed_zscore_events(conn: sqlite3.Connection) -> None:
 def _with_sqlite(tmp_dir: pathlib.Path) -> _State:
     state = _State()
     state.events_sqlite = tmp_dir / "events.sqlite"
-    with sqlite3.connect(state.events_sqlite) as conn:
+    conn = sqlite3.connect(state.events_sqlite)
+    try:
         conn.row_factory = sqlite3.Row
         _seed_zscore_events(conn)
         conn.commit()
+    finally:
+        conn.close()
     return state
 
 
