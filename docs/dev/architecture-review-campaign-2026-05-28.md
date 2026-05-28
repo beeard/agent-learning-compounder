@@ -58,3 +58,31 @@ coherent slice and leave this queue current.
 The six shallow-seam recommendations from the source review are complete, and
 gate-system C3 is closed. Start the next plan from fresh review evidence; M6
 hash-recipe migration and H3 causal-probe hardening remain separate candidates.
+
+## Post-M6 Campaign Queue
+
+Source review: `.runtime/reports/architecture-review-20260528-030819.md`
+
+| Order | Recommendation | Status | Owner / next action |
+|---|---|---|---|
+| 1 | Causal Evidence Module | Complete | `agent-learning-compounder/bin/causal_evidence.py`; focused coverage in `agent-learning-compounder/fixtures/tests/test_causal_evidence.py`; adapter compatibility covered by causal probe, hook telemetry, gate effectiveness, alias, and retirement tests. |
+| 2 | Analyst Run Module | Next | Plan `agent-learning-compounder/bin/analyst_run.py` as the next orchestration seam; keep individual analyst query logic in the existing analyst modules. |
+| 3 | Learning Report Payload Module | Queued | Plan after Analyst Run unless the files are isolated enough to land independently. |
+| 4 | Repo Profile and Doc Contract Module | Queued | Plan when first-run setup or report/analyst work resumes. |
+| 5 | Artifact Envelope Module | Decision gate | Decide after Analyst Run and Learning Report Payload evidence; implement only if repeated envelope rules remain across at least three producers. |
+
+## Post-M6 Evidence
+
+- Causal Evidence now centralizes deterministic probe assignment, probe
+  decision vocabulary, alias-aware evidence row construction, causal signal
+  thresholds, and disruptive-action eligibility in `bin/causal_evidence.py`.
+- `causal_probe`, `collect_hook_event`, `evaluate_gate_effectiveness`, and
+  `refresh_learning_state` remain adapters for CLI/file IO, hook safety,
+  resilient event loading/output, and queue locking/serialization.
+- Verification: `python3 -m unittest fixtures.tests.test_causal_evidence
+  fixtures.tests.test_causal_probe fixtures.tests.test_causal_probe_boundaries
+  fixtures.tests.test_probe_wiring fixtures.tests.test_collect_hook_event_schema_v2
+  fixtures.tests.test_evaluate_gate_effectiveness
+  fixtures.tests.test_evaluate_gate_effectiveness_resilience
+  fixtures.tests.test_gate_alias_effectiveness
+  fixtures.tests.test_refresh_retirement_filter -v` passed on 2026-05-28.

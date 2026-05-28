@@ -132,6 +132,11 @@ profiles, incremental hook replay into project `events.jsonl`, indexing, the
 repo refresh lock, stage ordering, and structured result payloads. The public
 `refresh_learning_state` command is a CLI adapter around this module.
 
+`bin/causal_evidence.py` is the Causal Evidence module: it owns probe assignment
+semantics, accepted probe decisions, alias-aware evidence rows, causal signal
+thresholds, and retirement/demotion eligibility. The probe CLI, hook collector,
+effectiveness scorer, and refresh queue writer are adapters around that policy.
+
 `bin/dashboard_read_model.py` is the Dashboard Read Model module: it owns
 read-only payload assembly for FastAPI/React, static dashboard rendering, and
 the stdlib fallback. Keep project reads behind `alc_query`/`StateHandle`, and

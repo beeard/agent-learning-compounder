@@ -15,6 +15,7 @@ import stat
 import sys
 from typing import Any
 
+from causal_evidence import normalize_probe_decisions
 from agent_dispatch import (
     DEFAULT_TELEMETRY_CONFIG,
     bounded,
@@ -49,9 +50,7 @@ MAX_CORRELATION_ID_LEN = 128
 
 # Probe-decision passthrough (added P3B-B). Mirrors the gate_loaded_ids
 # bound: 64 entries max, each gate_id capped at MAX_GATE_LOADED_ID_LEN.
-# Decision values are a closed set; out-of-set values drop the entry.
 MAX_PROBE_DECISIONS = 64
-_VALID_PROBE_DECISIONS = {"load", "skip"}
 
 # normalize_event uses an allowlist (constructs a fresh dict with only
 # vetted keys), so raw-payload keys like prompt/tool_output/transcript are
@@ -216,31 +215,14 @@ def normalize_event(
     # consistent with the gate_loaded_ids policy above. Whole-field is dropped
     # only when the payload itself is not a list.
     probe_decisions = raw.get("probe_decisions")
-    if isinstance(probe_decisions, list):
-        coerced_decisions: list[dict[str, str]] = []
-        for member in probe_decisions:
-            if not isinstance(member, dict):
-                continue
-            gate_id_raw = member.get("gate_id")
-            decision_raw = member.get("decision")
-            if not isinstance(gate_id_raw, (str, int)):
-                continue
-            gate_id_text = str(gate_id_raw)
-            if not gate_id_text or len(gate_id_text) > MAX_GATE_LOADED_ID_LEN:
-                continue
-            gate_id_bounded = bounded(gate_id_text, MAX_GATE_LOADED_ID_LEN)
-            if not gate_id_bounded:
-                continue
-            if not isinstance(decision_raw, str):
-                continue
-            decision_bounded = bounded(decision_raw, 16)
-            if decision_bounded not in _VALID_PROBE_DECISIONS:
-                continue
-            coerced_decisions.append({"gate_id": gate_id_bounded, "decision": decision_bounded})
-            if len(coerced_decisions) >= MAX_PROBE_DECISIONS:
-                break
-        if coerced_decisions:
-            event["probe_decisions"] = coerced_decisions
+    coerced_decisions = normalize_probe_decisions(
+        probe_decisions,
+        max_entries=MAX_PROBE_DECISIONS,
+        max_gate_id_len=MAX_GATE_LOADED_ID_LEN,
+        normalize_text=bounded,
+    )
+    if coerced_decisions:
+        event["probe_decisions"] = coerced_decisions
 
     event["schema_version"] = SCHEMA_VERSION
     return {key: value for key, value in event.items() if value is not None}

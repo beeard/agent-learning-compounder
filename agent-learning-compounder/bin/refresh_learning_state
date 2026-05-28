@@ -17,8 +17,8 @@ import time
 from typing import Any
 
 from build_repo_baseline import build as build_baseline
+from causal_evidence import evaluate_evidence, retirement_candidates
 from collect_hook_event import assert_regular_file_destination
-from evaluate_gate_effectiveness import evaluate as evaluate_gates
 from evaluate_gate_effectiveness import load_sessions
 from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
@@ -212,9 +212,6 @@ def _gate_alias_map(gates_md_path: pathlib.Path) -> dict[str, str]:
     return gate_registry.alias_map(blocks)
 
 
-_RETIRE_CAUSAL_OK = ("causal_correlated_with_failure", "causal_no_signal")
-
-
 def _retirement_row_id(gate_id: str, kind: str) -> str:
     """Stable per-(gate_id, kind) row id. Pre-fix the row id embedded the
     refresh's wall-clock second and a within-batch counter, so two refreshes
@@ -262,14 +259,12 @@ def _queue_retirement_candidates(
         return (0, 0)
     inherited_map = inherited or {}
     sessions = load_sessions(events_path)
-    result = evaluate_gates(sessions, min_n=10, alias_map=alias_map or {})
-    candidates = [
-        row for row in result["gates"]
-        if row["label"] in ("correlated_with_failure", "no_signal")
-        and row["n_loaded"] >= min_n_retire
-        and row["n_absent"] >= min_n_retire
-        and row.get("causal_signal") in _RETIRE_CAUSAL_OK
-    ]
+    result = evaluate_evidence(sessions, min_n=10, alias_map=alias_map or {})
+    candidates = retirement_candidates(
+        result["gates"],
+        inherited=inherited_map,
+        min_n_retire=min_n_retire,
+    )
     if not candidates:
         return (0, 0)
     retire_count = 0
@@ -296,35 +291,26 @@ def _queue_retirement_candidates(
                 if payload.get("id"):
                     seen.add(str(payload["id"]))
             handle.seek(0, 2)  # to end for appends
-            for c in candidates:
-                gate_id = c["gate_id"]
-                if gate_id in inherited_map:
-                    kind = "inherited_gate_demote_candidate"
-                else:
-                    kind = "gate_retirement_candidate"
+            for candidate in candidates:
+                gate_id = candidate.gate_id
+                kind = candidate.kind
+                evidence = candidate.evidence
                 row_id = _retirement_row_id(gate_id, kind)
                 if row_id in seen:
                     continue
                 if kind == "inherited_gate_demote_candidate":
-                    derived_from = inherited_map[gate_id]
+                    derived_from = candidate.derived_from or "unknown"
                     row = {
                         "id": row_id,
                         "kind": kind,
                         "text": (
                             f"Demote inherited gate {gate_id} (origin={derived_from}): "
-                            f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
-                            f"label={c['label']}."
+                            f"delta={evidence['delta']:.3f} after n_loaded={evidence['n_loaded']}, "
+                            f"label={evidence['label']}."
                         ),
                         "gate_id": gate_id,
                         "derived_from": derived_from,
-                        "evidence": {
-                            "n_loaded": c["n_loaded"],
-                            "n_absent": c["n_absent"],
-                            "delta": c["delta"],
-                            "label": c["label"],
-                            "causal_signal": c.get("causal_signal"),
-                            "contributing_previous_gate_ids": c.get("contributing_previous_gate_ids", []),
-                        },
+                        "evidence": evidence,
                         "ts": ts,
                     }
                     handle.write(json.dumps(row, sort_keys=True) + "\n")
@@ -336,18 +322,11 @@ def _queue_retirement_candidates(
                         "kind": kind,
                         "text": (
                             f"Retire low-impact gate {gate_id}: "
-                            f"delta={c['delta']:.3f} after n_loaded={c['n_loaded']}, "
-                            f"label={c['label']}."
+                            f"delta={evidence['delta']:.3f} after n_loaded={evidence['n_loaded']}, "
+                            f"label={evidence['label']}."
                         ),
                         "gate_id": gate_id,
-                        "evidence": {
-                            "n_loaded": c["n_loaded"],
-                            "n_absent": c["n_absent"],
-                            "delta": c["delta"],
-                            "label": c["label"],
-                            "causal_signal": c.get("causal_signal"),
-                            "contributing_previous_gate_ids": c.get("contributing_previous_gate_ids", []),
-                        },
+                        "evidence": evidence,
                         "ts": ts,
                     }
                     handle.write(json.dumps(row, sort_keys=True) + "\n")

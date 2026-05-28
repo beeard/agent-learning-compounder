@@ -55,7 +55,9 @@ The mechanism is a layered pipeline (see ARCHITECTURE.md for the seams):
    the corpus into proposed gates and skill-routing facts. Read-only by
    default; durable writes require explicit `--write --personal`.
 5. **Score and federate** — `evaluate_gate_effectiveness` gives each gate
-   a stable 12-char `gate_id` and a correlation-only effectiveness signal.
+   a stable 12-char `gate_id` and a correlation signal, while
+   `causal_evidence.py` owns probe assignment, causal signal labels,
+   alias-aware evidence rows, and retirement/demotion readiness.
    `gates_promote` / `gates_inherit` carry gates across repos with
    `derived_from:` provenance. When gate text is intentionally edited,
    `export_gates --rename OLD:NEW` writes `previous_gate_ids` on the
@@ -126,10 +128,10 @@ How we'd know it's working — observable signals, not vibes:
 - **Queue retire rate.** Low-impact gates get queued as
   `gate_retirement_candidate` for operator review. A healthy loop
   retires faster than it proposes.
-- **Causal probes deciding cleanly.** `causal_probe` runs deterministic
-  A/B skip cohorts per gate. Once a probe accumulates N ≥ 5 trials per
-  arm, it should emit a `causal_signal` — not stay in
-  collecting-evidence mode forever.
+- **Causal probes deciding cleanly.** `causal_evidence.py` runs the
+  deterministic A/B skip recipe used by `causal_probe`. Once a probe
+  accumulates N >= 5 trials per arm, evidence rows should emit a
+  `causal_signal` instead of staying in collecting-evidence mode forever.
 - **Refresh latency.** `refresh_learning_state` from corpus to exported
   surfaces should stay under operator patience (current target: well
   under a minute on a baseline-ALC corpus). Inferred threshold; no

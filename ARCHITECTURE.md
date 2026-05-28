@@ -64,6 +64,18 @@ Historical hook telemetry is immutable: old event ids are normalized to the
 current canonical id only at read/scoring boundaries. This does not change the
 hash recipe, separator, Unicode normalization behavior, or causal-probe design.
 
+### Causal Evidence
+
+`bin/causal_evidence.py` owns causal policy for gate evidence. It decides the
+frozen probe assignment recipe, validates probe rates, defines the accepted
+`load` / `skip` vocabulary, normalizes alias-aware evidence rows, assigns
+causal signal labels, and returns retirement or inherited-demotion eligibility.
+
+The surrounding commands stay adapters: `causal_probe` owns the probes file and
+CLI messages, `collect_hook_event` owns hook allowlists, scrubbing, caps, and
+log writes, `evaluate_gate_effectiveness` owns event loading and JSON output,
+and `refresh_learning_state` owns queue locking and row serialization.
+
 ### 2.1 The read seam: `alc_query` (KTD-21)
 
 `bin/alc_query.py` is the **only** read API. Everything that needs to read

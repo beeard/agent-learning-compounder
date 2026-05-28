@@ -50,6 +50,11 @@ meta tool.
   Use `export_gates --rename OLD:NEW` for intentional text edits; do not
   change `_gate_id` or rewrite historical telemetry as part of an alias
   migration.
+- `bin/causal_evidence.py` owns causal evidence policy: deterministic probe
+  assignment, accepted probe-decision values, alias-aware evidence rows,
+  causal signal thresholds, and retirement/demotion eligibility. Keep
+  `causal_probe`, `collect_hook_event`, `evaluate_gate_effectiveness`, and
+  `refresh_learning_state` as parsing, storage, output, and queue adapters.
 - `bin/alc_propose.py` is the symmetric propose/write API for the queue +
   event writer. Same rule: future propose-style tools register here.
 - `bin/proposal_lifecycle.py` owns proposal identity, lifecycle records,

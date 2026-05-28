@@ -14,12 +14,12 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import hashlib
 import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from causal_evidence import decide_probe  # noqa: E402
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 from state_handle import atomic_rewrite  # noqa: E402
 
@@ -54,17 +54,7 @@ def load_probes(path: Path) -> dict:
 
 
 def decide(gate_id: str, session_id: str, rate: float) -> str:
-    # Defend against a hand-edited probes.json that put a nonsense rate in:
-    # without this assertion a value of 2.0 silently makes every session skip
-    # and -0.1 silently makes every session load, both of which corrupt the
-    # cohort math invisibly. The check is at decide() rather than load() so
-    # `cmd_list` still works on a malformed file (the operator needs to see
-    # what to fix).
-    if not isinstance(rate, (int, float)) or not (0.0 <= rate <= 1.0):
-        raise ValueError(f"probe rate must be a number in [0.0, 1.0]; got {rate!r}")
-    h = hashlib.sha256(f"{session_id}|{gate_id}".encode("utf-8")).hexdigest()
-    bucket = int(h[:8], 16) % 10000
-    return "skip" if bucket < int(rate * 10000) else "load"
+    return decide_probe(gate_id, session_id, rate)
 
 
 def cmd_register(args):
