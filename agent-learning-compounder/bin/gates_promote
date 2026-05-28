@@ -11,12 +11,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
-import re
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
+import gate_registry  # noqa: E402
 from gates_inherit import REQUIRED_RECORD_FIELDS  # noqa: E402
 from state_handle import atomic_rewrite  # noqa: E402
 
@@ -30,71 +30,31 @@ EXIT_CONFLICT = 5
 EXIT_INVALID_RECORD = 6
 
 
-# Each gate block emitted by ``bin/export_gates`` looks like:
-#
-#     - domain: cloudflare
-#       gate_id: 2aed10be9612
-#       gate_category: docs-check
-#       gate: Re-read current Cloudflare docs before changing wrangler config.
-#       level: 3
-#
-# We split on the leading ``- domain:`` marker and parse field lines inside
-# each block. The next block (or end-of-file) terminates the current one.
-GATE_BLOCK_SPLIT_RE = re.compile(r"(?m)^-\s+domain:\s*")
-FIELD_RE = re.compile(r"^\s*([a-z_][a-z0-9_]*)\s*:\s*(.*?)\s*$", re.I)
-GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
-
-
-def parse_blocks(text: str) -> list[dict[str, str]]:
-    """Return one dict of field-name -> value per gate block in ``text``."""
-    blocks: list[dict[str, str]] = []
-    parts = GATE_BLOCK_SPLIT_RE.split(text)
-    # parts[0] is the preamble before the first ``- domain:`` marker.
-    for part in parts[1:]:
-        first_line, _, rest = part.partition("\n")
-        block: dict[str, str] = {"domain": first_line.strip()}
-        for raw in rest.splitlines():
-            # Stop at the next gate block (defensive: split already handles it)
-            # or at a blank section break.
-            stripped = raw.strip()
-            if not stripped:
-                # Blank lines inside a block are rare but tolerated; stop only
-                # when we hit a non-indented non-field line (e.g. next ##).
-                continue
-            if stripped.startswith("##") or stripped.startswith("# "):
-                break
-            match = FIELD_RE.match(raw)
-            if not match:
-                continue
-            block[match.group(1).lower()] = match.group(2)
-        blocks.append(block)
-    return blocks
-
-
-def find_gate(gates_md: Path, gate_id: str) -> dict[str, str] | None:
+def find_gate(gates_md: Path, gate_id: str) -> gate_registry.GateBlock | None:
     """Return the parsed block matching ``gate_id``, or None."""
     text = gates_md.read_text(encoding="utf-8")
-    for block in parse_blocks(text):
-        if block.get("gate_id") == gate_id:
+    for block in gate_registry.parse_gate_blocks(text):
+        if block.gate_id == gate_id:
             return block
     return None
 
 
-def build_record(block: dict[str, str], origin_repo: str, note: str) -> dict[str, str]:
+def build_record(block: gate_registry.GateBlock, origin_repo: str, note: str) -> dict:
     record = {
-        "domain": block["domain"],
-        "gate_id": block["gate_id"],
-        "gate_category": block.get("gate_category", ""),
-        "gate": block.get("gate", ""),
+        "domain": block.domain,
+        "gate_id": block.gate_id,
+        "gate_category": block.gate_category,
+        "gate": block.gate,
         "origin_repo": origin_repo,
         "promoted_at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "note": note,
     }
     # Preserve non-default severity when the source block carries it. Older
     # gates (pre-level) round-trip with no level field — no default invented.
-    level = block.get("level")
-    if level:
-        record["level"] = level
+    if block.level:
+        record["level"] = block.level
+    if block.previous_gate_ids:
+        record["previous_gate_ids"] = list(block.previous_gate_ids)
     return record
 
 
@@ -119,13 +79,12 @@ def _records_match_ignoring_volatile(a: dict, b: dict) -> bool:
     federation-stable fields agree. promoted_at always differs on a re-promote
     and `note` is operator metadata, so neither participates in the check.
     """
-    keys = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "level")
+    keys = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "level", "previous_gate_ids")
     return all(a.get(k) == b.get(k) for k in keys)
 
 
 def validate_gate_id(gate_id: str) -> None:
-    if not GATE_ID_RE.fullmatch(gate_id):
-        raise ValueError(f"gate_id must be 12 lowercase hex characters: {gate_id}")
+    gate_registry.validate_gate_id(gate_id)
 
 
 def shared_gate_path(shared_root: Path, gate_id: str) -> Path:
@@ -158,13 +117,14 @@ def main(argv: list[str] | None = None) -> int:
     if not args.gates.is_file():
         print(f"gates file not found: {args.gates}", file=sys.stderr)
         return 2
-    block = find_gate(args.gates, args.gate_id)
+    try:
+        block = find_gate(args.gates, args.gate_id)
+    except ValueError as exc:
+        print(f"invalid gates file: {exc}", file=sys.stderr)
+        return 4
     if not block:
         print(f"gate_id not found: {args.gate_id}", file=sys.stderr)
         return 3
-    if not block.get("gate_category") or not block.get("gate"):
-        print(f"gate block for {args.gate_id} missing gate_category or gate", file=sys.stderr)
-        return 4
     record = build_record(block, args.origin_repo, args.note)
     try:
         validate_record_for_promote(record)

@@ -39,12 +39,14 @@ Multi-reviewer audit of the gate pipeline in `agent-learning-compounder/`. Five 
 **Fix options:** (a) add `gate_text_sha256` to the registry record at promote time and verify on inherit; (b) recompute `_gate_id` from the record and refuse on mismatch. Option (b) is a one-liner using the existing `export_gates._gate_id`.
 
 ### C3. Editing gate text silently drifts `gate_id` with no alias chain
+**Status: Addressed in `docs/plans/2026-05-28-006-fix-gate-id-alias-chain-plan.md`.** The hash recipe remains frozen; identity migration is explicit. Evidence: `bin/gate_registry.py`, `bin/export_gates --rename OLD:NEW`, alias round-trip through `bin/gates_promote` / `bin/gates_inherit`, `alc_query.get_gates` alias exposure, and scoring normalization in `bin/evaluate_gate_effectiveness` / `bin/refresh_learning_state`. Regression coverage: `fixtures/tests/test_gate_registry_parser.py`, `fixtures/tests/test_export_gates_id.py`, `fixtures/tests/test_export_gates_federation.py`, `fixtures/tests/test_gates_promote.py`, `tests/test_alc_query.py`, `tests/test_dashboard_read_model.py`, `alc_mcp/tests/test_server.py`, and `fixtures/tests/test_gate_alias_effectiveness.py`.
+
 `bin/export_gates:18-22` derives `gate_id = sha256("{domain}|{category}|{gate_text.strip()}")[:12]`. A minor edit to gate text produces a new id. There is no `previous_gate_ids` alias table, so:
 - Probe registrations under the old id are orphaned (probes.json still has them, scoring sees no matches)
 - Federated copies in other repos retain the old text under the old id; origin diverges undetected
 - Cohort statistics restart from N=0 with no carry-over
 
-**Fix:** require an explicit `--rename old_id:new_id` flag for re-export when a gate's id would change, or maintain an alias chain in the exported markdown.
+**Fix:** require an explicit `--rename old_id:new_id` flag for re-export when a gate's id would change, and maintain `previous_gate_ids` on the canonical block. Historical telemetry and shared records are not rewritten; readers and scoring normalize aliases in memory.
 
 ### C4. Effectiveness scoring resets when `hook-events.jsonl` rotates
 `bin/collect_hook_event:330-365` rotates the live log to `<name>.<stamp>.bak` (up to 3 backups). `bin/evaluate_gate_effectiveness.load_sessions:33` reads only the live file — no glob, no merge. Effective cohort window = `DEFAULT_MAX_HOOK_EVENT_BYTES = 5 MB`. After a rotation, a gate with `n_loaded=200` can revert to `needs_review` overnight; previously confident labels flip without warning.
@@ -206,7 +208,7 @@ In dependency order, smallest-mechanical-fix-with-biggest-payoff first:
 7. **M1** (repo-level lock for refresh) — closes cross-file inconsistency.
 8. **M2 + M3** (parser robustness) — closes silent retire-vs-demote flip.
 9. **Add frozen-value tests for `_gate_id` and `causal_probe.decide`** — ~30-line PR that locks down both federation contracts permanently.
-10. **C3** (gate_id alias chain) — design change; coordinate with M6 if changing the hash recipe.
+10. **C3** (gate_id alias chain) — addressed without changing the hash recipe. M6 remains separate because separator and Unicode-normalization changes still require a broader federation migration.
 
 The adversarial findings **H1** (cohort smearing) and **H2** (retirement without causal gating) and **H3** (probe gameability) are design-level — they require deciding what guarantees the system is making before fixing code. Worth a written spec amendment, not a code change in isolation.
 

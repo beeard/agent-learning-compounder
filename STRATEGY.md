@@ -57,7 +57,9 @@ The mechanism is a layered pipeline (see ARCHITECTURE.md for the seams):
 5. **Score and federate** — `evaluate_gate_effectiveness` gives each gate
    a stable 12-char `gate_id` and a correlation-only effectiveness signal.
    `gates_promote` / `gates_inherit` carry gates across repos with
-   `derived_from:` provenance.
+   `derived_from:` provenance. When gate text is intentionally edited,
+   `export_gates --rename OLD:NEW` writes `previous_gate_ids` on the
+   canonical block so old cohorts and federated copies remain linked.
 6. **Export the durable surfaces** — `export_gates` + `export_skill_context`
    produce the two compact markdown files. Never raw logs.
 7. **Loop closed via hook telemetry** — `collect_hook_event` writes

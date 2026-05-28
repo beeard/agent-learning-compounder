@@ -53,6 +53,17 @@ ALC has gone through enough rounds of review that the seams have hardened
 into a small number of named contracts. Respect these; don't reimplement
 inline.
 
+### Gate Identity
+
+Gate identity is the current 12-hex `gate_id` plus optional
+`previous_gate_ids` metadata on the canonical block. `bin/export_gates`
+requires an explicit `--rename OLD:NEW` mapping before a same domain/category
+text edit can migrate identity. `bin/gate_registry.py` owns parsing and alias
+validation; promote, inherit, read, and scoring surfaces consume that contract.
+Historical hook telemetry is immutable: old event ids are normalized to the
+current canonical id only at read/scoring boundaries. This does not change the
+hash recipe, separator, Unicode normalization behavior, or causal-probe design.
+
 ### 2.1 The read seam: `alc_query` (KTD-21)
 
 `bin/alc_query.py` is the **only** read API. Everything that needs to read

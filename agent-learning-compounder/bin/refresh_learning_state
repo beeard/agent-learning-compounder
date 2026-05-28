@@ -23,6 +23,7 @@ from evaluate_gate_effectiveness import load_sessions
 from evaluate_skill_impact import evaluate as evaluate_impact
 from export_skill_context import write_context
 from extract_skill_usage import build_usage, read_events
+import gate_registry
 import index_events
 from map_active_skills import build_map
 from propose_domain_rules import parse_chunks, score_terms
@@ -204,6 +205,13 @@ def _inherited_gates(gates_md_path: pathlib.Path) -> dict[str, str]:
     return inherited
 
 
+def _gate_alias_map(gates_md_path: pathlib.Path) -> dict[str, str]:
+    if not gates_md_path.is_file():
+        return {}
+    blocks = gate_registry.parse_gate_blocks(gates_md_path.read_text(encoding="utf-8"))
+    return gate_registry.alias_map(blocks)
+
+
 _RETIRE_CAUSAL_OK = ("causal_correlated_with_failure", "causal_no_signal")
 
 
@@ -224,6 +232,7 @@ def _queue_retirement_candidates(
     events_path: pathlib.Path,
     min_n_retire: int = 20,
     inherited: dict[str, str] | None = None,
+    alias_map: dict[str, str] | None = None,
 ) -> tuple[int, int]:
     """Run effectiveness scoring; append retirement / demote candidates.
 
@@ -253,7 +262,7 @@ def _queue_retirement_candidates(
         return (0, 0)
     inherited_map = inherited or {}
     sessions = load_sessions(events_path)
-    result = evaluate_gates(sessions, min_n=10)
+    result = evaluate_gates(sessions, min_n=10, alias_map=alias_map or {})
     candidates = [
         row for row in result["gates"]
         if row["label"] in ("correlated_with_failure", "no_signal")
@@ -314,6 +323,7 @@ def _queue_retirement_candidates(
                             "delta": c["delta"],
                             "label": c["label"],
                             "causal_signal": c.get("causal_signal"),
+                            "contributing_previous_gate_ids": c.get("contributing_previous_gate_ids", []),
                         },
                         "ts": ts,
                     }
@@ -336,6 +346,7 @@ def _queue_retirement_candidates(
                             "delta": c["delta"],
                             "label": c["label"],
                             "causal_signal": c.get("causal_signal"),
+                            "contributing_previous_gate_ids": c.get("contributing_previous_gate_ids", []),
                         },
                         "ts": ts,
                     }
@@ -496,8 +507,9 @@ def _refresh_locked(
     # candidates.
     gates_md_path = reports / "latest-approved-gates.md"
     inherited_map = _inherited_gates(gates_md_path)
+    alias_map = _gate_alias_map(gates_md_path)
     retirement_count, demote_count = _queue_retirement_candidates(
-        queue_path, event_log, inherited=inherited_map
+        queue_path, event_log, inherited=inherited_map, alias_map=alias_map
     )
     # Mine the session corpus for correction-correlated n-grams and queue
     # them as domain_rule_candidate rows for operator review. The corpus is

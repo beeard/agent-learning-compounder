@@ -45,10 +45,16 @@ coherent slice and leave this queue current.
   patch bundles versus suggestions from registry metadata, `workflow_chain`
   remains suggestion-only, and `alc_apply_contracts` derives generator-emitted
   Hermes-DSL target types from the registry instead of a fallback map.
+- Gate identity migration now routes through a shared gate registry parser and
+  explicit alias chain. `bin/export_gates --rename OLD:NEW` is required before
+  a same domain/category text edit changes `gate_id`; the canonical block owns
+  `previous_gate_ids`, federation preserves it, `alc_query.get_gates` exposes
+  it without duplicate rows, and effectiveness scoring normalizes historical
+  event ids in memory.
 - Public command names and intended runtime install semantics were not changed.
 
 ## Next Planning Rule
 
-The six shallow-seam recommendations from the source review are complete.
-Start the next plan from a fresh architecture review or from newly discovered
-evidence, not from this campaign queue.
+The six shallow-seam recommendations from the source review are complete, and
+gate-system C3 is closed. Start the next plan from fresh review evidence; M6
+hash-recipe migration and H3 causal-probe hardening remain separate candidates.

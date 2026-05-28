@@ -45,6 +45,11 @@ meta tool.
 - `bin/alc_query.py` is the only read API. Hooks, dashboards, MCP tools,
   slash commands, and `alc_init` all consume it — never reimplement
   SQLite/JSONL reads inline. This is KTD-21.
+- `bin/gate_registry.py` owns approved-gate markdown parsing, current
+  `gate_id` plus `previous_gate_ids` alias metadata, and alias-map validation.
+  Use `export_gates --rename OLD:NEW` for intentional text edits; do not
+  change `_gate_id` or rewrite historical telemetry as part of an alias
+  migration.
 - `bin/alc_propose.py` is the symmetric propose/write API for the queue +
   event writer. Same rule: future propose-style tools register here.
 - `bin/proposal_lifecycle.py` owns proposal identity, lifecycle records,

@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
+import gate_registry  # noqa: E402
 
 
 def load_sessions(events_path: Path, *, include_rotated: bool = True):
@@ -89,7 +90,37 @@ def load_sessions(events_path: Path, *, include_rotated: bool = True):
 PROBE_COHORT_MIN_N = 5
 
 
-def evaluate(sessions, min_n=10):
+def _normalize_sessions(sessions, alias_map: dict[str, str]):
+    if not alias_map:
+        return sessions, {}
+    normalized = {}
+    contributing: dict[str, set[str]] = defaultdict(set)
+    for cid, session in sessions.items():
+        gates = set()
+        for gid in session["gates"]:
+            canonical = alias_map.get(gid, gid)
+            gates.add(canonical)
+            if canonical != gid:
+                contributing[canonical].add(gid)
+        probe_decisions = {}
+        for gid, decision in session.get("probe_decisions", {}).items():
+            canonical = alias_map.get(gid, gid)
+            if canonical != gid:
+                contributing[canonical].add(gid)
+            existing = probe_decisions.get(canonical)
+            if existing == "load" or decision == "load":
+                probe_decisions[canonical] = "load"
+            else:
+                probe_decisions[canonical] = decision
+        normalized[cid] = {
+            "gates": gates,
+            "outcome": session.get("outcome"),
+            "probe_decisions": probe_decisions,
+        }
+    return normalized, {gid: sorted(values) for gid, values in contributing.items()}
+
+
+def evaluate(sessions, min_n=10, alias_map: dict[str, str] | None = None):
     """For each gate_id, compute cohort stats. Returns dict with 'gates' list.
 
     Additionally splits by probe_decision when present, emitting a
@@ -98,6 +129,9 @@ def evaluate(sessions, min_n=10):
     operator-controlled skip rate, so the same threshold would suppress
     causal signal indefinitely.
     """
+    alias_map = alias_map or {}
+    sessions, contributing_aliases = _normalize_sessions(sessions, alias_map)
+
     all_gate_ids = set()
     for s in sessions.values():
         all_gate_ids.update(s["gates"])
@@ -169,7 +203,7 @@ def evaluate(sessions, min_n=10):
             else:
                 causal_signal = "causal_no_signal"
 
-        rows.append({
+        row = {
             "gate_id": gid,
             "n_loaded": n_loaded,
             "n_absent": n_absent,
@@ -178,8 +212,20 @@ def evaluate(sessions, min_n=10):
             "delta": delta,
             "label": label,
             "causal_signal": causal_signal,
-        })
+        }
+        if contributing_aliases.get(gid):
+            row["contributing_previous_gate_ids"] = contributing_aliases[gid]
+        rows.append(row)
     return {"gates": rows}
+
+
+def load_alias_map(gates_path: Path | None) -> dict[str, str]:
+    if gates_path is None:
+        return {}
+    if not gates_path.is_file():
+        raise ValueError(f"gates file not found: {gates_path}")
+    blocks = gate_registry.parse_gate_blocks(gates_path.read_text(encoding="utf-8"))
+    return gate_registry.alias_map(blocks)
 
 
 def parse_args():
@@ -187,6 +233,7 @@ def parse_args():
     p.add_argument("--events", required=True, type=Path)
     p.add_argument("--output", required=True, type=Path)
     p.add_argument("--min-n", type=int, default=10)
+    p.add_argument("--gates", type=Path, default=None, help="Optional latest-approved-gates.md for alias normalization.")
     return p.parse_args()
 
 
@@ -200,8 +247,13 @@ def main():
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    try:
+        alias_map = load_alias_map(args.gates)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     sessions = load_sessions(args.events)
-    result = evaluate(sessions, min_n=args.min_n)
+    result = evaluate(sessions, min_n=args.min_n, alias_map=alias_map)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True), encoding="utf-8")
     return 0
 

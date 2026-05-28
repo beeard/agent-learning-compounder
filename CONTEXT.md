@@ -234,6 +234,10 @@ ALC's safety posture is load-bearing. Preserve these:
 
 ## 10. Where to read first (task → reference)
 
+Gate identity migrations are explicit: keep `_gate_id` stable, use
+`export_gates --rename OLD:NEW`, preserve `previous_gate_ids`, and normalize
+old ids at read/scoring boundaries instead of rewriting historical telemetry.
+
 | If you're touching | Read first |
 |---|---|
 | Hooks (any kind) | `agent-learning-compounder/reference-lib/hook-telemetry` |

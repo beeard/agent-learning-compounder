@@ -83,14 +83,131 @@ class ExportGatesId(unittest.TestCase):
 
         modified = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
         self.report.write_text(modified)
+        changed_output = Path(self.tmp.name) / "changed-gates.md"
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(changed_output)],
+            check=True,
+        )
+        second_ids = set(re.findall(r"gate_id:\s*([a-f0-9]{12})", changed_output.read_text()))
+
+        # The unchanged live-check gate's ID should appear in both; the changed docs-check gate's ID should differ.
+        self.assertEqual(len(first_ids & second_ids), 1)
+
+    def test_text_edit_requires_explicit_rename_and_leaves_file_unchanged(self):
         subprocess.run(
             [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
             check=True,
         )
-        second_ids = set(re.findall(r"gate_id:\s*([a-f0-9]{12})", self.output.read_text()))
+        before = self.output.read_text()
+        old_id = re.search(r"gate_id:\s*([a-f0-9]{12})", before).group(1)
 
-        # The unchanged live-check gate's ID should appear in both; the changed docs-check gate's ID should differ.
-        self.assertEqual(len(first_ids & second_ids), 1)
+        modified = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
+        self.report.write_text(modified)
+        proc = subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("--rename", proc.stderr)
+        self.assertIn(old_id, proc.stderr)
+        self.assertEqual(self.output.read_text(), before)
+
+    def test_explicit_rename_writes_previous_gate_id(self):
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            check=True,
+        )
+        old_text = self.output.read_text()
+        old_id = re.search(r"gate_id:\s*([a-f0-9]{12})", old_text).group(1)
+
+        modified = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
+        self.report.write_text(modified)
+        proc = subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertNotEqual(proc.returncode, 0)
+        new_id = re.search(rf"--rename\s+{old_id}:([a-f0-9]{{12}})", proc.stderr).group(1)
+
+        subprocess.run(
+            [
+                str(EXPORT_GATES),
+                "--report", str(self.report),
+                "--output", str(self.output),
+                "--rename", f"{old_id}:{new_id}",
+            ],
+            check=True,
+        )
+        text = self.output.read_text()
+        self.assertIn(f"gate_id: {new_id}", text)
+        self.assertIn(f"previous_gate_ids: {old_id}", text)
+        self.assertNotIn(f"gate_id: {old_id}", text)
+
+    def test_second_rename_preserves_transitive_chain_newest_first(self):
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            check=True,
+        )
+        old_id = re.search(r"gate_id:\s*([a-f0-9]{12})", self.output.read_text()).group(1)
+
+        first = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
+        self.report.write_text(first)
+        proc = subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        newer_old = re.search(rf"--rename\s+{old_id}:([a-f0-9]{{12}})", proc.stderr).group(1)
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output), "--rename", f"{old_id}:{newer_old}"],
+            check=True,
+        )
+
+        second = first.replace("Read fresh Cloudflare docs", "Review fresh Cloudflare docs")
+        self.report.write_text(second)
+        proc = subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        newest = re.search(rf"--rename\s+{newer_old}:([a-f0-9]{{12}})", proc.stderr).group(1)
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output), "--rename", f"{newer_old}:{newest}"],
+            check=True,
+        )
+
+        self.assertIn(f"previous_gate_ids: {newer_old}, {old_id}", self.output.read_text())
+
+    def test_rename_new_id_must_match_rendered_gate(self):
+        subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            check=True,
+        )
+        old_id = re.search(r"gate_id:\s*([a-f0-9]{12})", self.output.read_text()).group(1)
+        modified = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
+        self.report.write_text(modified)
+
+        proc = subprocess.run(
+            [
+                str(EXPORT_GATES),
+                "--report", str(self.report),
+                "--output", str(self.output),
+                "--rename", f"{old_id}:ffffffffffff",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("does not match any rendered gate", proc.stderr)
 
 
 if __name__ == "__main__":

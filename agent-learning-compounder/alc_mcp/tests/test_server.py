@@ -58,7 +58,8 @@ class McpServerTools(unittest.TestCase):
             "- domain: tests\n"
             "  gate_id: abcdef012345\n"
             "  gate_category: validation-check\n"
-            "  gate: Run pytest before claiming done.\n",
+            "  gate: Run pytest before claiming done.\n"
+            "  previous_gate_ids: bbbbbbbbbbbb\n",
             encoding="utf-8",
         )
         (reports_dir / "latest-skill-context.md").write_text(
@@ -84,6 +85,7 @@ class McpServerTools(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["gate_id"], "abcdef012345")
         self.assertEqual(result[0]["domain"], "tests")
+        self.assertEqual(result[0]["previous_gate_ids"], ["bbbbbbbbbbbb"])
 
     def test_get_skill_context_returns_string(self):
         from alc_mcp.server import TOOL_HANDLERS

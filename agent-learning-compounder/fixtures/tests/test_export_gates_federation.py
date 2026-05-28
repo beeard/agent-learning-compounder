@@ -166,6 +166,64 @@ class ExportGatesPreservesInheritedBlocks(unittest.TestCase):
             ),
         )
 
+    def test_re_export_preserves_inherited_alias_chain(self):
+        self._export()
+        inherited_block = (
+            "- domain: kubernetes\n"
+            "  gate_id: cccccccccccc\n"
+            "  gate_category: yaml-check\n"
+            "  gate: Verify kustomize render before kubectl apply.\n"
+            "  previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa\n"
+            "  derived_from: sibling-repo:cccccccccccc:2026-01-15T00:00:00Z\n"
+        )
+        with self.output.open("a", encoding="utf-8") as fh:
+            fh.write("\n" + inherited_block)
+
+        self._export()
+
+        text = self.output.read_text()
+        self.assertIn("gate_id: cccccccccccc", text)
+        self.assertIn("previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa", text)
+
+    def test_local_explicit_rename_supersedes_inherited_old_id_without_duplicate(self):
+        self._export()
+        old_id = ExportGatesFrozenIdRecipe.EXPECTED_GATE_ID
+        updated_report = SAMPLE_REPORT.replace("Re-read current Cloudflare docs", "Read fresh Cloudflare docs")
+        self.report.write_text(updated_report)
+        proc = subprocess.run(
+            [str(EXPORT_GATES), "--report", str(self.report), "--output", str(self.output)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        new_id = re.search(rf"--rename\s+{old_id}:([a-f0-9]{{12}})", proc.stderr).group(1)
+        self.output.write_text(
+            "# Approved Agent Gates\n\n"
+            "## gates\n\n"
+            "- domain: cloudflare\n"
+            f"  gate_id: {old_id}\n"
+            "  gate_category: docs-check\n"
+            "  gate: Re-read current Cloudflare docs before changing wrangler config.\n"
+            "  previous_gate_ids: bbbbbbbbbbbb\n"
+            f"  derived_from: sibling-repo:{old_id}:2026-01-15T00:00:00Z\n",
+            encoding="utf-8",
+        )
+
+        subprocess.run(
+            [
+                str(EXPORT_GATES),
+                "--report", str(self.report),
+                "--output", str(self.output),
+                "--rename", f"{old_id}:{new_id}",
+            ],
+            check=True,
+        )
+
+        text = self.output.read_text()
+        self.assertIn(f"gate_id: {new_id}", text)
+        self.assertIn(f"previous_gate_ids: {old_id}, bbbbbbbbbbbb", text)
+        self.assertEqual(len(re.findall(rf"^\s*gate_id:\s*{old_id}\s*$", text, re.MULTILINE)), 0)
+
     def test_first_export_when_output_does_not_exist(self):
         """Regression: the preserve path must be a no-op when the output
         file doesn't exist yet (no existing inherited blocks to merge)."""

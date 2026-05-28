@@ -123,7 +123,11 @@ class DashboardReadModelTests(unittest.TestCase):
 
     def test_fastapi_payload_preserves_compatibility_keys(self) -> None:
         self.state.reports_dir.joinpath("latest-approved-gates.md").write_text(
-            "\n- domain: validation\n  gate_id: project-gate\n  gate_category: check\n  gate: run tests\n",
+            "\n- domain: validation\n"
+            "  gate_id: cccccccccccc\n"
+            "  gate_category: check\n"
+            "  gate: run tests\n"
+            "  previous_gate_ids: bbbbbbbbbbbb\n",
             encoding="utf-8",
         )
         self.state.reports_dir.joinpath("recommendations.json").write_text(
@@ -145,6 +149,10 @@ class DashboardReadModelTests(unittest.TestCase):
         for key in ("generated_at", "personal_root", "latest", "history", "scoped_gates", "read_surface"):
             self.assertIn(key, payload)
         self.assertEqual(payload["scoped_gates"]["summary"]["project"], 1)
+        self.assertEqual(
+            payload["scoped_gates"]["rows"][0]["previous_gate_ids"],
+            ["bbbbbbbbbbbb"],
+        )
         surface = payload["read_surface"]
         self.assertEqual(surface["recommendations"][0]["id"], "rec-1")
         self.assertEqual(surface["suggestions"][0]["recommendation_id"], "s1")

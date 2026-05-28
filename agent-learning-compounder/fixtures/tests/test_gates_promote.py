@@ -97,6 +97,28 @@ class GatesPromote(unittest.TestCase):
         self.assertIn("Re-read current Cloudflare docs", data["gate"])
         self.assertIn("promoted_at", data)
 
+    def test_promote_writes_previous_gate_ids(self):
+        gate_id = self._gate_id_for_category("docs-check")
+        text = self.gates_md.read_text(encoding="utf-8")
+        self.gates_md.write_text(
+            text.replace(
+                f"  gate_id: {gate_id}\n",
+                f"  gate_id: {gate_id}\n  previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa\n",
+            ),
+            encoding="utf-8",
+        )
+
+        subprocess.run([
+            str(PROMOTE),
+            "--gates", str(self.gates_md),
+            "--gate-id", gate_id,
+            "--origin-repo", "repo-abc",
+            "--shared-root", str(self.shared),
+        ], check=True)
+
+        data = json.loads((self.shared / "gates" / f"{gate_id}.json").read_text())
+        self.assertEqual(data["previous_gate_ids"], ["bbbbbbbbbbbb", "aaaaaaaaaaaa"])
+
     def test_promote_refuses_unknown_gate(self):
         proc = subprocess.run([
             str(PROMOTE),
@@ -144,6 +166,29 @@ class GatesPromote(unittest.TestCase):
         self.assertNotEqual(proc.returncode, 0)
         self.assertIn("12 lowercase hex", proc.stderr)
         self.assertFalse((Path(self.tmp.name) / "escape.json").exists())
+
+    def test_promote_rejects_malformed_previous_gate_ids(self):
+        gate_id = self._gate_id_for_category("docs-check")
+        text = self.gates_md.read_text(encoding="utf-8")
+        self.gates_md.write_text(
+            text.replace(
+                f"  gate_id: {gate_id}\n",
+                f"  gate_id: {gate_id}\n  previous_gate_ids: not-hex\n",
+            ),
+            encoding="utf-8",
+        )
+
+        proc = subprocess.run([
+            str(PROMOTE),
+            "--gates", str(self.gates_md),
+            "--gate-id", gate_id,
+            "--origin-repo", "repo-abc",
+            "--shared-root", str(self.shared),
+        ], capture_output=True, text=True, check=False)
+
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("previous_gate_ids", proc.stderr)
+        self.assertFalse((self.shared / "gates" / f"{gate_id}.json").exists())
 
 
 class GatesPromoteInheritRoundTrip(unittest.TestCase):
@@ -246,6 +291,80 @@ class GatesPromoteInheritRoundTrip(unittest.TestCase):
                 level_line,
                 f"expected ``level: 3`` to appear in inherited block:\n{inherited}",
             )
+
+    def test_promote_then_inherit_preserves_previous_gate_ids(self):
+        import re
+        INHERIT = REPO_ROOT / "bin" / "gates_inherit"
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            report = tdp / "report.md"
+            report.write_text(SAMPLE_REPORT_CONTENT)
+            origin_gates = tdp / "origin-gates.md"
+            shared = tdp / "shared"
+            subprocess.run(
+                [str(EXPORT_GATES), "--report", str(report),
+                 "--output", str(origin_gates)],
+                check=True,
+            )
+            origin_text = origin_gates.read_text()
+            gate_id = re.search(r"gate_id:\s*([a-f0-9]{12})", origin_text).group(1)
+            origin_gates.write_text(
+                origin_text.replace(
+                    f"  gate_id: {gate_id}\n",
+                    f"  gate_id: {gate_id}\n  previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa\n",
+                ),
+                encoding="utf-8",
+            )
+
+            subprocess.run([
+                str(PROMOTE),
+                "--gates", str(origin_gates),
+                "--gate-id", gate_id,
+                "--origin-repo", "repo-A",
+                "--shared-root", str(shared),
+            ], check=True)
+
+            target_gates = tdp / "target-gates.md"
+            target_gates.write_text("# Approved Agent Gates\n\n")
+            subprocess.run([
+                str(INHERIT),
+                "--shared-root", str(shared),
+                "--target-gates", str(target_gates),
+                "--gate-id", gate_id,
+            ], check=True)
+
+            inherited = target_gates.read_text()
+            self.assertIn("previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa", inherited)
+
+    def test_inherit_rejects_malformed_previous_gate_ids(self):
+        INHERIT = REPO_ROOT / "bin" / "gates_inherit"
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            shared = tdp / "shared" / "gates"
+            shared.mkdir(parents=True)
+            gate_id = "2aed10be9612"
+            (shared / f"{gate_id}.json").write_text(json.dumps({
+                "domain": "cloudflare",
+                "gate_id": gate_id,
+                "gate_category": "docs-check",
+                "gate": "Re-read current Cloudflare docs before changing wrangler config.",
+                "origin_repo": "repo-A",
+                "promoted_at": "2026-01-15T00:00:00Z",
+                "previous_gate_ids": ["not-hex"],
+            }), encoding="utf-8")
+            target_gates = tdp / "target-gates.md"
+            target_gates.write_text("# Approved Agent Gates\n\n")
+
+            proc = subprocess.run([
+                str(INHERIT),
+                "--shared-root", str(tdp / "shared"),
+                "--target-gates", str(target_gates),
+                "--gate-id", gate_id,
+            ], capture_output=True, text=True, check=False)
+
+            self.assertNotEqual(proc.returncode, 0)
+            self.assertIn("previous_gate_ids", proc.stderr)
+            self.assertNotIn("gate_id:", target_gates.read_text())
 
     def test_promote_without_level_omits_field(self):
         """When the source block has no level (older gates), the shared record

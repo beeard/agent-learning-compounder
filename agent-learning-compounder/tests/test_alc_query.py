@@ -345,6 +345,46 @@ class AlcQueryTests(unittest.TestCase):
         self.assertEqual([row["gate_id"] for row in rows], ["shared", "user-only"])
         self.assertEqual(rows[0]["_source_scope"], "project")
 
+    def test_get_gates_surfaces_previous_gate_ids(self) -> None:
+        self.state.reports_dir.mkdir(parents=True, exist_ok=True)
+        self.state.reports_dir.joinpath("latest-approved-gates.md").write_text(
+            "\n- domain: repo\n"
+            "  gate_id: cccccccccccc\n"
+            "  gate_category: project\n"
+            "  gate: project wins\n"
+            "  previous_gate_ids: bbbbbbbbbbbb, aaaaaaaaaaaa\n",
+            encoding="utf-8",
+        )
+
+        rows = alc_query.get_gates(self.state, scope="project")
+
+        self.assertEqual(rows[0]["gate_id"], "cccccccccccc")
+        self.assertEqual(rows[0]["previous_gate_ids"], ["bbbbbbbbbbbb", "aaaaaaaaaaaa"])
+
+    def test_both_scope_suppresses_user_gate_claimed_by_project_alias(self) -> None:
+        self.state.reports_dir.mkdir(parents=True, exist_ok=True)
+        self.state.reports_dir.joinpath("latest-approved-gates.md").write_text(
+            "\n- domain: repo\n"
+            "  gate_id: cccccccccccc\n"
+            "  gate_category: project\n"
+            "  gate: project wins\n"
+            "  previous_gate_ids: bbbbbbbbbbbb\n",
+            encoding="utf-8",
+        )
+        user_root = Path(self.temp.name) / "user"
+        reports = user_root / "reports" / "agent-learning"
+        reports.mkdir(parents=True)
+        (reports / "latest-approved-gates.md").write_text(
+            "\n- domain: repo\n  gate_id: bbbbbbbbbbbb\n  gate_category: user\n  gate: user loses by alias\n"
+            "\n- domain: repo\n  gate_id: aaaaaaaaaaaa\n  gate_category: user\n  gate: user remains\n",
+            encoding="utf-8",
+        )
+
+        rows = alc_query.get_gates(self.state, scope="both", user_root=user_root)
+
+        self.assertEqual([row["gate_id"] for row in rows], ["cccccccccccc", "aaaaaaaaaaaa"])
+        self.assertEqual(rows[0]["previous_gate_ids"], ["bbbbbbbbbbbb"])
+
     def test_env_user_scope_uses_shared_state_scope_resolver(self) -> None:
         user_root = Path(self.temp.name) / "env-user"
         reports = user_root / "reports" / "agent-learning"

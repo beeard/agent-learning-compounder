@@ -23,6 +23,11 @@ try:
 except ImportError:  # pragma: no cover
     from bin import proposal_lifecycle
 
+try:
+    import gate_registry
+except ImportError:  # pragma: no cover
+    from bin import gate_registry
+
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$", re.I)
 _ALLOWED_KIND_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -66,6 +71,23 @@ def _configured_path(state: StateHandle, key: str, fallback: Path) -> Path:
 
 
 def _parse_gates_markdown(text: str, *, source: str) -> list[dict[str, Any]]:
+    try:
+        rows: list[dict[str, Any]] = []
+        for block in gate_registry.parse_gate_blocks(text):
+            row: dict[str, Any] = {
+                "domain": block.domain,
+                "gate_id": block.gate_id,
+                "category": block.gate_category,
+                "gate": block.gate,
+                "_source_scope": source,
+            }
+            if block.previous_gate_ids:
+                row["previous_gate_ids"] = list(block.previous_gate_ids)
+            rows.append(row)
+        return rows
+    except ValueError:
+        pass
+
     out: list[dict[str, Any]] = []
     for i, block in enumerate(text.split("\n- domain:")):
         if i == 0:
@@ -123,6 +145,8 @@ def get_gates(
             user_rows = _parse_gates_markdown(path.read_text(encoding="utf-8"), source="user")
             if scope == "both":
                 seen = {row.get("gate_id") for row in rows}
+                for row in rows:
+                    seen.update(row.get("previous_gate_ids") or [])
                 user_rows = [row for row in user_rows if row.get("gate_id") not in seen]
             rows.extend(user_rows)
     if domain:

@@ -14,10 +14,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_hook_event import assert_regular_file_destination  # noqa: E402
 from export_gates import _gate_id  # noqa: E402
+import gate_registry  # noqa: E402
 from state_handle import atomic_rewrite  # noqa: E402
 
 
-GATE_ID_RE = re.compile(r"^[a-f0-9]{12}$")
 REQUIRED_RECORD_FIELDS = ("domain", "gate_id", "gate_category", "gate", "origin_repo", "promoted_at")
 # Conflict exit code: distinct from invalid-input (2) so callers can tell apart
 # a same-gate_id / different-origin collision from a malformed-record refusal.
@@ -25,8 +25,7 @@ EXIT_CONFLICT = 3
 
 
 def validate_gate_id(gate_id: str) -> None:
-    if not GATE_ID_RE.fullmatch(gate_id):
-        raise ValueError(f"gate_id must be 12 lowercase hex characters: {gate_id}")
+    gate_registry.validate_gate_id(gate_id)
 
 
 def shared_gate_path(shared_root: Path, gate_id: str) -> Path:
@@ -62,6 +61,16 @@ def validate_record(record: dict, gate_id: str) -> None:
             f"record content does not hash to gate_id {gate_id} "
             f"(derived {derived}); possible registry tampering"
         )
+    aliases = record.get("previous_gate_ids")
+    if aliases is not None:
+        if not isinstance(aliases, list):
+            raise ValueError("previous_gate_ids must be a list")
+        for alias in aliases:
+            if not isinstance(alias, str):
+                raise ValueError("previous_gate_ids entries must be strings")
+            gate_registry.validate_gate_id(alias, field="previous_gate_ids")
+        if gate_id in aliases:
+            raise ValueError("previous_gate_ids cannot contain current gate_id")
 
 
 def gate_already_present(target: Path, gate_id: str) -> bool:
@@ -109,6 +118,9 @@ def _gate_block(record: dict) -> str:
         f"  gate_category: {record['gate_category']}\n",
         f"  gate: {record['gate']}\n",
     ]
+    previous_gate_ids = record.get("previous_gate_ids")
+    if isinstance(previous_gate_ids, list) and previous_gate_ids:
+        lines.append(f"  previous_gate_ids: {', '.join(previous_gate_ids)}\n")
     # Preserve non-default severity when the shared record carries one.
     # Older records (pre-level) round-trip with no level emitted — no default
     # invented at the federation boundary.
