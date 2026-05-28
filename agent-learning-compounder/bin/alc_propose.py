@@ -40,8 +40,10 @@ except ImportError:  # pragma: no cover
 
 try:
     import proposal_lifecycle
+    import index_events
 except ImportError:  # pragma: no cover
     from bin import proposal_lifecycle
+    from bin import index_events
 
 
 MAX_GATE_TEXT_LEN = proposal_lifecycle.MAX_GATE_TEXT_LEN
@@ -110,6 +112,15 @@ def _append_jsonl_locked(path: Path, row: dict[str, Any]) -> None:
         pass
 
 
+def refresh_write_visibility(state: StateHandle) -> dict[str, Any]:
+    """Bounded post-write refresh so query/dashboard reads see new events."""
+    try:
+        indexed = index_events.run(state.repo_state_dir)
+        return {"updated": True, "indexed_events": indexed}
+    except Exception as error:  # noqa: BLE001 - writes should remain durable if indexing degrades.
+        return {"updated": False, "indexed_events": 0, "error": str(error)}
+
+
 def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evidence: str | None = None) -> dict[str, str]:
     if not state.repo_state_dir.is_dir():
         raise FileNotFoundError("improvement queue missing; run init_learning_system first")
@@ -124,7 +135,7 @@ def propose_gate(state: StateHandle, domain: str, category: str, gate: str, evid
     _append_jsonl_locked(queue, proposal.queue_row)
     _emit(state, proposal.event, source="background")
 
-    return {"queue_id": proposal.queue_id}
+    return {"queue_id": proposal.queue_id, "visibility": refresh_write_visibility(state)}
 
 
 def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
@@ -137,7 +148,7 @@ def propose_apply(state: StateHandle, patch_id: str) -> dict[str, str]:
     audit_nonce = secrets.token_urlsafe(16)
     proposal = proposal_lifecycle.build_apply_proposal(patch_id=patch_id, audit_nonce=audit_nonce)
     _emit(state, proposal.event, source="apply")
-    return {"command": proposal.command}
+    return {"command": proposal.command, "visibility": refresh_write_visibility(state)}
 
 
 def report_outcome(state: StateHandle, recommendation_id: str, verdict: str, reason: str) -> str:
@@ -146,7 +157,9 @@ def report_outcome(state: StateHandle, recommendation_id: str, verdict: str, rea
         verdict=verdict,
         reason=reason,
     )
-    return _emit(state, payload, source="eval", auto_id_fallback=False)
+    event_id = _emit(state, payload, source="eval", auto_id_fallback=False)
+    refresh_write_visibility(state)
+    return event_id
 
 
 def report_agent_event(state: StateHandle, kind: str, actor_name: str, telemetry: dict[str, Any] | None = None) -> str:
@@ -155,7 +168,9 @@ def report_agent_event(state: StateHandle, kind: str, actor_name: str, telemetry
         actor_name=actor_name,
         telemetry=_safe_telemetry(dict(telemetry or {})),
     )
-    return _emit(state, payload, source="background")
+    event_id = _emit(state, payload, source="background")
+    refresh_write_visibility(state)
+    return event_id
 
 
 def mark_patch_status(state: StateHandle, patch_id: str, status: Literal["deferred", "rejected"]) -> dict[str, str]:
@@ -178,4 +193,4 @@ def mark_patch_status(state: StateHandle, patch_id: str, status: Literal["deferr
 
     event = proposal_lifecycle.build_patch_status_event(patch_id=patch_id, status=status)
     _emit(state, event, source="apply")
-    return {"patch_id": patch_id, "status": status}
+    return {"patch_id": patch_id, "status": status, "visibility": refresh_write_visibility(state)}

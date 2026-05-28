@@ -122,6 +122,16 @@ class DashboardReadModelTests(unittest.TestCase):
         self.assertIn("archive_diagnostics", payload)
 
     def test_fastapi_payload_preserves_compatibility_keys(self) -> None:
+        actions_dir = self.user_root / "actions"
+        actions_dir.mkdir(parents=True, exist_ok=True)
+        actions_dir.joinpath("promoted-gates.json").write_text(
+            json.dumps([{"key": "validation::quality", "domain": "validation", "gate_category": "quality"}]),
+            encoding="utf-8",
+        )
+        actions_dir.joinpath("muted-domains.json").write_text(
+            json.dumps([{"domain": "noise", "reason": "too broad"}]),
+            encoding="utf-8",
+        )
         self.state.reports_dir.joinpath("latest-approved-gates.md").write_text(
             "\n- domain: validation\n"
             "  gate_id: cccccccccccc\n"
@@ -138,6 +148,18 @@ class DashboardReadModelTests(unittest.TestCase):
             json.dumps({"suggestions": [{"recommendation_id": "s1", "title": "Try it"}]}),
             encoding="utf-8",
         )
+        self.state.repo_state_dir.joinpath("improvement-queue.jsonl").write_text(
+            json.dumps({
+                "id": "proposal-1",
+                "type": "gate",
+                "status": "open",
+                "domain": "validation",
+                "category": "quality",
+                "gate": "Run tests.",
+                "created_at": "2026-05-28T00:00:00+00:00",
+            }) + "\n",
+            encoding="utf-8",
+        )
         self._write_event_db()
 
         payload = dashboard_read_model.build_fastapi_payload(
@@ -148,6 +170,11 @@ class DashboardReadModelTests(unittest.TestCase):
 
         for key in ("generated_at", "personal_root", "latest", "history", "scoped_gates", "read_surface"):
             self.assertIn(key, payload)
+        self.assertIn("freshness", payload)
+        self.assertIn("capabilities", payload)
+        self.assertEqual(payload["actions"]["promoted_count"], 1)
+        self.assertEqual(payload["actions"]["muted_count"], 1)
+        self.assertGreaterEqual(payload["capabilities"]["mcp_tool_count"], 31)
         self.assertEqual(payload["scoped_gates"]["summary"]["project"], 1)
         self.assertEqual(
             payload["scoped_gates"]["rows"][0]["previous_gate_ids"],
@@ -156,7 +183,59 @@ class DashboardReadModelTests(unittest.TestCase):
         surface = payload["read_surface"]
         self.assertEqual(surface["recommendations"][0]["id"], "rec-1")
         self.assertEqual(surface["suggestions"][0]["recommendation_id"], "s1")
+        self.assertEqual(surface["proposal_queue"][0]["queue_id"], "proposal-1")
         self.assertIn("diagnostics", surface)
+        self.assertIn("canonical_state_root", surface["diagnostics"])
+
+    def test_capability_summary_uses_live_catalog(self) -> None:
+        summary = dashboard_read_model.build_capability_summary(self.state)
+        self.assertIn("get_session_signals", summary["mcp_tools"])
+        self.assertIn("/alc-help", summary["commands"])
+
+    def test_dashboard_health_matches_fastapi_shape(self) -> None:
+        bundle = self.root / "bundle.html"
+        distill = self.root / "auto_distill_session"
+        bundle.write_text("<html></html>", encoding="utf-8")
+
+        health = dashboard_read_model.build_dashboard_health(
+            self.user_root,
+            version="0.2.0",
+            bundle_path=bundle,
+            auto_distill_path=distill,
+        )
+
+        self.assertTrue(health["ok"])
+        self.assertEqual(health["version"], "0.2.0")
+        self.assertEqual(health["personal"], str(self.user_root.resolve()))
+        self.assertTrue(health["bundle_present"])
+        self.assertFalse(health["auto_distill"])
+        self.assertIn("ts", health)
+
+    def test_latest_report_content_reads_html_and_markdown(self) -> None:
+        reports = self.user_root / "reports" / "agent-learning"
+        (reports / "latest-report.html").write_text("<h1>HTML</h1>", encoding="utf-8")
+        (reports / "2026-05-28-report.md").write_text("# Markdown\n", encoding="utf-8")
+        (reports / "latest-approved-gates.md").write_text("# Excluded\n", encoding="utf-8")
+
+        html = dashboard_read_model.build_latest_report_content(self.user_root, format="html")
+        markdown = dashboard_read_model.build_latest_report_content(self.user_root, format="markdown")
+
+        self.assertEqual(html["status"], "available")
+        self.assertEqual(html["content"], "<h1>HTML</h1>")
+        self.assertEqual(html["media_type"], "text/html")
+        self.assertEqual(markdown["status"], "available")
+        self.assertEqual(markdown["content"], "# Markdown\n")
+        self.assertEqual(markdown["media_type"], "text/markdown")
+
+    def test_latest_report_content_missing_messages_match_routes(self) -> None:
+        html = dashboard_read_model.build_latest_report_content(self.user_root, format="html")
+        markdown_no_report = dashboard_read_model.build_latest_report_content(self.user_root, format="markdown")
+        empty_root = self.root / "empty-user"
+        markdown_no_archive = dashboard_read_model.build_latest_report_content(empty_root, format="markdown")
+
+        self.assertEqual(html["message"], "no report on file")
+        self.assertEqual(markdown_no_report["message"], "no report on file")
+        self.assertEqual(markdown_no_archive["message"], "no archive on file")
 
     def test_fastapi_payload_without_state_has_no_project_read_surface(self) -> None:
         payload = dashboard_read_model.build_fastapi_payload(self.user_root, state=None, history_limit=5)
@@ -219,7 +298,7 @@ class DashboardReadModelTests(unittest.TestCase):
         static_adapter = _function_from(REPO_ROOT / "bin" / "render_dashboard", "build_dashboard_data")
         stdlib_adapter = _function_from(REPO_ROOT / "skills" / "alc-dashboard" / "server.py", "build_data_blob")
 
-        self.assertIn("build_fastapi_payload", _called_names(fastapi_adapter))
+        self.assertIn("build_dashboard_payload", _called_names(fastapi_adapter))
         self.assertIn("build_static_payload", _called_names(static_adapter))
         self.assertIn("build_stdlib_payload", _called_names(stdlib_adapter))
 

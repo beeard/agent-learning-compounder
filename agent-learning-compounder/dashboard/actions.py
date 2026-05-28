@@ -18,7 +18,10 @@ import datetime as dt
 import json
 import os
 import pathlib
+import subprocess
+import threading
 import tempfile
+import uuid
 from typing import Any, Iterable
 
 
@@ -157,4 +160,118 @@ def actions_summary(personal: pathlib.Path) -> dict:
         "muted_count": len(muted),
         "promoted": promoted,
         "muted": muted,
+    }
+
+
+_JOBS: dict[str, dict[str, Any]] = {}
+_JOBS_LOCK = threading.Lock()
+
+
+def _job_snapshot(job: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "job_id": job["job_id"],
+        "kind": job["kind"],
+        "status": job["status"],
+        "started_at": job["started_at"],
+        "finished_at": job.get("finished_at"),
+        "exit_code": job.get("exit_code"),
+        "messages": list(job.get("messages", [])),
+    }
+
+
+def _create_job(kind: str) -> dict[str, Any]:
+    job = {
+        "job_id": f"{kind}-{uuid.uuid4().hex[:12]}",
+        "kind": kind,
+        "status": "running",
+        "started_at": _now(),
+        "messages": [],
+    }
+    with _JOBS_LOCK:
+        _JOBS[job["job_id"]] = job
+    return job
+
+
+def _finish_job(job_id: str, exit_code: int, message: str | None = None) -> None:
+    with _JOBS_LOCK:
+        job = _JOBS[job_id]
+        if message:
+            job.setdefault("messages", []).append(message)
+        job["exit_code"] = exit_code
+        job["status"] = "succeeded" if exit_code == 0 else "failed"
+        job["finished_at"] = _now()
+
+
+def run_distill(personal: pathlib.Path, *, script: pathlib.Path | None = None) -> dict[str, Any]:
+    """Start the dashboard distill action and return a stable job id."""
+    script = script or pathlib.Path(__file__).resolve().parents[1] / "bin" / "auto_distill_session"
+    if not script.is_file():
+        return {
+            "status": "missing",
+            "job_id": None,
+            "message": "auto_distill_session script missing",
+            "next_steps": ["Install or build the dashboard distill script before retrying."],
+        }
+
+    job = _create_job("distill")
+
+    def _run() -> None:
+        env = os.environ.copy()
+        env["AGENT_LEARNING_USER"] = str(personal)
+        env["AGENT_LEARNING_PERSONAL"] = str(personal)
+        try:
+            proc = subprocess.Popen(
+                [str(script)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                env=env,
+                text=True,
+            )
+            proc.communicate(timeout=10)
+            _finish_job(job["job_id"], proc.returncode or 0, "auto_distill_session invoked")
+        except subprocess.TimeoutExpired:
+            _finish_job(job["job_id"], 124, "auto_distill_session timed out")
+        except Exception as error:  # noqa: BLE001
+            _finish_job(job["job_id"], 1, f"error: {error}")
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {
+        "status": "running",
+        "job_id": job["job_id"],
+        "next_steps": ["Call list_action_jobs or get_action_job to inspect completion."],
+    }
+
+
+def list_action_jobs() -> dict[str, Any]:
+    with _JOBS_LOCK:
+        return {"jobs": [_job_snapshot(job) for job in _JOBS.values()]}
+
+
+def get_action_job(job_id: str) -> dict[str, Any]:
+    with _JOBS_LOCK:
+        job = _JOBS.get(job_id)
+        if not job:
+            return {"job_id": job_id, "status": "missing", "messages": ["unknown job"]}
+        return _job_snapshot(job)
+
+
+def latest_report(personal: pathlib.Path) -> dict[str, Any]:
+    target_dir = personal / "reports" / "agent-learning"
+    html = target_dir / "latest-report.html"
+    mds = sorted(
+        (
+            p
+            for p in target_dir.glob("*.md")
+            if p.name not in {"latest-approved-gates.md", "latest-skill-context.md"}
+        ),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    ) if target_dir.is_dir() else []
+    markdown = mds[0] if mds else None
+    if not html.is_file() and markdown is None:
+        return {"status": "missing", "html": None, "markdown": None, "message": "no report on file"}
+    return {
+        "status": "available",
+        "html": {"path": str(html), "mtime": html.stat().st_mtime} if html.is_file() else None,
+        "markdown": {"path": str(markdown), "mtime": markdown.stat().st_mtime} if markdown else None,
     }

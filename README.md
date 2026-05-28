@@ -156,21 +156,22 @@ That single injection — synthesised on demand by [`alc_init`](agent-learning-c
 
 ## Ask it what's next
 
-The newest MCP tool, **`next_action`** (M11), computes the single best move
-from current state. Same synthesiser handles "what's next?", "where did I
-leave off?", "session end recap" — one source of truth, never drift.
+The lifecycle MCP tools split raw facts from compatibility prose:
+**`get_session_signals`** (M30) returns compact facts for prompt-owned ranking,
+while **`next_action`** (M11) preserves the existing synthesized cache wrapper.
 
 ```text
 You:    What's next?
 
-Agent:  → mcp__alc__next_action(repo)
-        ← "2 pending patches, last apply 6h ago, /ce-plan stale —
-            suggest /ce-doc-review docs/plans/refactor-api.md"
+Agent:  → mcp__alc__get_session_signals(repo)
+        ← "2 pending patches, last apply 6h ago"
+        → rank in prompt space and pick one next move
 ```
 
-20 MCP tools total — read surface (`get_gates`, `get_recommendations`,
+31 MCP tools total — read surface (`get_gates`, `get_recommendations`,
 `get_skill_context`, …), propose surface (`propose_gate`, `report_outcome`),
-sandbox (`exec_sandbox`), and the new synthesiser. All auto-registered
+sandbox (`exec_sandbox`), dashboard actions, lifecycle contracts, and session
+signals. All auto-registered
 from the [`MCP_TOOLS`](agent-learning-compounder/alc_mcp/catalog.py) catalog.
 
 <br/>

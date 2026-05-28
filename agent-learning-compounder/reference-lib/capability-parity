@@ -22,5 +22,19 @@
 | M18 | mark_patch_status | alc_propose.mark_patch_status | alc_propose.mark_patch_status (UP5) |
 | M19 | get_proposal_queue | alc_query.get_proposal_queue | alc_query.get_proposal_queue (UQ10) |
 | M20 | get_proposal_lifecycle | alc_query.get_proposal_lifecycle | alc_query.get_proposal_lifecycle (UQ11) |
+| M21 | run_distill | dashboard.actions.run_distill | dashboard.actions.run_distill |
+| M22 | list_action_jobs | dashboard.actions.list_action_jobs | dashboard.actions.list_action_jobs |
+| M23 | get_action_job | dashboard.actions.get_action_job | dashboard.actions.get_action_job |
+| M24 | get_action_state | dashboard.actions.actions_summary | dashboard.actions.actions_summary |
+| M25 | promote_gate_action | dashboard.actions.promote_gate | dashboard.actions.promote_gate |
+| M26 | unpromote_gate_action | dashboard.actions.unpromote_gate | dashboard.actions.unpromote_gate |
+| M27 | mute_domain | dashboard.actions.mute_domain | dashboard.actions.mute_domain |
+| M28 | unmute_domain | dashboard.actions.unmute_domain | dashboard.actions.unmute_domain |
+| M29 | get_latest_report | dashboard.actions.latest_report | dashboard.actions.latest_report |
+| M30 | get_session_signals | alc_next_action.get_session_signals | alc_next_action.get_session_signals |
+| M31 | get_lifecycle_contracts | alc_query.get_lifecycle_contracts | alc_query.get_lifecycle_contracts |
+| M32 | get_dashboard_payload | dashboard_read_model.build_dashboard_payload | dashboard_read_model.build_dashboard_payload |
+| M33 | get_dashboard_health | dashboard_read_model.build_dashboard_health | dashboard_read_model.build_dashboard_health |
+| M34 | get_latest_report_content | dashboard_read_model.build_latest_report_content | dashboard_read_model.build_latest_report_content |
 
 Deletion check, local only: temporarily remove one row from this table or one catalog registration backing an M-ID, then run `python3 -m unittest tests.test_capability_map tests.test_capability_parity tests.test_catalog_mcp_parity tests.test_mcp_catalog_doc -v`. The map/parity/doc tests should fail before any consumer can silently bypass the catalog.

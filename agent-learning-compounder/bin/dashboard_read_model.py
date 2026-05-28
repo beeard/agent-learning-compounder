@@ -12,14 +12,22 @@ import datetime as dt
 import json
 import pathlib
 import re
+import sys
 import time
 from typing import Any
 
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+for _path in (ROOT, ROOT / "bin"):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
+
 try:
     import alc_query
+    from alc_mcp.catalog import MCP_TOOLS
     from state_handle import StateHandle
 except ImportError:  # pragma: no cover
     from bin import alc_query
+    from alc_mcp.catalog import MCP_TOOLS
     from bin.state_handle import StateHandle
 
 
@@ -134,14 +142,46 @@ def read_history(personal: pathlib.Path, limit: int) -> list[dict[str, Any]]:
     return rows[-limit:] if limit else rows
 
 
+def _read_action_rows(path: pathlib.Path) -> list[dict[str, Any]]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [_json_safe(item) for item in data if isinstance(item, dict)]
+
+
+def build_actions_summary(personal: pathlib.Path) -> dict[str, Any]:
+    personal = pathlib.Path(personal).expanduser().resolve()
+    actions_dir = personal / "actions"
+    promoted = _read_action_rows(actions_dir / "promoted-gates.json")
+    muted = _read_action_rows(actions_dir / "muted-domains.json")
+    return {
+        "promoted_count": len(promoted),
+        "muted_count": len(muted),
+        "promoted": promoted,
+        "muted": muted,
+    }
+
+
 def build_archive_model(personal: pathlib.Path, history_limit: int = 180) -> dict[str, Any]:
     personal = pathlib.Path(personal).expanduser().resolve()
     report_dir = personal / "reports" / "agent-learning"
     metrics = report_dir / "metrics.jsonl"
     latest = find_latest_payload(personal)
     history = read_history(personal, history_limit)
+    generated_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+    latest_report = report_dir / "latest-report.html"
+    latest_mtime = latest_report.stat().st_mtime if latest_report.is_file() else None
     return {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": generated_at,
+        "freshness": {
+            "generated_at": generated_at,
+            "latest_report_mtime": latest_mtime,
+            "data_age_seconds": int(time.time() - latest_mtime) if latest_mtime else None,
+            "status": "fresh" if latest_mtime else "degraded",
+        },
         "personal_root": str(personal),
         "latest": latest,
         "history": history,
@@ -188,8 +228,13 @@ def build_scoped_gates(state: StateHandle | None, *, user_root: pathlib.Path | N
 
 def _project_diagnostics(state: StateHandle) -> dict[str, Any]:
     hook_events = state.repo_state_dir / "hook-events.jsonl"
+    repo = state.repo
+    inner = repo / "agent-learning-compounder" / ".agent-learning.json"
+    dev_sink = repo / ".runtime" / "agent-learning-state" / "events.jsonl"
+    legacy_sqlite = repo / ".agent-learning" / "events.sqlite"
     diagnostics = {
         "repo_state": str(state.repo_state_dir),
+        "canonical_state_root": str(state.state_root),
         "events_sqlite": str(state.events_sqlite),
         "events_sqlite_present": state.events_sqlite.is_file(),
         "events_sqlite_bytes": _file_bytes(state.events_sqlite),
@@ -197,6 +242,9 @@ def _project_diagnostics(state: StateHandle) -> dict[str, Any]:
         "events_jsonl_bytes": _file_bytes(state.events_jsonl),
         "hook_events_present": hook_events.is_file(),
         "hook_events_bytes": _file_bytes(hook_events),
+        "inner_package_state_config": str(inner) if inner.is_file() else None,
+        "dev_event_sink": str(dev_sink) if dev_sink.is_file() else None,
+        "legacy_events_sqlite": str(legacy_sqlite) if legacy_sqlite.is_file() and legacy_sqlite != state.events_sqlite else None,
     }
     reasons: list[str] = []
     if not diagnostics["events_sqlite_present"]:
@@ -205,8 +253,27 @@ def _project_diagnostics(state: StateHandle) -> dict[str, Any]:
         reasons.append("events.sqlite is empty")
     if not diagnostics["events_jsonl_present"] and not diagnostics["hook_events_present"]:
         reasons.append("no raw event artifacts are present")
+    if diagnostics["inner_package_state_config"]:
+        reasons.append("inner package state config may split repo identity")
+    if diagnostics["dev_event_sink"]:
+        reasons.append("unindexed dev event sink present")
+    if diagnostics["legacy_events_sqlite"]:
+        reasons.append("legacy diagnostic events.sqlite is not canonical")
     diagnostics["cold_state_reasons"] = reasons
     return diagnostics
+
+
+def build_capability_summary(state: StateHandle | None = None) -> dict[str, Any]:
+    diagnostics = _project_diagnostics(state) if state is not None else {}
+    return {
+        "mcp_tool_count": len(MCP_TOOLS),
+        "mcp_tools": list(MCP_TOOLS),
+        "commands": ["/alc-report", "/alc-next", "/alc-help"],
+        "hooks_status": "configured" if diagnostics.get("hook_events_present") else "no hook events",
+        "sql_index_status": "present" if diagnostics.get("events_sqlite_present") else "missing",
+        "dashboard_status": "project" if state is not None else "archive-only",
+        "runtime_status": "installed" if state is not None else "unknown",
+    }
 
 
 def build_project_read_surface(state: StateHandle | None) -> dict[str, Any] | None:
@@ -217,6 +284,8 @@ def build_project_read_surface(state: StateHandle | None) -> dict[str, Any] | No
     pending_patches = _safe_read("pending_patches", [], lambda: alc_query.get_pending_patches(state))
     apply_log = _safe_read("apply_log", [], lambda: alc_query.get_apply_log(state, since="30d"))
     outcomes = _safe_read("outcomes", [], lambda: alc_query.get_outcomes(state, since="30d"))
+    proposal_queue = _safe_read("proposal_queue", [], lambda: alc_query.get_proposal_queue(state, limit=25))
+    proposal_lifecycle = _safe_read("proposal_lifecycle", [], lambda: alc_query.get_proposal_lifecycle(state, limit=50))
     skill_usage = _safe_read("skill_usage", [], lambda: alc_query.get_skill_usage_summary(state, since="30d"))
     suggestions = _safe_read("suggestions", [], lambda: alc_query.get_suggestions(state))
     actor_summary = _safe_read(
@@ -231,6 +300,8 @@ def build_project_read_surface(state: StateHandle | None) -> dict[str, Any] | No
         "pending_patches": pending_patches[:25] if isinstance(pending_patches, list) else pending_patches,
         "apply_log": apply_log[-25:] if isinstance(apply_log, list) else apply_log,
         "outcomes": outcomes[-25:] if isinstance(outcomes, list) else outcomes,
+        "proposal_queue": proposal_queue[:25] if isinstance(proposal_queue, list) else proposal_queue,
+        "proposal_lifecycle": proposal_lifecycle[:50] if isinstance(proposal_lifecycle, list) else proposal_lifecycle,
         "skill_usage": skill_usage[:25] if isinstance(skill_usage, list) else skill_usage,
         "suggestions": suggestions[:25] if isinstance(suggestions, list) else suggestions,
         "diagnostics": _project_diagnostics(state),
@@ -246,7 +317,104 @@ def build_fastapi_payload(
     payload = build_archive_model(personal, history_limit=history_limit)
     payload["scoped_gates"] = build_scoped_gates(state, user_root=pathlib.Path(personal))
     payload["read_surface"] = build_project_read_surface(state)
+    payload["capabilities"] = build_capability_summary(state)
+    payload["actions"] = build_actions_summary(personal)
     return payload
+
+
+def build_dashboard_payload(
+    personal: pathlib.Path,
+    *,
+    state: StateHandle | None = None,
+    history_limit: int = 180,
+) -> dict[str, Any]:
+    return build_fastapi_payload(personal, state=state, history_limit=history_limit)
+
+
+def build_dashboard_health(
+    personal: pathlib.Path,
+    *,
+    version: str,
+    bundle_path: pathlib.Path,
+    auto_distill_path: pathlib.Path,
+) -> dict[str, Any]:
+    personal = pathlib.Path(personal).expanduser().resolve()
+    return {
+        "ok": True,
+        "version": version,
+        "personal": str(personal),
+        "bundle_present": pathlib.Path(bundle_path).is_file(),
+        "auto_distill": pathlib.Path(auto_distill_path).is_file(),
+        "ts": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _latest_markdown_report(target_dir: pathlib.Path) -> pathlib.Path | None:
+    if not target_dir.is_dir():
+        return None
+    reports = sorted(
+        (
+            path
+            for path in target_dir.glob("*.md")
+            if path.name not in {"latest-approved-gates.md", "latest-skill-context.md"}
+        ),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    return reports[0] if reports else None
+
+
+def build_latest_report_content(personal: pathlib.Path, *, format: str = "html") -> dict[str, Any]:
+    personal = pathlib.Path(personal).expanduser().resolve()
+    target_dir = personal / "reports" / "agent-learning"
+    if format not in {"html", "markdown"}:
+        return {
+            "status": "error",
+            "format": format,
+            "content": None,
+            "path": None,
+            "media_type": None,
+            "message": "format must be html or markdown",
+        }
+
+    if format == "html":
+        target = target_dir / "latest-report.html"
+        missing_message = "no report on file"
+        media_type = "text/html"
+    else:
+        target = _latest_markdown_report(target_dir)
+        missing_message = "no archive on file" if not target_dir.is_dir() else "no report on file"
+        media_type = "text/markdown"
+
+    if target is None or not target.is_file():
+        return {
+            "status": "missing",
+            "format": format,
+            "content": None,
+            "path": None,
+            "media_type": media_type,
+            "message": missing_message,
+        }
+
+    try:
+        content = target.read_text(encoding="utf-8")
+    except OSError as error:
+        return {
+            "status": "error",
+            "format": format,
+            "content": None,
+            "path": str(target),
+            "media_type": media_type,
+            "message": str(error),
+        }
+    return {
+        "status": "available",
+        "format": format,
+        "content": content,
+        "path": str(target),
+        "media_type": media_type,
+        "mtime": target.stat().st_mtime,
+    }
 
 
 def _bucket_recommendations(rows: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
@@ -296,6 +464,7 @@ def build_stdlib_payload(
         "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "recommendations": recommendations,
         "pending_patches": _safe_read("pending_patches", [], lambda: alc_query.get_pending_patches(state)),
+        "proposal_queue": _safe_read("proposal_queue", [], lambda: alc_query.get_proposal_queue(state)),
         "anomalies": rec_buckets["anomalies"],
         "patterns": rec_buckets["patterns"],
         "correlations": rec_buckets["correlations"],
@@ -308,5 +477,5 @@ def build_stdlib_payload(
             "actor_summary": _safe_read("actor_summary", {}, lambda: alc_query.get_actor_summary(state)),
         },
         "suggestions": _safe_read("suggestions", [], lambda: alc_query.get_suggestions(state)),
-        "sections": list(STDLIB_SECTIONS),
+        "sections": list(STDLIB_SECTIONS) + ["proposal_queue"],
     }

@@ -39,6 +39,19 @@ def _rows() -> list[dict[str, str]]:
     return rows
 
 
+def _is_runnable_cli(value: str) -> bool:
+    normalized = value.strip().strip("`")
+    token = normalized.split()[0] if normalized else ""
+    if not token:
+        return False
+    if token in {"python", "python3"}:
+        parts = normalized.split()
+        token = parts[1] if len(parts) > 1 else ""
+    if token.startswith("bin/"):
+        return (ROOT / token).exists()
+    return "/" in token
+
+
 class CapabilityMapTests(unittest.TestCase):
     def test_dashboard_actions_have_at_least_two_invocation_paths(self) -> None:
         rows = _rows()
@@ -66,6 +79,14 @@ class CapabilityMapTests(unittest.TestCase):
         for section in dashboard_server.authored_sections:
             partners = [row for row in rows if row["dashboard_section"] == section and MID_RE.search(row["mcp_tool"])]
             self.assertTrue(partners, f"dashboard section lacks M-ID partner: {section}")
+
+    def test_cli_column_names_runnable_entrypoints_not_library_modules(self) -> None:
+        for row in _rows():
+            cli = row["cli"]
+            if not cli:
+                continue
+            self.assertTrue(_is_runnable_cli(cli), f"CLI entry is not a runnable path: {row}")
+            self.assertNotRegex(cli, r"(?<!bin/)\b[a-zA-Z_]\w*\.[a-zA-Z_]\w*\b", row)
 
 
 if __name__ == "__main__":

@@ -521,23 +521,25 @@ def _synthesise_auto(state: StateHandle, signals: dict[str, Any]) -> dict[str, A
 # Schema assembly
 # ---------------------------------------------------------------------------
 
+def _public_signals(signals: dict[str, Any]) -> dict[str, Any]:
+    """Strip internal routing hints from collected session signals."""
+    return {
+        "pending_patches": signals["pending_patches"],
+        "pending_recommendations": signals["pending_recommendations"],
+        "recent_applies_7d": signals["recent_applies_7d"],
+        "recent_verdicts_7d": dict(signals["recent_verdicts_7d"]),
+        "last_activity_iso": signals["last_activity_iso"],
+        "approved_gates": signals.get("approved_gates", {"total": 0, "user": 0, "project": 0}),
+    }
+
+
 def _build_result(
     intent: str,
     synthesis: dict[str, Any],
     signals: dict[str, Any],
 ) -> dict[str, Any]:
     """Assemble the final output dict, stripping internal keys from signals."""
-    public_signals = {
-        "pending_patches": signals["pending_patches"],
-        "pending_recommendations": signals["pending_recommendations"],
-        "recent_applies_7d": signals["recent_applies_7d"],
-        "recent_verdicts_7d": dict(signals["recent_verdicts_7d"]),
-        "last_activity_iso": signals["last_activity_iso"],
-        # approved_gates added in PR 2d. Tolerate older signal-dicts (e.g.
-        # those produced by tests that pre-date the field) by defaulting to
-        # an empty breakdown so the public schema is always complete.
-        "approved_gates": signals.get("approved_gates", {"total": 0, "user": 0, "project": 0}),
-    }
+    public_signals = _public_signals(signals)
     alternatives_raw = synthesis.get("alternatives") or []
     alternatives = [
         {"skill": item.get("skill"), "rationale": item.get("rationale", "")}
@@ -578,6 +580,19 @@ def _write_cache(state: StateHandle, result: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+def get_session_signals(
+    state: StateHandle,
+    intent: str = "auto",
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Return synthesized lifecycle facts without ranking, prose, or cache writes."""
+    return {
+        "intent": _normalise_intent(intent),
+        "session_id": session_id,
+        "signals": _public_signals(_collect_signals(state)),
+    }
+
 
 def next_action(
     state: StateHandle,

@@ -2,26 +2,40 @@
 
 | User action | Dashboard section | Command | MCP tool | CLI |
 | --- | --- | --- | --- | --- |
-| Review approved gates | gates_and_insights | `/alc-report` | M1 get_gates | `bin/alc_query gates --repo <repo>` |
-| Read skill context | gates_and_insights | `/alc-report` | M2 get_skill_context | `bin/alc_query skill-context --repo <repo>` |
-| Review recommendations | recommendations | `/alc-report` | M3 get_recommendations | `bin/alc_query recommendations --repo <repo>` |
-| Review pending patches | pending_patches | `/alc-report` | M4 list_pending_patches | `bin/alc_query pending-patches --repo <repo>` |
-| Open dashboard | recommendations | `/alc-report` | M5 get_dashboard_url | `bin/alc_query dashboard-url --repo <repo>` |
-| Propose patch apply | pending_patches | `/alc-report` | M6 propose_apply | `bin/alc_propose apply --repo <repo> --patch-id <id>` |
-| Propose a gate | suggestions | `/alc-report` | M7 propose_gate | `bin/alc_propose gate --repo <repo>` |
-| Report recommendation outcome | recommendations | `/alc-report` | M8 report_outcome | `bin/alc_propose outcome --repo <repo>` |
-| Report agent telemetry | apply_log | `/alc-report` | M9 report_agent_event | `bin/alc_propose agent-event --repo <repo>` |
+| Review approved gates | gates_and_insights | `/alc-report` | M1 get_gates |  |
+| Read skill context | gates_and_insights | `/alc-report` | M2 get_skill_context |  |
+| Review recommendations | recommendations | `/alc-report` | M3 get_recommendations |  |
+| Review pending patches | pending_patches | `/alc-report` | M4 list_pending_patches |  |
+| Open dashboard | recommendations | `/alc-report` | M5 get_dashboard_url |  |
+| Propose patch apply | pending_patches | `/alc-report` | M6 propose_apply |  |
+| Propose a gate | suggestions | `/alc-report` | M7 propose_gate |  |
+| Report recommendation outcome | recommendations | `/alc-report` | M8 report_outcome |  |
+| Report agent telemetry | apply_log | `/alc-report` | M9 report_agent_event |  |
 | Run sandbox command | apply_log | `/alc-report` | M10 exec_sandbox | `bin/alc_invoke --repo <repo> --scope read -- <cmd>` |
 | Inspect anomalies | anomalies | `/alc-report` | M3 get_recommendations | `bin/analyst_anomalies --state <state>` |
 | Inspect patterns | patterns | `/alc-report` | M3 get_recommendations | `bin/analyst_patterns --state <state>` |
 | Inspect correlations | correlations | `/alc-report` | M3 get_recommendations | `bin/analyst_correlations --state <state>` |
-| Session lifecycle synthesiser | recommendations | `/alc-next` | M11 next_action | `python3 bin/alc_next_action.py --repo <repo>` |
-| Inspect patch apply log | apply_log | `/alc-report` | M12 get_apply_log | `bin/alc_query apply-log --repo <repo>` |
-| Inspect eval outcomes | recommendations | `/alc-report` | M13 get_outcomes | `bin/alc_query outcomes --repo <repo>` |
-| Trace session event DAG | apply_log | `/alc-report` | M14 get_event_dag | `bin/alc_query event-dag --repo <repo> --session-id <id>` |
-| Per-actor event summary | patterns | `/alc-report` | M15 get_actor_summary | `bin/alc_query actor-summary --repo <repo>` |
-| Skill invocation history | patterns | `/alc-report` | M16 get_skill_invocation_history | `bin/alc_query skill-history --repo <repo> --skill <name>` |
-| Skill usage summary | patterns | `/alc-report` | M17 get_skill_usage_summary | `bin/alc_query skill-usage --repo <repo>` |
-| Defer or reject a pending patch | pending_patches | `/alc-report` | M18 mark_patch_status | `bin/alc_propose patch-status --repo <repo> --patch-id <id> --status deferred` |
-| Inspect proposal queue | suggestions | `/alc-report` | M19 get_proposal_queue | `bin/alc_query proposal-queue --repo <repo>` |
-| Inspect proposal lifecycle | recommendations | `/alc-report` | M20 get_proposal_lifecycle | `bin/alc_query proposal-lifecycle --repo <repo>` |
+| Session lifecycle synthesiser | recommendations | `/alc-next` | M11 next_action |  |
+| Inspect patch apply log | apply_log | `/alc-report` | M12 get_apply_log |  |
+| Inspect eval outcomes | recommendations | `/alc-report` | M13 get_outcomes |  |
+| Trace session event DAG | apply_log | `/alc-report` | M14 get_event_dag |  |
+| Per-actor event summary | patterns | `/alc-report` | M15 get_actor_summary |  |
+| Skill invocation history | patterns | `/alc-report` | M16 get_skill_invocation_history |  |
+| Skill usage summary | patterns | `/alc-report` | M17 get_skill_usage_summary |  |
+| Defer or reject a pending patch | pending_patches | `/alc-report` | M18 mark_patch_status |  |
+| Inspect proposal queue | suggestions | `/alc-report` | M19 get_proposal_queue |  |
+| Inspect proposal lifecycle | recommendations | `/alc-report` | M20 get_proposal_lifecycle |  |
+| Run dashboard distill | suggestions | `/alc-report` | M21 run_distill |  |
+| List dashboard action jobs | suggestions | `/alc-report` | M22 list_action_jobs |  |
+| Inspect dashboard action job | suggestions | `/alc-report` | M23 get_action_job |  |
+| Inspect dashboard action state | suggestions | `/alc-report` | M24 get_action_state |  |
+| Promote gate from dashboard action state | suggestions | `/alc-report` | M25 promote_gate_action |  |
+| Unpromote gate from dashboard action state | suggestions | `/alc-report` | M26 unpromote_gate_action |  |
+| Mute noisy dashboard domain | suggestions | `/alc-report` | M27 mute_domain |  |
+| Unmute dashboard domain | suggestions | `/alc-report` | M28 unmute_domain |  |
+| Inspect latest dashboard report | recommendations | `/alc-report` | M29 get_latest_report |  |
+| Inspect session lifecycle signals | recommendations | `/alc-next` | M30 get_session_signals |  |
+| Inspect entity lifecycle contracts | suggestions | `/alc-help` | M31 get_lifecycle_contracts |  |
+| Read dashboard payload | recommendations | `/alc-report` | M32 get_dashboard_payload |  |
+| Read dashboard health | recommendations | `/alc-report` | M33 get_dashboard_health |  |
+| Read latest dashboard report content | recommendations | `/alc-report` | M34 get_latest_report_content |  |

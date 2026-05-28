@@ -18,9 +18,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import alc_propose  # noqa: E402
 import alc_query  # noqa: E402
+import dashboard.actions as dashboard_actions  # noqa: E402
+import dashboard_read_model  # noqa: E402
 import exec_sandbox as sandbox  # noqa: E402
 import state_handle  # noqa: E402
 from alc_mcp.catalog import MCP_TOOLS, MCPToolSpec  # noqa: E402
+
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+DASHBOARD_BUNDLE = SKILL_ROOT / "dashboard" / "web" / "dist" / "index.html"
+AUTO_DISTILL = SKILL_ROOT / "bin" / "auto_distill_session"
+DASHBOARD_VERSION = "0.2.0"
 
 
 def _agent_kind(args: dict[str, Any]) -> str:
@@ -30,6 +37,25 @@ def _agent_kind(args: dict[str, Any]) -> str:
 
 def _state(args: dict[str, Any]) -> state_handle.StateHandle:
     return state_handle.project_state(Path(args["repo"]).resolve())
+
+
+def _optional_state(args: dict[str, Any]) -> state_handle.StateHandle | None:
+    try:
+        return _state(args)
+    except Exception:
+        return None
+
+
+def _personal(args: dict[str, Any]) -> Path:
+    if args.get("personal"):
+        personal = Path(args["personal"]).expanduser().resolve()
+    else:
+        repo = Path(args["repo"]).expanduser().resolve()
+        candidate = repo / ".agent-learning"
+        personal = candidate if candidate.exists() else Path.home() / ".agent-learning"
+    personal.mkdir(parents=True, exist_ok=True)
+    (personal / "reports" / "agent-learning").mkdir(parents=True, exist_ok=True)
+    return personal
 
 
 def _improvement_queue_path(repo: Path) -> Path:
@@ -149,6 +175,89 @@ async def _exec_sandbox_handler(args: dict[str, Any]) -> dict[str, Any]:
 
 
 TOOL_HANDLERS["exec_sandbox"] = _exec_sandbox_handler
+
+
+async def _run_distill_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_actions.run_distill(_personal(args))
+
+
+async def _get_action_state_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_actions.actions_summary(_personal(args))
+
+
+async def _promote_gate_action_handler(args: dict[str, Any]) -> dict[str, Any]:
+    result = dashboard_actions.promote_gate(
+        _personal(args),
+        key=args["key"],
+        domain=args["domain"],
+        gate_category=args["gate_category"],
+        by=args.get("by") or "mcp",
+    )
+    result["promoted_count"] = dashboard_actions.actions_summary(_personal(args))["promoted_count"]
+    return result
+
+
+async def _unpromote_gate_action_handler(args: dict[str, Any]) -> dict[str, Any]:
+    result = dashboard_actions.unpromote_gate(_personal(args), key=args["key"])
+    result["promoted_count"] = dashboard_actions.actions_summary(_personal(args))["promoted_count"]
+    return result
+
+
+async def _mute_domain_handler(args: dict[str, Any]) -> dict[str, Any]:
+    result = dashboard_actions.mute_domain(
+        _personal(args),
+        domain=args["domain"],
+        reason=args.get("reason"),
+        by=args.get("by") or "mcp",
+    )
+    result["muted_count"] = dashboard_actions.actions_summary(_personal(args))["muted_count"]
+    return result
+
+
+async def _unmute_domain_handler(args: dict[str, Any]) -> dict[str, Any]:
+    result = dashboard_actions.unmute_domain(_personal(args), domain=args["domain"])
+    result["muted_count"] = dashboard_actions.actions_summary(_personal(args))["muted_count"]
+    return result
+
+
+async def _get_latest_report_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_actions.latest_report(_personal(args))
+
+
+async def _get_dashboard_payload_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_read_model.build_dashboard_payload(
+        _personal(args),
+        state=_optional_state(args),
+        history_limit=180,
+    )
+
+
+async def _get_dashboard_health_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_read_model.build_dashboard_health(
+        _personal(args),
+        version=DASHBOARD_VERSION,
+        bundle_path=DASHBOARD_BUNDLE,
+        auto_distill_path=AUTO_DISTILL,
+    )
+
+
+async def _get_latest_report_content_handler(args: dict[str, Any]) -> dict[str, Any]:
+    return dashboard_read_model.build_latest_report_content(
+        _personal(args),
+        format=args.get("format") or "html",
+    )
+
+
+TOOL_HANDLERS["run_distill"] = _run_distill_handler
+TOOL_HANDLERS["get_action_state"] = _get_action_state_handler
+TOOL_HANDLERS["promote_gate_action"] = _promote_gate_action_handler
+TOOL_HANDLERS["unpromote_gate_action"] = _unpromote_gate_action_handler
+TOOL_HANDLERS["mute_domain"] = _mute_domain_handler
+TOOL_HANDLERS["unmute_domain"] = _unmute_domain_handler
+TOOL_HANDLERS["get_latest_report"] = _get_latest_report_handler
+TOOL_HANDLERS["get_dashboard_payload"] = _get_dashboard_payload_handler
+TOOL_HANDLERS["get_dashboard_health"] = _get_dashboard_health_handler
+TOOL_HANDLERS["get_latest_report_content"] = _get_latest_report_content_handler
 
 # list_capabilities: not in MCP_TOOLS catalog; returns catalog metadata itself.
 async def _list_capabilities_handler(args: dict[str, Any]) -> list[dict[str, Any]]:

@@ -18,6 +18,8 @@ SERVE = loader.load_module()
 
 if str(REPO_ROOT / "bin") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "bin"))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from dashboard_url_publisher import dashboard_url  # noqa: E402
 from state_handle import StateHandle  # noqa: E402
@@ -180,6 +182,117 @@ class ServeDashboardTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         self.assertEqual(observed, ["http://127.0.0.1:41038/"])
+
+    def test_shared_run_distill_defaults_to_bin_auto_distill_session(self) -> None:
+        import dashboard.actions as dashboard_actions
+
+        commands: list[list[str]] = []
+
+        class FakeProc:
+            returncode = 0
+
+            def communicate(self, *, timeout: int):  # noqa: ARG002
+                return ("", "")
+
+        class ImmediateThread:
+            def __init__(self, *, target, daemon: bool) -> None:  # noqa: ANN001, ARG002
+                self.target = target
+
+            def start(self) -> None:
+                self.target()
+
+        def fake_popen(command, **kwargs):  # noqa: ANN001, ARG001
+            commands.append(command)
+            return FakeProc()
+
+        with (
+            patch.object(dashboard_actions.pathlib.Path, "is_file", return_value=True),
+            patch.object(dashboard_actions.subprocess, "Popen", side_effect=fake_popen),
+            patch.object(dashboard_actions.threading, "Thread", ImmediateThread),
+        ):
+            result = dashboard_actions.run_distill(self.state_root)
+
+        self.assertEqual(result["status"], "running")
+        self.assertEqual(commands, [[str(REPO_ROOT / "bin" / "auto_distill_session")]])
+
+    def _fastapi_client(self, app):  # noqa: ANN001
+        try:
+            from fastapi.testclient import TestClient
+        except ImportError:
+            self.skipTest("fastapi test client unavailable")
+        return TestClient(app)
+
+    def _build_fastapi_app(self, dashboard_module):  # noqa: ANN001
+        if not dashboard_module._FASTAPI_AVAILABLE:
+            self.skipTest("fastapi unavailable")
+        return dashboard_module.build_app(personal=self.state_root)
+
+    def test_fastapi_distill_delegates_to_dashboard_actions(self) -> None:
+        import dashboard
+        import dashboard.actions as dashboard_actions
+
+        result = {"job_id": "distill-123", "status": "running"}
+        with patch.object(dashboard_actions, "run_distill", return_value=result) as run_distill:
+            client = self._fastapi_client(self._build_fastapi_app(dashboard))
+            response = client.post("/api/actions/distill")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), result)
+        run_distill.assert_called_once()
+        args, kwargs = run_distill.call_args
+        self.assertEqual(args, (self.state_root.resolve(),))
+        self.assertEqual(kwargs, {"script": dashboard.AUTO_DISTILL})
+
+    def test_fastapi_missing_distill_script_returns_503(self) -> None:
+        import dashboard
+        import dashboard.actions as dashboard_actions
+
+        with patch.object(
+            dashboard_actions,
+            "run_distill",
+            return_value={"status": "missing", "job_id": None, "message": "auto_distill_session script missing"},
+        ):
+            client = self._fastapi_client(self._build_fastapi_app(dashboard))
+            response = client.post("/api/actions/distill")
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "auto_distill_session script missing")
+
+    def test_fastapi_jobs_delegate_to_dashboard_actions(self) -> None:
+        import dashboard
+        import dashboard.actions as dashboard_actions
+
+        jobs = {"jobs": [{"job_id": "distill-123", "status": "running"}]}
+        job = {"job_id": "distill-123", "status": "running"}
+        with (
+            patch.object(dashboard_actions, "list_action_jobs", return_value=jobs) as list_action_jobs,
+            patch.object(dashboard_actions, "get_action_job", return_value=job) as get_action_job,
+        ):
+            client = self._fastapi_client(self._build_fastapi_app(dashboard))
+            list_response = client.get("/api/actions/jobs")
+            get_response = client.get("/api/actions/jobs/distill-123")
+
+        self.assertEqual(list_response.status_code, 200)
+        self.assertEqual(list_response.json(), jobs)
+        self.assertEqual(get_response.status_code, 200)
+        self.assertEqual(get_response.json(), job)
+        list_action_jobs.assert_called_once_with()
+        get_action_job.assert_called_once_with("distill-123")
+
+    def test_fastapi_unknown_job_id_returns_404(self) -> None:
+        import dashboard
+        import dashboard.actions as dashboard_actions
+
+        with patch.object(
+            dashboard_actions,
+            "get_action_job",
+            return_value={"job_id": "missing", "status": "missing", "messages": ["unknown job"]},
+        ):
+            client = self._fastapi_client(self._build_fastapi_app(dashboard))
+            response = client.get("/api/actions/jobs/missing")
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(response.json()["detail"], "unknown job")
 
 
 if __name__ == "__main__":

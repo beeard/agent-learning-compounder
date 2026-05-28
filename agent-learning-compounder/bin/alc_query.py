@@ -20,8 +20,10 @@ except ImportError:  # pragma: no cover
 
 try:
     import proposal_lifecycle
+    import lifecycle_contracts
 except ImportError:  # pragma: no cover
     from bin import proposal_lifecycle
+    from bin import lifecycle_contracts
 
 try:
     import gate_registry
@@ -487,6 +489,12 @@ def get_proposal_lifecycle(
     if scope == "user":
         return []
     return proposal_lifecycle.read_lifecycle_state(state, limit=limit)
+
+
+def get_lifecycle_contracts(state: StateHandle | None = None, *, scope: Scope = "project") -> list[dict[str, Any]]:
+    """Return lifecycle contracts for ALC core entities."""
+    _validate_scope(scope)
+    return lifecycle_contracts.list_lifecycle_contracts()
 
 
 def get_event_dag(

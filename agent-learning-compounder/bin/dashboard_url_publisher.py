@@ -18,6 +18,7 @@ SERVER_MARKER = "server.json"
 DASHBOARD_HTML = "dashboard.html"
 LEGACY_INDEX_HTML = "index.html"
 LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+LIVE_MARKER_TTL_SECONDS = 12 * 60 * 60
 
 
 def _canonical_host(host: str) -> str:
@@ -82,6 +83,14 @@ def _valid_marker_url(payload: dict[str, Any]) -> str | None:
         if marker_port != url_port:
             return None
 
+    timestamp = payload.get("timestamp")
+    if timestamp is not None:
+        try:
+            if time.time() - float(timestamp) > LIVE_MARKER_TTL_SECONDS:
+                return None
+        except (TypeError, ValueError):
+            return None
+
     return url
 
 
@@ -103,6 +112,25 @@ def static_dashboard_url(state: StateHandle) -> str:
 def dashboard_url(repo: StateHandle | str | pathlib.Path) -> str:
     state = _state(repo)
     return live_dashboard_url(state) or static_dashboard_url(state)
+
+
+def dashboard_url_status(repo: StateHandle | str | pathlib.Path) -> dict[str, Any]:
+    state = _state(repo)
+    payload = _read_marker(marker_path(state))
+    live = _valid_marker_url(payload) if payload else None
+    age_seconds = None
+    if payload and payload.get("timestamp") is not None:
+        try:
+            age_seconds = time.time() - float(payload["timestamp"])
+        except (TypeError, ValueError):
+            age_seconds = None
+    return {
+        "url": live or static_dashboard_url(state),
+        "live_url": live,
+        "marker_present": payload is not None,
+        "healthy": live is not None,
+        "age_seconds": age_seconds,
+    }
 
 
 def _url_for(host: str, port: int) -> str:

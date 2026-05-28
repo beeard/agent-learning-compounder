@@ -55,6 +55,24 @@ class TestMakeHandlerResolvesAllCatalogEntries(unittest.TestCase):
     def test_next_action_catalog_id_is_m11(self):
         self.assertEqual(MCP_TOOLS["next_action"].id, "M11")
 
+    def test_dashboard_action_tools_registered(self):
+        for name in (
+            "run_distill",
+            "list_action_jobs",
+            "get_action_job",
+            "get_action_state",
+            "promote_gate_action",
+            "unpromote_gate_action",
+            "mute_domain",
+            "unmute_domain",
+            "get_latest_report",
+            "get_dashboard_payload",
+            "get_dashboard_health",
+            "get_latest_report_content",
+        ):
+            self.assertIn(name, MCP_TOOLS)
+            self.assertIn(name, TOOL_HANDLERS)
+
     def test_next_action_handler_resolves_to_callable(self):
         import inspect
         self.assertTrue(inspect.iscoroutinefunction(TOOL_HANDLERS["next_action"]))
@@ -305,6 +323,106 @@ class TestReportAgentEventOverride(unittest.TestCase):
         self.assertEqual(_agent_kind({"kind": "agent_dispatch_review"}), "review")
         self.assertEqual(_agent_kind({"event": "complete"}), "complete")
         self.assertEqual(_agent_kind({}), "complete")
+
+    def test_promote_gate_action_is_idempotent(self):
+        td, repo = self._fake_repo()
+        try:
+            args = {
+                "repo": str(repo),
+                "personal": str(repo / ".agent-learning"),
+                "key": "gate-1",
+                "domain": "tests",
+                "gate_category": "validation",
+            }
+            first = _run(TOOL_HANDLERS["promote_gate_action"](args))
+            second = _run(TOOL_HANDLERS["promote_gate_action"](args))
+            self.assertFalse(first["updated"])
+            self.assertTrue(second["updated"])
+            self.assertEqual(second["promoted_count"], 1)
+        finally:
+            td.cleanup()
+
+    def test_mute_then_unmute_domain_updates_action_state(self):
+        td, repo = self._fake_repo()
+        try:
+            args = {"repo": str(repo), "personal": str(repo / ".agent-learning"), "domain": "noisy"}
+            muted = _run(TOOL_HANDLERS["mute_domain"](args))
+            self.assertEqual(muted["muted_count"], 1)
+            state = _run(TOOL_HANDLERS["get_action_state"](args))
+            self.assertEqual(state["muted_count"], 1)
+            unmuted = _run(TOOL_HANDLERS["unmute_domain"](args))
+            self.assertEqual(unmuted["removed"], 1)
+            self.assertEqual(unmuted["muted_count"], 0)
+        finally:
+            td.cleanup()
+
+    def test_get_latest_report_missing_and_present(self):
+        td, repo = self._fake_repo()
+        try:
+            personal = repo / ".agent-learning"
+            missing = _run(TOOL_HANDLERS["get_latest_report"]({"repo": str(repo), "personal": str(personal)}))
+            self.assertEqual(missing["status"], "missing")
+            report_dir = personal / "reports" / "agent-learning"
+            report_dir.mkdir(parents=True, exist_ok=True)
+            (report_dir / "latest-report.html").write_text("<h1>Report</h1>", encoding="utf-8")
+            present = _run(TOOL_HANDLERS["get_latest_report"]({"repo": str(repo), "personal": str(personal)}))
+            self.assertEqual(present["status"], "available")
+            self.assertTrue(present["html"]["path"].endswith("latest-report.html"))
+        finally:
+            td.cleanup()
+
+    def test_get_dashboard_payload_includes_actions_summary(self):
+        td, repo = self._fake_repo()
+        try:
+            personal = repo / ".agent-learning"
+            actions = personal / "actions"
+            actions.mkdir(parents=True, exist_ok=True)
+            (actions / "muted-domains.json").write_text('[{"domain":"noise"}]\n', encoding="utf-8")
+
+            result = _run(TOOL_HANDLERS["get_dashboard_payload"]({"repo": str(repo), "personal": str(personal)}))
+
+            self.assertIn("generated_at", result)
+            self.assertIn("actions", result)
+            self.assertEqual(result["actions"]["muted_count"], 1)
+            self.assertIn("read_surface", result)
+        finally:
+            td.cleanup()
+
+    def test_get_dashboard_health_matches_fastapi_payload_shape(self):
+        td, repo = self._fake_repo()
+        try:
+            personal = repo / ".agent-learning"
+            result = _run(TOOL_HANDLERS["get_dashboard_health"]({"repo": str(repo), "personal": str(personal)}))
+
+            for key in ("ok", "version", "personal", "bundle_present", "auto_distill", "ts"):
+                self.assertIn(key, result)
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["personal"], str(personal.resolve()))
+        finally:
+            td.cleanup()
+
+    def test_get_latest_report_content_reads_requested_format(self):
+        td, repo = self._fake_repo()
+        try:
+            personal = repo / ".agent-learning"
+            report_dir = personal / "reports" / "agent-learning"
+            report_dir.mkdir(parents=True, exist_ok=True)
+            (report_dir / "latest-report.html").write_text("<h1>Report</h1>", encoding="utf-8")
+            (report_dir / "report.md").write_text("# Report\n", encoding="utf-8")
+
+            html = _run(TOOL_HANDLERS["get_latest_report_content"]({"repo": str(repo), "personal": str(personal)}))
+            markdown = _run(TOOL_HANDLERS["get_latest_report_content"]({
+                "repo": str(repo),
+                "personal": str(personal),
+                "format": "markdown",
+            }))
+
+            self.assertEqual(html["format"], "html")
+            self.assertEqual(html["content"], "<h1>Report</h1>")
+            self.assertEqual(markdown["format"], "markdown")
+            self.assertEqual(markdown["content"], "# Report\n")
+        finally:
+            td.cleanup()
 
 
 if __name__ == "__main__":

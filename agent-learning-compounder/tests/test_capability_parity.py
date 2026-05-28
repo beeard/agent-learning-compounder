@@ -17,6 +17,7 @@ import alc_next_action
 import alc_propose
 import alc_query
 import analyst_queries
+import dashboard_read_model
 import recommender_generators
 import render_catalogs
 from alc_mcp.catalog import MCP_TOOLS
@@ -46,6 +47,20 @@ PARITY_PARTNERS = {
     "M18": ["alc_propose.mark_patch_status"],
     "M19": ["alc_query.get_proposal_queue"],
     "M20": ["alc_query.get_proposal_lifecycle"],
+    "M21": ["dashboard_actions.run_distill"],
+    "M22": ["dashboard_actions.list_action_jobs"],
+    "M23": ["dashboard_actions.get_action_job"],
+    "M24": ["dashboard_actions.actions_summary"],
+    "M25": ["dashboard_actions.promote_gate"],
+    "M26": ["dashboard_actions.unpromote_gate"],
+    "M27": ["dashboard_actions.mute_domain"],
+    "M28": ["dashboard_actions.unmute_domain"],
+    "M29": ["dashboard_actions.latest_report"],
+    "M30": ["alc_next_action.get_session_signals"],
+    "M31": ["alc_query.get_lifecycle_contracts"],
+    "M32": ["dashboard_read_model.build_dashboard_payload"],
+    "M33": ["dashboard_read_model.build_dashboard_health"],
+    "M34": ["dashboard_read_model.build_latest_report_content"],
 }
 
 
@@ -77,6 +92,20 @@ class CapabilityParityTests(unittest.TestCase):
         available["analyst_queries.QUERY_FUNCS"] = analyst_queries.QUERY_FUNCS
         available["alc_next_action"] = alc_next_action
         available["alc_next_action.next_action"] = alc_next_action.next_action
+        available["alc_next_action.get_session_signals"] = alc_next_action.get_session_signals
+        available["dashboard_read_model.build_dashboard_payload"] = dashboard_read_model.build_dashboard_payload
+        available["dashboard_read_model.build_dashboard_health"] = dashboard_read_model.build_dashboard_health
+        available["dashboard_read_model.build_latest_report_content"] = dashboard_read_model.build_latest_report_content
+        import dashboard.actions as dashboard_actions
+        available["dashboard_actions.run_distill"] = dashboard_actions.run_distill
+        available["dashboard_actions.list_action_jobs"] = dashboard_actions.list_action_jobs
+        available["dashboard_actions.get_action_job"] = dashboard_actions.get_action_job
+        available["dashboard_actions.actions_summary"] = dashboard_actions.actions_summary
+        available["dashboard_actions.promote_gate"] = dashboard_actions.promote_gate
+        available["dashboard_actions.unpromote_gate"] = dashboard_actions.unpromote_gate
+        available["dashboard_actions.mute_domain"] = dashboard_actions.mute_domain
+        available["dashboard_actions.unmute_domain"] = dashboard_actions.unmute_domain
+        available["dashboard_actions.latest_report"] = dashboard_actions.latest_report
 
         for spec in MCP_TOOLS.values():
             partners = PARITY_PARTNERS.get(spec.id, [])

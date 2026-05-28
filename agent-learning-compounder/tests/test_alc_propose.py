@@ -121,7 +121,9 @@ class AlcProposeTests(unittest.TestCase):
         patch_path.write_text(json.dumps({"patch_id": "p-1", "status": "pending"}), encoding="utf-8")
 
         result = alc_propose.mark_patch_status(self.state, "p-1", "rejected")
-        self.assertEqual(result, {"patch_id": "p-1", "status": "rejected"})
+        self.assertEqual(result["patch_id"], "p-1")
+        self.assertEqual(result["status"], "rejected")
+        self.assertTrue(result["visibility"]["updated"])
 
         payload = json.loads(patch_path.read_text(encoding="utf-8"))
         self.assertEqual(payload["status"], "rejected")
@@ -129,6 +131,16 @@ class AlcProposeTests(unittest.TestCase):
         events = self._event_rows()
         self.assertEqual(events[-1]["event"], "patch_rejected")
         self.assertEqual(events[-1]["payload"]["patch_id"], "p-1")
+
+    def test_report_outcome_is_visible_to_query_after_write(self) -> None:
+        event_id = alc_propose.report_outcome(self.state, "rec-1", "helpful", "visible immediately")
+
+        conn = sqlite3.connect(self.state.events_sqlite)
+        try:
+            count = conn.execute("SELECT COUNT(*) FROM events WHERE event_id = ?", (event_id,)).fetchone()[0]
+        finally:
+            conn.close()
+        self.assertEqual(count, 1)
 
     def test_concurrent_propose_gate_calls_serialized(self) -> None:
         total = 40

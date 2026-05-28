@@ -19,6 +19,7 @@ from dashboard_url_publisher import (  # noqa: E402
     SERVER_MARKER,
     clear_live_url,
     dashboard_url,
+    dashboard_url_status,
     marker_path,
     publish_live_url,
 )
@@ -116,6 +117,15 @@ class DashboardUrlPublisherTests(unittest.TestCase):
 
         self.assertIsNone(token)
         self.assertFalse(marker_path(self.state).exists())
+
+    def test_stale_live_marker_falls_back_with_unhealthy_status(self) -> None:
+        (self.state.dashboard_dir / DASHBOARD_HTML).write_text("<html></html>", encoding="utf-8")
+        self._write_marker({"url": "http://127.0.0.1:8765/", "timestamp": 1})
+
+        self.assertNotEqual(dashboard_url(self.repo), "http://127.0.0.1:8765/")
+        status = dashboard_url_status(self.repo)
+        self.assertFalse(status["healthy"])
+        self.assertIsNone(status["live_url"])
 
 
 if __name__ == "__main__":

@@ -475,6 +475,23 @@ class TestCacheFile(unittest.TestCase):
         parsed_b = json.loads(content_b)
         self.assertEqual(parsed_b["signals"]["pending_patches"], 3)
 
+    def test_get_session_signals_does_not_write_cache_or_rank(self):
+        td = self._td()
+        state = _make_state(td)
+        signals = _empty_signals()
+        signals["pending_patches"] = 2
+        signals["_first_patch_id"] = "private-routing-hint"
+        with patch.object(mod, "_collect_signals", return_value=signals):
+            result = mod.get_session_signals(state, intent="start", session_id="s1")
+
+        self.assertEqual(result["intent"], "start")
+        self.assertEqual(result["session_id"], "s1")
+        self.assertEqual(result["signals"]["pending_patches"], 2)
+        self.assertNotIn("_first_patch_id", result["signals"])
+        for decision_key in ("headline", "rationale", "suggested", "alternatives"):
+            self.assertNotIn(decision_key, result)
+        self.assertFalse((state.reports_dir / "latest-next-action.json").exists())
+
 
 # ---------------------------------------------------------------------------
 # End intent
@@ -618,6 +635,10 @@ class TestMCPCatalogEntry(unittest.TestCase):
     def test_next_action_backing_module(self):
         from alc_mcp.catalog import MCP_TOOLS
         self.assertEqual(MCP_TOOLS["next_action"].backing, "alc_next_action.next_action")
+
+    def test_session_signals_in_catalog(self):
+        from alc_mcp.catalog import MCP_TOOLS
+        self.assertEqual(MCP_TOOLS["get_session_signals"].id, "M30")
 
 
 if __name__ == "__main__":

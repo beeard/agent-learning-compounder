@@ -38,9 +38,16 @@ python3 alc_mcp/server.py
 - `report_outcome(repo, recommendation_id, verdict, reason) -> {recorded, event_id}`
 - `report_agent_event(repo, kind, actor_name, telemetry?) -> {recorded, event_id}`
 - `exec_sandbox(repo, scope, command, ...) -> {exit_code, stdout, stderr, event_id}`
+- dashboard action tools: `run_distill`, `list_action_jobs`, `get_action_job`,
+  `get_action_state`, `promote_gate_action`, `unpromote_gate_action`,
+  `mute_domain`, `unmute_domain`, `get_latest_report`
+- `get_session_signals(repo, intent?) -> {intent, signals}`
+- `get_lifecycle_contracts(repo) -> list[contract]`
+- dashboard read tools: `get_dashboard_payload`, `get_dashboard_health`,
+  `get_latest_report_content`
 - `list_capabilities(repo) -> list[MCPToolSpec]`
 
-The M1-M10 capability catalog is published as `alc_mcp.MCP_TOOLS`; see
+The M1-M34 capability catalog is published as `alc_mcp.MCP_TOOLS`; see
 `skills/alc-core/references/mcp-catalog.md` for the human-readable reference.
 
 ## Integration

@@ -235,12 +235,23 @@ class RenderSessionContextTests(unittest.TestCase):
     def test_includes_all_top_level_headers(self) -> None:
         result = render_session_context(self._minimal_profile(), self._minimal_mcp())
         self.assertIn("# Session context — agent-learning-compounder", result)
+        self.assertIn("## Freshness", result)
         self.assertIn("## Repo profile", result)
         self.assertIn("## ALC MCP status", result)
         self.assertIn("## Runtime summary", result)
         self.assertIn("## Documentation contract", result)
         self.assertIn("## CE-family skill usage", result)
         self.assertIn("## Compound-engineering playbook", result)
+
+    def test_workspace_facts_render_when_present(self) -> None:
+        result = render_session_context(
+            self._minimal_profile(),
+            self._minimal_mcp(),
+            workspace_facts={"branch": "dev", "dirty_state": "2 files", "active_plan": "plan.md"},
+        )
+        self.assertIn("Branch", result)
+        self.assertIn("dev", result)
+        self.assertIn("plan.md", result)
 
     def test_profile_fields_rendered(self) -> None:
         result = render_session_context(self._minimal_profile(), self._minimal_mcp())

@@ -70,6 +70,7 @@ class RecommenderGeneratorsTests(unittest.TestCase):
             self.assertTrue(spec.summary)
             self.assertEqual(spec.version, 1)
             self.assertTrue(callable(spec.generator))
+            self.assertEqual(spec.policy_owner, "skills-or-agents")
             self.assertIn(spec.output_class, {"patch_bundle", "suggestion"})
             if spec.output_class == "patch_bundle":
                 self.assertIn(spec.target_type, {"skill", "agent"})

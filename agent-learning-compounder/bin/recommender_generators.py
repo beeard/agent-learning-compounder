@@ -48,6 +48,7 @@ class GeneratorSpec:
     version: int
     generator: GeneratorFn
     output: GeneratorOutput
+    policy_owner: str = "skills-or-agents"
 
     @property
     def output_class(self) -> str:
@@ -66,6 +67,7 @@ class GeneratorSpec:
             "version": self.version,
             "output_class": self.output_class,
             "target_type": self.target_type or "",
+            "policy_owner": self.policy_owner,
         }
 
 

@@ -18,8 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from alc_mcp.catalog import MCP_TOOLS
+from bin import render_catalogs
 
 CATALOG_DOC = ROOT / "reference-lib" / "mcp-catalog"
+SKILL_CATALOG_DOC = ROOT / "skills" / "alc-core" / "references" / "mcp-catalog.md"
 
 
 class MCPCatalogDocTests(unittest.TestCase):
@@ -45,6 +47,23 @@ class MCPCatalogDocTests(unittest.TestCase):
         catalog_mids = {spec.id for spec in MCP_TOOLS.values()}
         stale = doc_mids - catalog_mids
         self.assertFalse(stale, f"mcp-catalog.md has rows for retired M-IDs: {stale}")
+
+    def test_reference_catalog_matches_renderer(self) -> None:
+        rendered, count = render_catalogs._render_catalog_payload(
+            "mcp-catalog",
+            "alc_mcp.catalog",
+            "MCP_TOOLS",
+        )
+        self.assertEqual(count, len(MCP_TOOLS))
+        self.assertEqual(CATALOG_DOC.read_text(encoding="utf-8"), rendered)
+
+    def test_skill_reference_catalog_matches_renderer(self) -> None:
+        rendered, _count = render_catalogs._render_catalog_payload(
+            "mcp-catalog",
+            "alc_mcp.catalog",
+            "MCP_TOOLS",
+        )
+        self.assertEqual(SKILL_CATALOG_DOC.read_text(encoding="utf-8"), rendered)
 
 
 if __name__ == "__main__":
