@@ -2,9 +2,9 @@
 
 Source review: `.runtime/reports/architecture-review-20260527-215034.md`
 
-Status: active campaign. The review identified six shallow seams where policy
-was still repeated across adapters. Each plan/build cycle should complete one
-coherent slice and leave this queue current.
+Status: completed campaign. The review identified six shallow seams where
+policy was still repeated across adapters. Each slice has landed; this document
+now records the completed queue and historical evidence for future reviews.
 
 ## Campaign Queue
 
@@ -66,10 +66,10 @@ Source review: `.runtime/reports/architecture-review-20260528-030819.md`
 | Order | Recommendation | Status | Owner / next action |
 |---|---|---|---|
 | 1 | Causal Evidence Module | Complete | `agent-learning-compounder/bin/causal_evidence.py`; focused coverage in `agent-learning-compounder/fixtures/tests/test_causal_evidence.py`; adapter compatibility covered by causal probe, hook telemetry, gate effectiveness, alias, and retirement tests. |
-| 2 | Analyst Run Module | Next | Plan `agent-learning-compounder/bin/analyst_run.py` as the next orchestration seam; keep individual analyst query logic in the existing analyst modules. |
-| 3 | Learning Report Payload Module | Queued | Plan after Analyst Run unless the files are isolated enough to land independently. |
-| 4 | Repo Profile and Doc Contract Module | Queued | Plan when first-run setup or report/analyst work resumes. |
-| 5 | Artifact Envelope Module | Decision gate | Decide after Analyst Run and Learning Report Payload evidence; implement only if repeated envelope rules remain across at least three producers. |
+| 2 | Analyst Run Module | Complete | `agent-learning-compounder/bin/analyst_run.py`; analyst-suite selection, state resolution, fallback payloads, artifact writes, and progress reporting are centralized while analyst modules keep query logic. |
+| 3 | Learning Report Payload Module | Complete | `agent-learning-compounder/bin/learning_report_payload.py`; markdown and HTML report adapters consume shared totals, memory rows, skill sections, muted-domain filtering, and history context. |
+| 4 | Repo Profile and Doc Contract Module | Complete | `agent-learning-compounder/bin/repo_profile.py`; `alc_init`, `ce_playbook`, and session-context rendering consume shared profile, doc-contract, and CE usage-count helpers. |
+| 5 | Artifact Envelope Module | Complete | `agent-learning-compounder/bin/artifact_envelope.py`; repeated analyst artifact envelope fields are centralized while `artifact_writer` keeps destination and serialization policy. |
 
 ## Post-M6 Evidence
 
@@ -79,6 +79,17 @@ Source review: `.runtime/reports/architecture-review-20260528-030819.md`
 - `causal_probe`, `collect_hook_event`, `evaluate_gate_effectiveness`, and
   `refresh_learning_state` remain adapters for CLI/file IO, hook safety,
   resilient event loading/output, and queue locking/serialization.
+- Analyst Run now centralizes the analyst suite's adapter registry, state
+  handle resolution, fallback payload construction, artifact writes, and unified
+  report progress. Individual analyst modules remain query adapters.
+- Learning Report Payload now centralizes markdown/HTML report meaning:
+  report totals, memory-derived rows, skill inventory/usage/health sections,
+  muted-domain filtering, and prior-report level-change context.
+- Repo Profile now owns repository detection, documentation contract rows, and
+  CE usage-count shaping. `alc_init` is the first-run CLI/session-context
+  orchestrator, not the owner of profiling vocabulary.
+- Artifact Envelope now owns repeated analyst envelope fields:
+  `generated_at`, `fallback_mode`, and `fallback_samples_count`.
 - Verification: `python3 -m unittest fixtures.tests.test_causal_evidence
   fixtures.tests.test_causal_probe fixtures.tests.test_causal_probe_boundaries
   fixtures.tests.test_probe_wiring fixtures.tests.test_collect_hook_event_schema_v2
@@ -86,3 +97,10 @@ Source review: `.runtime/reports/architecture-review-20260528-030819.md`
   fixtures.tests.test_evaluate_gate_effectiveness_resilience
   fixtures.tests.test_gate_alias_effectiveness
   fixtures.tests.test_refresh_retirement_filter -v` passed on 2026-05-28.
+
+## Historical Notes
+
+Earlier versions of this file named Analyst Run as the next post-M6 slice after
+only U1 had shipped. That statement is historical: U2-U5 have since landed on
+the post-M6 campaign branch, and the active next step must come from a fresh
+review or a separate scoped plan such as the M6 gate-ID hash recipe plan.

@@ -11,7 +11,7 @@
 |---|---|---|
 | Install | `install.sh`, `bootstrap.sh`, `scripts/alc-install.mjs` | Copy skill tree → `--verify` (3 test suites) → call `init_learning_system` → call `install_runtime_hooks --dry-run` → call `alc_init` |
 | Repo init | `bin/init_learning_system` | `build_repo_baseline` + `build_map` + write empty exports + write hook + refresh **manifests** |
-| First-run profiler | `bin/alc_init` | `detect_repo` + `ensure_mcp` + `smoke_mcp` + `check_doc_contract` + 6 `alc_query` reads + render session-context |
+| First-run profiler | `bin/alc_init` | `repo_profile.detect` + `ensure_mcp` + `smoke_mcp` + `repo_profile.doc_contract_rows` + 6 `alc_query` reads + render session-context |
 | Hook wiring | `bin/install_runtime_hooks` | Manifest-only by default. `--apply` writes `.codex/hooks.json` / `.claude/settings.local.json` |
 | Orchestrator | `bin/refresh_learning_state` (645 lines) | `build_baseline` + `build_map` + `extract_skill_usage` + `evaluate_skill_impact` + `evaluate_gate_effectiveness` + `propose_domain_rules` + queue dedup + write exports |
 | Stop-hook | `bin/auto_distill_session` | `extract_sessions` + `distill_learning` over the last `--days 1`, `--max-sessions 20`, forked to background |
@@ -30,7 +30,7 @@
    - Self-test confirms required files exist; does not run any pipeline.
 4. `python3 .../install_runtime_hooks.py --runtime <r> --dry-run` (unless `--apply-runtime-hooks`).
 5. `python3 .../alc_init --repo <repo>`:
-   - Profiles repo, ensures `mcp` python module is importable, runs initialize + tools/list against `alc_mcp/server.py`.
+   - Orchestrates first-run profiling through `bin/repo_profile.py`, ensures `mcp` python module is importable, runs initialize + tools/list against `alc_mcp/server.py`.
    - Calls six `alc_query.*` reads (all of which gracefully return `[]`/`{}` because `events.sqlite` doesn't exist yet).
    - Renders `latest-session-context.md` with the CE playbook and doc-contract hints.
 
@@ -64,7 +64,7 @@ A fresh install lands with:
 - `baseline.json`, `skill-map.json` populated (repo scan only).
 - `latest-approved-gates.md` carrying "`- none`".
 - `latest-skill-context.md` empty (no `events.sqlite`, no usage).
-- `latest-session-context.md` populated by `alc_init` (doc contract + CE playbook + empty runtime summary).
+- `latest-session-context.md` populated by `alc_init` (repo-profile/doc-contract data from `bin/repo_profile.py`, CE playbook, and empty runtime summary).
 - `hook-events.jsonl` an empty 0o600 file.
 - `improvement-queue.jsonl` an empty file.
 - **No** `events.sqlite`. **No** session corpus. **No** queued candidates.
@@ -197,8 +197,11 @@ upstream feeders to have done their job first.
 
 ### 4.2 Have `alc_init` call into the pipeline orchestrator
 
-Today `alc_init` is paragraph "what's in your repo + is MCP green" and
-six graceful-empty `alc_query` reads. After the install-time backfill,
+Today `alc_init` is the first-run CLI/session-context orchestrator for "what's
+in your repo + is MCP green" and six graceful-empty `alc_query` reads. The
+repository detection and documentation-contract vocabulary now live in
+`bin/repo_profile.py`, which keeps `alc_init` out of owning those domain rules.
+After the install-time backfill,
 `alc_init`'s six reads would actually return rows, and the session-context
 prose would synthesize a real summary instead of "no recent activity".
 

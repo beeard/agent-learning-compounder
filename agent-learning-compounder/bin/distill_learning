@@ -425,64 +425,6 @@ def skill_map_from_baseline(baseline: dict) -> dict:
     return {"repo": baseline.get("repo", "unknown"), "skills": skills, "invalid": []}
 
 
-def render_skill_sections(skill_map: dict, skill_usage: dict, skill_impact: dict) -> list[str]:
-    lines: list[str] = []
-    skills = skill_map.get("skills", [])
-    valid_skills = [item for item in skills if item.get("valid", True)]
-    invalid = skill_map.get("invalid", [])
-    missed = skill_usage.get("missed", [])
-    failed = skill_usage.get("failed", [])
-    impact_rows = skill_impact.get("skills", [])
-
-    lines.extend(["", "## skill_inventory"])
-    lines.append(f"- [skill_inventory] available_skills: {len(valid_skills)} source: skill-map input")
-    if invalid:
-        lines.append(f"- [skill_inventory] invalid_skills: {len(invalid)} source: skill-map input")
-    for item in valid_skills[:12]:
-        lines.append(f"- [skill_inventory] skill: {item.get('name', 'unknown')} source: {item.get('path', 'skill-map input')}")
-    if len(valid_skills) > 12:
-        lines.append(f"- [skill_inventory] omitted_skills: {len(valid_skills) - 12} source: skill-map input")
-
-    lines.extend(["", "## skill_usage"])
-    lines.append(f"- [skill_usage] expected: {', '.join(skill_usage.get('expected', [])) or 'none'} count: {len(skill_usage.get('expected', []))} source: skill-usage input")
-    lines.append(f"- [skill_usage] loaded: {', '.join(skill_usage.get('loaded', [])) or 'none'} count: {len(skill_usage.get('loaded', []))} source: skill-usage input")
-    lines.append(f"- [skill_usage] applied: {', '.join(skill_usage.get('applied', [])) or 'none'} count: {len(skill_usage.get('applied', []))} source: skill-usage input")
-
-    lines.extend(["", "## skill_health"])
-    if not invalid and not missed and not failed:
-        lines.append("- [skill_health] no skill-health alerts found. source: skill inputs; count: 0; verify: rerun map_active_skills.py and extract_skill_usage.py.")
-    for item in invalid:
-        lines.append(
-            f"- [skill_health] invalid: {item.get('path') or item.get('name', 'unknown')} "
-            "source: skill-map input; count: 1; verify: inspect SKILL.md frontmatter and resources."
-        )
-    for skill in missed:
-        lines.append(
-            f"- [skill_health] missed_expected_skill: {skill} "
-            "source: skill-usage input; count: 1; verify: rerun evaluate_skill_routing.py for the matching scope."
-        )
-    for skill in failed:
-        lines.append(
-            f"- [skill_health] loaded_but_not_applied: {skill} "
-            "source: skill-usage input; count: 1; verify: inspect session closeout evidence before changing the skill."
-        )
-
-    lines.extend(["", "## skill_compensation"])
-    if not impact_rows:
-        lines.append("- [skill_compensation] no candidate skill adjustments. source: skill-impact input; count: 0; verify: rerun evaluate_skill_impact.py.")
-    for row in impact_rows:
-        candidate = row.get("candidate_adjustment")
-        if not candidate:
-            continue
-        count = row.get("expected_sessions", row.get("missed_sessions", 1))
-        lines.append(
-            f"- [skill_compensation] category: candidate_skill_adjustment; skill: {row.get('skill', 'unknown')}; "
-            f"signal: {row.get('impact_signal', 'needs_review')}; gate: {candidate} "
-            f"source: skill-impact input; count: {count}; verify: rerun evaluate_skill_impact.py after the next session batch."
-        )
-    return lines
-
-
 def render_report(
     corpus: str,
     baseline: dict,

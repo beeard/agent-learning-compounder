@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 import os
 import pathlib
@@ -42,6 +44,16 @@ def _seed_target_repo(root: pathlib.Path, *, with_tests: bool = True, framework:
 
 
 class AlcInitTests(unittest.TestCase):
+    def test_repo_profile_compatibility_aliases_are_intentional(self) -> None:
+        loader = importlib.machinery.SourceFileLoader("alc_init_module", str(ALC_INIT))
+        spec = importlib.util.spec_from_loader("alc_init_module", loader)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+
+        self.assertIs(module.detect_repo, module.repo_profile.detect)
+        self.assertIs(module.check_doc_contract, module.repo_profile.doc_contract_rows)
+
     def test_writes_session_context_with_expected_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)

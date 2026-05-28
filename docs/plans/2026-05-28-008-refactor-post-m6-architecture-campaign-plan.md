@@ -101,10 +101,10 @@ The dependency on M6 is a campaign guard, not a code dependency for every file. 
 | Order | Finding | Strength | Campaign action | Primary module |
 |---|---|---|---|---|
 | 1 | Causal Evidence Module | Strong | Complete; module and adapter compatibility verified on 2026-05-28 | `agent-learning-compounder/bin/causal_evidence.py` |
-| 2 | Analyst Run Module | Worth exploring | Next orchestration slice | `agent-learning-compounder/bin/analyst_run.py` |
-| 3 | Learning Report Payload Module | Worth exploring | Implement after analyst orchestration or in parallel only if isolated | `agent-learning-compounder/bin/learning_report_payload.py` |
-| 4 | Repo Profile and Doc Contract Module | Worth exploring | Implement after the report/analyst seams or when first-run work resumes | `agent-learning-compounder/bin/repo_profile.py` |
-| 5 | Artifact Envelope Module | Speculative | Decide after U2 and U3 evidence; implement or defer explicitly | `agent-learning-compounder/bin/artifact_envelope.py` |
+| 2 | Analyst Run Module | Worth exploring | Complete; analyst-suite orchestration and fallback/write behavior centralized on 2026-05-28 | `agent-learning-compounder/bin/analyst_run.py` |
+| 3 | Learning Report Payload Module | Worth exploring | Complete; markdown and HTML report semantics consume one payload on 2026-05-28 | `agent-learning-compounder/bin/learning_report_payload.py` |
+| 4 | Repo Profile and Doc Contract Module | Worth exploring | Complete; first-run setup consumes shared repo-profile helpers on 2026-05-28 | `agent-learning-compounder/bin/repo_profile.py` |
+| 5 | Artifact Envelope Module | Speculative | Complete; repeated analyst envelope fields centralized on 2026-05-28 | `agent-learning-compounder/bin/artifact_envelope.py` |
 
 ---
 
@@ -231,13 +231,28 @@ The campaign also affects review behavior. Each slice should leave command-level
 
 - U1 Causal Evidence Module is complete. `bin/causal_evidence.py` now owns
   probe assignment, probe-decision vocabulary, alias-aware evidence rows,
-  causal signal thresholds, and retirement/demotion eligibility.
-- The adapters remain stable: `causal_probe` keeps probes-file CLI behavior,
+  causal signal thresholds, and retirement/demotion eligibility. The adapters
+  remain stable: `causal_probe` keeps probes-file CLI behavior,
   `collect_hook_event` keeps hook safety policy, `evaluate_gate_effectiveness`
   keeps event loading and JSON output, and `refresh_learning_state` keeps queue
   locking and row serialization.
-- Verification: the focused causal/probe/hook/scorer/refresh suite passed on
-  2026-05-28. The next campaign slice is U2 Analyst Run Module.
+- U2 Analyst Run Module is complete. `bin/analyst_run.py` owns analyst adapter
+  selection, state resolution, fallback payload handling, artifact writes, and
+  pipeline progress while individual analyst modules keep query logic.
+- U3 Learning Report Payload Module is complete. `bin/learning_report_payload.py`
+  owns shared report totals, memory-derived rows, skill sections, muted-domain
+  filtering, and report-history context for markdown and HTML adapters.
+- U4 Repo Profile and Doc Contract Module is complete. `bin/repo_profile.py`
+  owns repository detection, documentation contract rows, and CE usage-count
+  shaping while `alc_init`, `ce_playbook`, and session-context rendering consume
+  the shared vocabulary.
+- U5 Artifact Envelope Module is complete. `bin/artifact_envelope.py` owns the
+  repeated analyst artifact envelope fields; `artifact_writer` remains the
+  destination, serialization, and max-size adapter.
+- Verification: focused suites for causal evidence, analyst run, report payload,
+  repo profile, and artifact envelope passed during the 2026-05-28 campaign.
+  The post-M6 architecture campaign is complete; future architecture plans
+  should start from fresh review evidence rather than treating U2 as next.
 
 ---
 
