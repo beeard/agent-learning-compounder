@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import math
 import pathlib
 import sys
@@ -12,6 +11,7 @@ from contextlib import closing
 from typing import Any
 
 from analyst_queries import load_samples_rows, open_events_db
+from artifact_envelope import analyst_payload
 from state_handle import StateHandle
 
 
@@ -158,15 +158,14 @@ def run(state_handle: Any, *, min_n: int = 4, z_threshold: float = 4.0) -> dict[
             samples = load_samples_rows(state_handle)
         except ValueError:
             samples = []
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": True,
-            "fallback_samples_count": len(samples),
-            "duration_anomalies": [],
-            "token_anomalies": [],
-            "cost_anomalies": [],
-            "session_rollups": [],
-        }
+        return analyst_payload(
+            fallback_mode=True,
+            fallback_samples_count=len(samples),
+            duration_anomalies=[],
+            token_anomalies=[],
+            cost_anomalies=[],
+            session_rollups=[],
+        )
 
     with closing(conn) as conn, conn:
         rows = [
@@ -245,15 +244,14 @@ def run(state_handle: Any, *, min_n: int = 4, z_threshold: float = 4.0) -> dict[
             outlier_name="cost_iqr",
         )
 
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": False,
-            "fallback_samples_count": 0,
-            "duration_anomalies": duration_rows,
-            "token_anomalies": token_rows,
-            "cost_anomalies": cost_rows,
-            "session_rollups": _session_rollups(conn),
-        }
+        return analyst_payload(
+            fallback_mode=False,
+            fallback_samples_count=0,
+            duration_anomalies=duration_rows,
+            token_anomalies=token_rows,
+            cost_anomalies=cost_rows,
+            session_rollups=_session_rollups(conn),
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

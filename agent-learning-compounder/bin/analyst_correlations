@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import pathlib
 import sys
 from contextlib import closing
@@ -19,6 +18,7 @@ from analyst_queries import (
     query_q10_eval_verdict_roi,
     query_q8_frustration_pairs,
 )
+from artifact_envelope import analyst_payload
 from state_handle import StateHandle
 
 
@@ -58,17 +58,16 @@ def run(state_handle: Any) -> dict[str, Any]:
             samples = load_samples_rows(state_handle)
         except ValueError:
             samples = []
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": True,
-            "fallback_samples_count": len(samples),
-            "gate_effectiveness": [],
-            "dag_cost_attribution": [],
-            "cache_hit_ratio": [],
-            "time_to_stop_patterns": [],
-            "eval_roi": [],
-            "time_of_day_sessions": [],
-        }
+        return analyst_payload(
+            fallback_mode=True,
+            fallback_samples_count=len(samples),
+            gate_effectiveness=[],
+            dag_cost_attribution=[],
+            cache_hit_ratio=[],
+            time_to_stop_patterns=[],
+            eval_roi=[],
+            time_of_day_sessions=[],
+        )
 
     with closing(conn) as conn, conn:
         gate_rows = query_gate_with_evidence(conn)
@@ -81,17 +80,16 @@ def run(state_handle: Any) -> dict[str, Any]:
         for row in dag_rows:
             _attach_event_ids(row)
 
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": False,
-            "fallback_samples_count": 0,
-            "gate_effectiveness": gate_rows,
-            "dag_cost_attribution": dag_rows,
-            "cache_hit_ratio": query_cache_hit_ratio(conn),
-            "time_to_stop_patterns": query_q8_frustration_pairs(conn),
-            "eval_roi": query_q10_eval_verdict_roi(conn),
-            "time_of_day_sessions": [],
-        }
+        return analyst_payload(
+            fallback_mode=False,
+            fallback_samples_count=0,
+            gate_effectiveness=gate_rows,
+            dag_cost_attribution=dag_rows,
+            cache_hit_ratio=query_cache_hit_ratio(conn),
+            time_to_stop_patterns=query_q8_frustration_pairs(conn),
+            eval_roi=query_q10_eval_verdict_roi(conn),
+            time_of_day_sessions=[],
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

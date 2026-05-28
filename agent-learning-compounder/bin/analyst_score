@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import datetime as dt
 import json
 import math
 import pathlib
@@ -20,6 +19,7 @@ from analyst_queries import (
     query_gate_with_evidence,
     query_q1_longest_by_skill,
 )
+from artifact_envelope import analyst_payload
 from state_handle import StateHandle
 
 
@@ -169,13 +169,12 @@ def _run_from_events(state_handle: Any, limit: int) -> dict[str, Any]:
     weights = _load_outcome_weights(state_handle)
     scored = _score_rows(recommendations, weights)
 
-    return {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "fallback_mode": False,
-        "fallback_samples_count": 0,
-        "outcome_weights": weights,
-        "recommendations": scored[:limit],
-    }
+    return analyst_payload(
+        fallback_mode=False,
+        fallback_samples_count=0,
+        outcome_weights=weights,
+        recommendations=scored[:limit],
+    )
 
 
 def _run_fallback(state_handle: Any, limit: int) -> dict[str, Any]:
@@ -184,13 +183,12 @@ def _run_fallback(state_handle: Any, limit: int) -> dict[str, Any]:
     except ValueError:
         samples = []
     if not samples:
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": True,
-            "fallback_samples_count": 0,
-            "outcome_weights": {},
-            "recommendations": [],
-        }
+        return analyst_payload(
+            fallback_mode=True,
+            fallback_samples_count=0,
+            outcome_weights={},
+            recommendations=[],
+        )
 
     sample_rows: list[dict[str, Any]] = []
     for idx, row in enumerate(samples[:limit], start=1):
@@ -206,13 +204,12 @@ def _run_fallback(state_handle: Any, limit: int) -> dict[str, Any]:
             }
         )
 
-    return {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "fallback_mode": True,
-        "fallback_samples_count": len(samples),
-        "outcome_weights": {},
-        "recommendations": sample_rows,
-    }
+    return analyst_payload(
+        fallback_mode=True,
+        fallback_samples_count=len(samples),
+        outcome_weights={},
+        recommendations=sample_rows,
+    )
 
 
 def run(state_handle: Any, *, limit: int = 25) -> dict[str, Any]:

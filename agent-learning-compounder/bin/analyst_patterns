@@ -13,6 +13,7 @@ from contextlib import closing
 from typing import Any
 
 from analyst_queries import load_samples_rows, open_events_db, query_q6_time_of_day_sessions
+from artifact_envelope import analyst_payload
 from state_handle import StateHandle
 
 
@@ -137,14 +138,13 @@ def _fallback_payload(state_handle: Any) -> dict[str, Any]:
         samples = load_samples_rows(state_handle)
     except ValueError:
         samples = []
-    return {
-        "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-        "fallback_mode": True,
-        "fallback_samples_count": len(samples),
-        "frequency_by_skill": [],
-        "co_occurrence_pairs": [],
-        "time_of_day_patterns": [],
-    }
+    return analyst_payload(
+        fallback_mode=True,
+        fallback_samples_count=len(samples),
+        frequency_by_skill=[],
+        co_occurrence_pairs=[],
+        time_of_day_patterns=[],
+    )
 
 
 def run(state_handle: Any) -> dict[str, Any]:
@@ -154,14 +154,13 @@ def run(state_handle: Any) -> dict[str, Any]:
         return _fallback_payload(state_handle)
 
     with closing(conn) as conn, conn:
-        return {
-            "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
-            "fallback_mode": False,
-            "fallback_samples_count": 0,
-            "frequency_by_skill": _frequency_rows(conn),
-            "co_occurrence_pairs": _co_occurrence_pairs(conn),
-            "time_of_day_patterns": _time_of_day_rows(conn),
-        }
+        return analyst_payload(
+            fallback_mode=False,
+            fallback_samples_count=0,
+            frequency_by_skill=_frequency_rows(conn),
+            co_occurrence_pairs=_co_occurrence_pairs(conn),
+            time_of_day_patterns=_time_of_day_rows(conn),
+        )
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
