@@ -57,6 +57,10 @@ meta tool.
 - `bin/release_layout.py` owns release archive/package layout. Build scripts,
   sanitizer policy, npm files, manifest docs/exclusions, and release fixture
   archive checks are adapters guarded by `tests/test_release_layout.py`.
+- `bin/runtime_topology.py` owns runtime path policy: hook config targets,
+  dev hook specs, drift candidates, install runtime resolution, user-global
+  install roots, Codex-home roots, Claude plugin roots, explicit target roots,
+  and repo bootstrap target expansion. `install.sh` is the execution adapter.
 - `bin/dashboard_url_publisher.py` owns dashboard live marker schema,
   loopback validation, owner-token cleanup, and static fallback order. FastAPI,
   stdlib serving, static rendering, `state_handle.dashboard_url`, and MCP

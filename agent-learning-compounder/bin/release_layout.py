@@ -14,6 +14,7 @@ SHIPPED_TOP_LEVEL_FILES = (
     "CHANGES.md",
     "MANIFEST.json",
     "README.md",
+    "bootstrap.sh",
     "install.sh",
 )
 

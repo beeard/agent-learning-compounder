@@ -107,6 +107,8 @@ class ReleaseLayoutTests(unittest.TestCase):
         rendered = {path.as_posix() for path in files}
         self.assertTrue(rendered)
         self.assertIn("README.md", rendered)
+        self.assertIn("bootstrap.sh", rendered)
+        self.assertIn("install.sh", rendered)
         self.assertIn("agent-learning-compounder/AGENTS.md", rendered)
         self.assertNotIn("docs/dev/architecture-review-closeout-2026-05-27.md", rendered)
         self.assertFalse(any("__pycache__" in path for path in rendered))

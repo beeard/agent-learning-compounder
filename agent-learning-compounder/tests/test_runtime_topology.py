@@ -13,10 +13,16 @@ if str(BIN) not in sys.path:
 from runtime_topology import (
     RuntimeTopology,
     adapter_command,
+    build_runtime_install_plan,
     build_runtime_drift_plan,
     build_runtime_topology,
+    codex_home_install_root,
     config_for_runtime,
     dev_hook_specs,
+    plugin_install_root,
+    resolve_install_runtime,
+    runtime_install_modes,
+    user_global_install_root,
 )
 
 
@@ -103,6 +109,84 @@ class RuntimeTopologyTests(unittest.TestCase):
             )
             self.assertEqual(explicit_user_audit.mode, "explicit+user-audit")
             self.assertIn(explicit.resolve(), explicit_user_audit.read_targets)
+
+    def test_install_policy_resolves_user_global_roots_from_env(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            env = {
+                "HOME": str(base / "home"),
+                "AGENTS_HOME": str(base / "agents-home"),
+                "CLAUDE_HOME": str(base / "claude-home"),
+            }
+
+            self.assertEqual(
+                user_global_install_root("codex", env=env),
+                base / "agents-home" / "skills",
+            )
+            self.assertEqual(
+                user_global_install_root("claude", env=env),
+                base / "claude-home" / "skills",
+            )
+
+            override = base / "custom-skills"
+            env["AGENTS_SKILLS_DIR"] = str(override)
+            self.assertEqual(user_global_install_root("codex", env=env), override)
+
+    def test_install_policy_resolves_codex_home_and_plugin_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = pathlib.Path(tmp)
+            env = {
+                "HOME": str(base / "home"),
+                "CODEX_HOME": str(base / "codex-home"),
+                "CLAUDE_HOME": str(base / "claude-home"),
+            }
+
+            self.assertEqual(codex_home_install_root(env=env), base / "codex-home" / "skills")
+            self.assertEqual(plugin_install_root(env=env), base / "claude-home" / "plugins")
+
+            codex_plan = build_runtime_install_plan("codex", mode="codex-home", env=env)
+            plugin_plan = build_runtime_install_plan("claude", mode="plugin", env=env)
+            self.assertEqual(codex_plan.targets[0].runtime, "codex")
+            self.assertEqual(codex_plan.targets[0].root, base / "codex-home" / "skills")
+            self.assertEqual(plugin_plan.targets[0].runtime, "claude")
+            self.assertEqual(plugin_plan.targets[0].root, base / "claude-home" / "plugins")
+
+    def test_install_policy_expands_bootstrap_runtime_all_in_stable_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp) / "repo"
+            repo.mkdir()
+
+            plan = build_runtime_install_plan("all", mode="bootstrap", repo=repo)
+
+            self.assertEqual([target.runtime for target in plan.targets], ["codex", "claude"])
+            self.assertEqual(
+                [target.root for target in plan.targets],
+                [repo.resolve() / ".agents" / "skills", repo.resolve() / ".claude" / "skills"],
+            )
+            self.assertEqual(runtime_install_modes("all"), ("codex", "claude"))
+
+    def test_install_policy_rejects_user_global_runtime_all_without_explicit_target(self) -> None:
+        with self.assertRaises(ValueError):
+            build_runtime_install_plan("all", mode="user")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = pathlib.Path(tmp) / "target"
+            plan = build_runtime_install_plan("all", mode="explicit", target_root=target)
+            self.assertEqual(plan.targets[0].runtime, "all")
+            self.assertEqual(plan.targets[0].root, target)
+
+    def test_resolve_install_runtime_precedence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = pathlib.Path(tmp)
+            (repo / "AGENTS.md").write_text("runtime: claude\n", encoding="utf-8")
+
+            self.assertEqual(
+                resolve_install_runtime("auto", repo=repo, env={"AGENT_LEARNING_RUNTIME": "codex"}),
+                "codex",
+            )
+            self.assertEqual(resolve_install_runtime("auto", repo=repo, env={}), "claude")
+            self.assertEqual(resolve_install_runtime("codex", repo=repo, env={"AGENT_LEARNING_RUNTIME": "claude"}), "codex")
+            self.assertEqual(resolve_install_runtime("auto", env={}), "codex")
 
 
 if __name__ == "__main__":

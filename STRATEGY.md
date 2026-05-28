@@ -167,7 +167,9 @@ What we're actively investing in vs. parked.
 - **Install-path parity.** Three first-class install paths kept in
   sync via the same end-to-end validation suite. Symlink-vs-copy
   pitfalls (npm strips symlinks on pack — see `plus2.1` hotfix) are
-  the failure mode to keep guarded.
+  the failure mode to keep guarded. Runtime install target policy is
+  owned by `bin/runtime_topology.py`; `install.sh` remains the shell
+  execution adapter.
 - **Release contract ownership.** Package-visible identity is owned by
   `bin/release_metadata.py`; archive/package inclusion policy is owned by
   `bin/release_layout.py`. Manifest, npm, plugin, marketplace, README, shell,

@@ -311,10 +311,17 @@ user-scope state must do so explicitly via `StateHandle.for_user()`.
 | Codex | `.codex/hooks.json` | `--runtime codex` |
 | Claude | `.claude/settings.local.json` | `--runtime claude` |
 
-Both share the same wrapper command and manifest. Adding a new runtime
+`bin/runtime_topology.py` owns the runtime path policy behind this matrix:
+hook config targets, dev hook specs, drift candidates, install runtime
+resolution, user-global install roots, Codex-home roots, Claude plugin roots,
+explicit target roots, and repo bootstrap target expansion. `install.sh`
+parses flags and executes the selected install plan; it does not own a
+separate target-root policy.
+
+Both runtimes share the same wrapper command and manifest. Adding a new runtime
 means updating:
 
-1. Path handling in `install_runtime_hooks.py`
+1. Runtime path handling in `runtime_topology.py`
 2. Event mapping
 3. Command-integrity validation
 4. Regression coverage for both dry-run and apply flows

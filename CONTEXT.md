@@ -35,6 +35,13 @@ suite. Forward any `install.sh` flag through `npx` / curl pipe:
 npx agent-learning-compounder --bootstrap-repo "$PWD" --verify
 ```
 
+Runtime target selection for these paths is owned by
+`agent-learning-compounder/bin/runtime_topology.py`: user-global Codex/Claude
+skills roots, Codex-home roots, Claude plugin roots, explicit targets, runtime
+resolution, and repo bootstrap expansion all route through that policy.
+`install.sh` stays the execution adapter for copy, backup, verification,
+dashboard build, bootstrap hooks, and first-run indexing.
+
 ## 3. Dual-name layout (without this, grep goes wrong)
 
 ```
@@ -239,7 +246,7 @@ ALC's safety posture is load-bearing. Preserve these:
 | Output schema / scrubbing | `…/reference-lib/output-schema`, `…/threat-model` |
 | Apply path (Hermes-DSL) | `…/reference-lib/hermes-dsl-spec` |
 | Anything performance-affecting | `…/reference-lib/pressure-tests` (the durable-write gate) |
-| Install paths or symlink layout | `CHANGES.md` (entries for `plus1.3`, `plus2.0`, `plus2.1`) |
+| Install paths, target roots, or symlink layout | `agent-learning-compounder/bin/runtime_topology.py`, `agent-learning-compounder/tests/test_install_targets.py`, `CHANGES.md` (entries for `plus1.3`, `plus2.0`, `plus2.1`) |
 
 ## 11. Editing conventions
 

@@ -51,6 +51,7 @@ fi
 . "$sanitizer"
 
 target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
+target_mode="user"
 runtime="auto"
 bootstrap_repo=""
 apply_runtime_hooks=0
@@ -67,52 +68,14 @@ first_run_index="${ALC_FIRST_RUN_INDEX:-1}"
 # turns on --verify only when this is still 1 after arg parsing.
 auto_detect=1
 
-runtime_hint() {
-  repo="$1"
-  for path in "$repo/AGENTS.md" "$repo/CLAUDE.md" "$repo/GEMINI.md"; do
-    if [ ! -f "$path" ]; then
-      continue
-    fi
-    hint=$(awk '
-      {
-        line = tolower($0)
-        if (match(line, /runtime[[:space:]]*[:=][[:space:]]*(codex|claude|all)/)) {
-          match_value = substr(line, RSTART, RLENGTH)
-          sub(/.*runtime[[:space:]]*[:=][[:space:]]*/, "", match_value)
-          print match_value
-          exit
-        }
-      }' "$path" || true)
-    if [ -n "$hint" ]; then
-      printf '%s' "$hint"
-      return 0
-    fi
-  done
-  return 1
-}
-
 resolve_runtime() {
   request="$1"
   repo="$2"
-  if [ "$request" != "auto" ]; then
-    printf '%s' "$request"
-    return
-  fi
-
-  requested_runtime="${AGENT_LEARNING_RUNTIME:-}"
-  case "$requested_runtime" in
-    codex|claude|all) printf '%s' "$requested_runtime"; return ;;
-  esac
-
   if [ -n "$repo" ]; then
-    hint=$(runtime_hint "$repo" || true)
-    if [ -n "$hint" ]; then
-      printf '%s' "$hint"
-      return
-    fi
+    topology_shell resolve-install-runtime --request "$request" --repo "$repo"
+  else
+    topology_shell resolve-install-runtime --request "$request"
   fi
-
-  printf 'codex'
 }
 
 # Pick a runtime from filesystem evidence. Used by the zero-arg install path
@@ -134,32 +97,6 @@ detect_runtime() {
   else
     printf 'neither'
   fi
-}
-
-runtime_targets() {
-  mode="$1"
-  if [ "$mode" = "all" ]; then
-    echo "codex"
-    echo "claude"
-    return
-  fi
-  printf '%s\n' "$mode"
-}
-
-runtime_root() {
-  repo="$1"
-  mode="$2"
-  case "$mode" in
-    codex)
-      printf '%s/.agents/skills' "$repo"
-      ;;
-    claude)
-      printf '%s/.claude/skills' "$repo"
-      ;;
-    *)
-      return 1
-      ;;
-  esac
 }
 
 install_once() {
@@ -237,21 +174,24 @@ build_dashboard_bundle() {
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --codex)
-      target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
+      target_mode="user"
+      runtime="codex"
       auto_detect=0
       ;;
     --codex-home)
-      target_root="${CODEX_HOME:-$HOME/.codex}/skills"
+      target_mode="codex-home"
+      runtime="codex"
       auto_detect=0
       ;;
     --claude)
-      target_root="${CLAUDE_HOME:-$HOME/.claude}/skills"
+      target_mode="user"
+      runtime="claude"
       auto_detect=0
       ;;
     --plugin)
       plugin_mode=1
       runtime="claude"
-      target_root="${CLAUDE_HOME:-$HOME/.claude}/plugins"
+      target_mode="plugin"
       target_root_explicit=1
       auto_detect=0
       ;;
@@ -262,6 +202,7 @@ while [ "$#" -gt 0 ]; do
         exit 2
       fi
       target_root="$1"
+      target_mode="explicit"
       target_root_explicit=1
       auto_detect=0
       ;;
@@ -333,6 +274,10 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+topology_shell() {
+  python3 "$skill_src/bin/runtime_topology.py" --shell "$@"
+}
+
 # Zero-arg path: detect the runtime from filesystem state and turn on
 # --verify by default. Skipped when any explicit flag set auto_detect=0,
 # and skipped when AGENT_LEARNING_RUNTIME is set so env-var configuration
@@ -372,14 +317,16 @@ if [ -n "$bootstrap_repo" ]; then
   repo_root=$(CDPATH= cd -- "$bootstrap_repo" && pwd)
   runtime=$(resolve_runtime "$runtime" "$repo_root")
 
+  target_plan_file=$(mktemp "${TMPDIR:-/tmp}/alc-install-targets.XXXXXX")
+  topology_shell install-targets --runtime "$runtime" --mode bootstrap --repo "$repo_root" > "$target_plan_file"
+
   bootstrap_dest=""
-  for mode in $(runtime_targets "$runtime"); do
-    dest_root="$(runtime_root "$repo_root" "$mode")"
+  while IFS='	' read -r mode dest_root; do
     dest="$(install_once "$dest_root")"
     if [ -z "$bootstrap_dest" ]; then
       bootstrap_dest="$dest"
     fi
-  done
+  done < "$target_plan_file"
 
   if [ -z "$bootstrap_dest" ]; then
     echo "bootstrap failed to stage agent-learning-compounder" >&2
@@ -393,10 +340,9 @@ if [ -n "$bootstrap_repo" ]; then
     sanitize_skill_tree "$bootstrap_dest"
   fi
 
-  for mode in $(runtime_targets "$runtime"); do
-    dest_root="$(runtime_root "$repo_root" "$mode")"
+  while IFS='	' read -r mode dest_root; do
     build_dashboard_bundle "$dest_root/agent-learning-compounder"
-  done
+  done < "$target_plan_file"
 
   python3 "$bootstrap_dest/bin/init_learning_system.py" \
     --repo "$repo_root" \
@@ -409,12 +355,12 @@ if [ -n "$bootstrap_repo" ]; then
   if [ "$apply_runtime_hooks" -eq 1 ]; then
     hook_mode="--apply"
   fi
-  for mode in $(runtime_targets "$runtime"); do
+  while IFS='	' read -r mode dest_root; do
     python3 "$bootstrap_dest/bin/install_runtime_hooks.py" \
       --repo "$repo_root" \
       --runtime "$mode" \
       "$hook_mode"
-  done
+  done < "$target_plan_file"
 
   if [ "$hook_mode" = --dry-run ]; then
     echo "Runtime hooks ran in dry-run mode. Pass --apply-runtime-hooks to apply changes."
@@ -439,6 +385,7 @@ if [ -n "$bootstrap_repo" ]; then
   fi
 
   printf 'bootstrapped agent-learning-compounder into: %s\n' "$repo_root"
+  rm -f "$target_plan_file"
   exit 0
 fi
 
@@ -447,12 +394,7 @@ if [ "$runtime" = "all" ] && [ "$target_root_explicit" -eq 0 ]; then
   echo "--runtime all requires --bootstrap-repo for explicit dual-runtime install; pass --runtime codex or --runtime claude" >&2
   exit 2
 fi
-if [ "$runtime" = "codex" ] && [ "$target_root_explicit" -eq 0 ]; then
-  target_root="${AGENTS_SKILLS_DIR:-${AGENTS_HOME:-$HOME/.agents}/skills}"
-fi
-if [ "$runtime" = "claude" ] && [ "$target_root_explicit" -eq 0 ]; then
-  target_root="${CLAUDE_HOME:-$HOME/.claude}/skills"
-fi
+target_root=$(topology_shell install-target-root --runtime "$runtime" --mode "$target_mode" --target-root "$target_root")
 
 if [ -L "$target_root" ]; then
   echo "refusing to install into symlinked target root: $target_root" >&2
